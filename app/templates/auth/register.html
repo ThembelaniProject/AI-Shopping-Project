@@ -458,18 +458,14 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="email">Email Address</label>
+                    
+
+                    <label for="email">DUT Student Email</label> 
                     <div class="input-wrapper">
-                        <input
-                            type="email"
-                            id="email"
-                            name="email"
-                            placeholder="you@example.com"
-                            required
-                            autocomplete="email"
-                            inputmode="email"
-                        >
-                    </div>
+                         <input type="email" id="email" name="email" placeholder="229578387@dut4life.ac.za" required autocomplete="email" inputmode="email" > 
+                        </div>
+
+                        <div class="field-error" id="emailError"> Please use a valid DUT student email. Example: 229578387@dut4life.ac.za </div>
                 </div>
 
                 <div class="form-group">
@@ -528,109 +524,277 @@
         </div>
     </div>
 
-    <script>
-        // Password visibility toggles (works for both fields)
-        document.querySelectorAll('.toggle-password').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const targetId = btn.dataset.target;
-                const input = document.getElementById(targetId);
-                const svg = btn.querySelector('svg');
-                const isPassword = input.type === 'password';
+<script>
+    // ============================================
+    // PASSWORD VISIBILITY TOGGLE
+    // ============================================
 
-                input.type = isPassword ? 'text' : 'password';
-                btn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    document.querySelectorAll('.toggle-password').forEach(btn => {
 
-                if (isPassword) {
-                    svg.innerHTML = `
-                        <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                        <line x1="1" y1="1" x2="23" y2="23"/>
-                    `;
-                } else {
-                    svg.innerHTML = `
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                    `;
-                }
-            });
+        btn.addEventListener('click', () => {
+
+            const targetId = btn.dataset.target;
+            const input = document.getElementById(targetId);
+            const svg = btn.querySelector('svg');
+
+            const isPassword = input.type === 'password';
+
+            input.type = isPassword ? 'text' : 'password';
+
+            btn.setAttribute(
+                'aria-label',
+                isPassword ? 'Hide password' : 'Show password'
+            );
+
+            if (isPassword) {
+
+                svg.innerHTML = `
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                `;
+
+            } else {
+
+                svg.innerHTML = `
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                `;
+            }
         });
 
-        // Form validation + loading state
-        const form = document.getElementById('registerForm');
-        const submitBtn = document.getElementById('submitBtn');
-        const passwordInput = document.getElementById('password');
-        const confirmInput = document.getElementById('confirm_password');
-        const passwordError = document.getElementById('passwordError');
-        const confirmError = document.getElementById('confirmError');
+    });
 
-        function clearErrors() {
-            passwordInput.classList.remove('error');
+
+    // ============================================
+    // FORM ELEMENTS
+    // ============================================
+
+    const form = document.getElementById('registerForm');
+    const submitBtn = document.getElementById('submitBtn');
+
+    const nameInput = document.getElementById('name');
+    const emailInput = document.getElementById('email');
+
+    const passwordInput = document.getElementById('password');
+    const confirmInput = document.getElementById('confirm_password');
+
+    const emailError = document.getElementById('emailError');
+    const passwordError = document.getElementById('passwordError');
+    const confirmError = document.getElementById('confirmError');
+
+
+    // ============================================
+    // DUT EMAIL VALIDATION
+    // ============================================
+
+    function isValidDUTEmail(email) {
+
+        /*
+         * DUT email must:
+         *
+         * 1. Have exactly 9 digits
+         * 2. Be followed by @dut4life.ac.za
+         *
+         * Example:
+         *
+         * 220578387@dut4life.ac.za
+         */
+
+        const dutEmailRegex = /^[0-9]{9}@dut4life\.ac\.za$/i;
+
+        return dutEmailRegex.test(email);
+    }
+
+
+    // ============================================
+    // CLEAR ERRORS
+    // ============================================
+
+    function clearErrors() {
+
+        emailInput.classList.remove('error');
+        passwordInput.classList.remove('error');
+        confirmInput.classList.remove('error');
+
+        emailError.classList.remove('show');
+        passwordError.classList.remove('show');
+        confirmError.classList.remove('show');
+    }
+
+
+    // ============================================
+    // FORM SUBMISSION
+    // ============================================
+
+    form.addEventListener('submit', (e) => {
+
+        clearErrors();
+
+        const name = nameInput.value.trim();
+        const email = emailInput.value.trim().toLowerCase();
+
+        const password = passwordInput.value;
+        const confirm = confirmInput.value;
+
+        let valid = true;
+
+
+        // --------------------------------------------
+        // NAME VALIDATION
+        // --------------------------------------------
+
+        if (!name) {
+
+            e.preventDefault();
+
+            nameInput.focus();
+
+            return;
+        }
+
+
+        // --------------------------------------------
+        // DUT EMAIL VALIDATION
+        // --------------------------------------------
+
+        if (!isValidDUTEmail(email)) {
+
+            e.preventDefault();
+
+            emailInput.classList.add('error');
+            emailError.classList.add('show');
+
+            emailInput.focus();
+
+            return;
+        }
+
+
+        // --------------------------------------------
+        // PASSWORD VALIDATION
+        // --------------------------------------------
+
+        if (password.length < 6) {
+
+            e.preventDefault();
+
+            passwordInput.classList.add('error');
+            passwordError.classList.add('show');
+
+            passwordInput.focus();
+
+            valid = false;
+        }
+
+
+        // --------------------------------------------
+        // PASSWORD MATCH
+        // --------------------------------------------
+
+        if (password !== confirm) {
+
+            e.preventDefault();
+
+            confirmInput.classList.add('error');
+            confirmError.classList.add('show');
+
+            if (valid) {
+                confirmInput.focus();
+            }
+
+            valid = false;
+        }
+
+
+        // --------------------------------------------
+        // STOP IF INVALID
+        // --------------------------------------------
+
+        if (!valid) {
+            return;
+        }
+
+
+        // --------------------------------------------
+        // LOADING STATE
+        // --------------------------------------------
+
+        submitBtn.classList.add('loading');
+        submitBtn.disabled = true;
+
+    });
+
+
+    // ============================================
+    // LIVE DUT EMAIL VALIDATION
+    // ============================================
+
+    emailInput.addEventListener('input', () => {
+
+        const email = emailInput.value.trim();
+
+        if (!email) {
+
+            emailInput.classList.remove('error');
+            emailError.classList.remove('show');
+
+            return;
+        }
+
+
+        if (isValidDUTEmail(email)) {
+
+            emailInput.classList.remove('error');
+            emailError.classList.remove('show');
+
+        } else {
+
+            emailInput.classList.add('error');
+            emailError.classList.add('show');
+        }
+
+    });
+
+
+    // ============================================
+    // LIVE PASSWORD MATCH
+    // ============================================
+
+    confirmInput.addEventListener('input', () => {
+
+        if (
+            confirmInput.value &&
+            passwordInput.value !== confirmInput.value
+        ) {
+
+            confirmInput.classList.add('error');
+            confirmError.classList.add('show');
+
+        } else {
+
             confirmInput.classList.remove('error');
-            passwordError.classList.remove('show');
             confirmError.classList.remove('show');
         }
 
-        form.addEventListener('submit', (e) => {
-            clearErrors();
+    });
 
-            const name = document.getElementById('name').value.trim();
-            const email = document.getElementById('email').value.trim();
-            const password = passwordInput.value;
-            const confirm = confirmInput.value;
 
-            let valid = true;
+    // ============================================
+    // AUTO FOCUS
+    // ============================================
 
-            if (!name || !email || !password || !confirm) {
-                e.preventDefault();
-                return;
-            }
+    window.addEventListener('DOMContentLoaded', () => {
 
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                e.preventDefault();
-                document.getElementById('email').focus();
-                return;
-            }
+        if (
+            window.matchMedia('(min-width: 768px)').matches
+        ) {
 
-            if (password.length < 6) {
-                e.preventDefault();
-                passwordInput.classList.add('error');
-                passwordError.classList.add('show');
-                passwordInput.focus();
-                valid = false;
-            }
+            nameInput.focus();
+        }
 
-            if (password !== confirm) {
-                e.preventDefault();
-                confirmInput.classList.add('error');
-                confirmError.classList.add('show');
-                if (valid) confirmInput.focus();
-                valid = false;
-            }
+    });
 
-            if (!valid) return;
+</script>
 
-            // Show loading state
-            submitBtn.classList.add('loading');
-            submitBtn.disabled = true;
-        });
-
-        // Live password match feedback
-        confirmInput.addEventListener('input', () => {
-            if (confirmInput.value && passwordInput.value !== confirmInput.value) {
-                confirmInput.classList.add('error');
-                confirmError.classList.add('show');
-            } else {
-                confirmInput.classList.remove('error');
-                confirmError.classList.remove('show');
-            }
-        });
-
-        // Auto-focus name on larger screens
-        window.addEventListener('DOMContentLoaded', () => {
-            if (window.matchMedia('(min-width: 768px)').matches) {
-                document.getElementById('name').focus();
-            }
-        });
-    </script>
 </body>
 </html>
