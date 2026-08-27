@@ -4,6 +4,7 @@ from flask import Flask
 from flask_login import LoginManager
 from flask_sqlalchemy import SQLAlchemy
 
+from app.routes.preferences import preferences_bp
 
 # ---------------------------------------------------------
 # Extensions
@@ -63,6 +64,9 @@ def create_app():
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(products_bp)
+    app.register_blueprint(preferences_bp)
+    
+
 
     # -----------------------------------------------------
     # Create database tables

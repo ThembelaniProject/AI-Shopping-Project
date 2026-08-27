@@ -59,10 +59,14 @@ def create_app():
     from app.routes.main import main_bp
     from app.routes.auth import auth_bp
     from app.routes.products import products_bp
+    from app.routes.preferences import preferences_bp
 
     app.register_blueprint(main_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(products_bp)
+    app.register_blueprint(
+    preferences_bp
+)
 
     # -----------------------------------------------------
     # Create database tables

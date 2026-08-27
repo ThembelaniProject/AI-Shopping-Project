@@ -1,10 +1,25 @@
 from flask import Blueprint, render_template, request
-from flask_login import login_required
+from flask_login import (
+    login_required,
+    current_user
+)
 
 from app import db
-from app.models import Product
-from app.services.recommender import calculate_distance
 
+from app.models import (
+    Product,
+    Preference
+)
+
+from app.services.recommender import (
+    calculate_distance,
+    calculate_recommendation_score
+)
+
+
+# =========================================================
+# PRODUCTS BLUEPRINT
+# =========================================================
 
 products_bp = Blueprint(
     "products",
@@ -22,7 +37,7 @@ products_bp = Blueprint(
 def search():
 
     # =====================================================
-    # Get search values
+    # GET SEARCH VALUES
     # =====================================================
 
     keyword = request.args.get(
@@ -78,16 +93,16 @@ def search():
     sort = request.args.get(
         "sort",
         "price_asc"
-    )
+    ).strip()
 
     # =====================================================
-    # Start database query
+    # START DATABASE QUERY
     # =====================================================
 
     query = Product.query
 
     # =====================================================
-    # Keyword filter
+    # KEYWORD FILTER
     # =====================================================
 
     if keyword:
@@ -104,20 +119,22 @@ def search():
         )
 
     # =====================================================
-    # Budget filter
+    # BUDGET FILTER
     # =====================================================
 
     if budget:
 
         try:
 
-            budget_value = float(budget)
+            budget_filter = float(
+                budget
+            )
 
             query = query.filter(
                 (
                     Product.price +
                     Product.shipping_cost
-                ) <= budget_value
+                ) <= budget_filter
             )
 
         except ValueError:
@@ -125,7 +142,7 @@ def search():
             pass
 
     # =====================================================
-    # Colour filter
+    # COLOUR FILTER
     # =====================================================
 
     if colour:
@@ -137,7 +154,7 @@ def search():
         )
 
     # =====================================================
-    # Size filter
+    # SIZE FILTER
     # =====================================================
 
     if size:
@@ -149,7 +166,7 @@ def search():
         )
 
     # =====================================================
-    # Store filter
+    # STORE FILTER
     # =====================================================
 
     if store:
@@ -161,7 +178,7 @@ def search():
         )
 
     # =====================================================
-    # Location filter
+    # LOCATION FILTER
     # =====================================================
 
     if location:
@@ -173,19 +190,20 @@ def search():
         )
 
     # =====================================================
-    # Maximum shipping filter
+    # MAXIMUM SHIPPING FILTER
     # =====================================================
 
     if max_shipping:
 
         try:
 
-            shipping_value = float(
+            shipping_filter = float(
                 max_shipping
             )
 
             query = query.filter(
-                Product.shipping_cost <= shipping_value
+                Product.shipping_cost
+                <= shipping_filter
             )
 
         except ValueError:
@@ -193,7 +211,7 @@ def search():
             pass
 
     # =====================================================
-    # Database sorting
+    # DATABASE SORTING
     # =====================================================
 
     if sort == "price_desc":
@@ -221,13 +239,13 @@ def search():
         )
 
     # =====================================================
-    # Get products
+    # GET PRODUCTS
     # =====================================================
 
     products = query.all()
 
     # =====================================================
-    # Prepare distance calculation
+    # PREPARE DISTANCE CALCULATION
     # =====================================================
 
     products_with_distance = []
@@ -253,7 +271,7 @@ def search():
         longitude = None
 
     # =====================================================
-    # Calculate distances
+    # CALCULATE PRODUCT DISTANCES
     # =====================================================
 
     for product in products:
@@ -282,14 +300,14 @@ def search():
         )
 
     # =====================================================
-    # Maximum distance filter
+    # MAXIMUM DISTANCE FILTER
     # =====================================================
 
     if max_distance:
 
         try:
 
-            distance_value = float(
+            distance_filter = float(
                 max_distance
             )
 
@@ -303,7 +321,8 @@ def search():
                     for item in products_with_distance
                     if (
                         item["distance"] is not None
-                        and item["distance"] <= distance_value
+                        and item["distance"]
+                        <= distance_filter
                     )
                 ]
 
@@ -312,7 +331,7 @@ def search():
             pass
 
     # =====================================================
-    # Sort by distance
+    # SORT BY DISTANCE
     # =====================================================
 
     if sort == "distance_asc":
@@ -325,10 +344,117 @@ def search():
         )
 
     # =====================================================
-    # Display search page
+    # PREPARE BUDGET FOR AI
+    # =====================================================
+
+    recommendation_budget = None
+
+    if budget:
+
+        try:
+
+            recommendation_budget = float(
+                budget
+            )
+
+        except ValueError:
+
+            recommendation_budget = None
+
+    # =====================================================
+    # GET USER PREFERENCES
+    # =====================================================
+
+    preference = Preference.query.filter_by(
+        user_id=current_user.id
+    ).first()
+
+    user_preferences = None
+
+    if preference:
+
+        user_preferences = {
+
+            "styles": (
+                preference.styles
+                if preference.styles
+                else ""
+            ),
+
+            "colours": (
+                preference.colours
+                if preference.colours
+                else ""
+            ),
+
+            "stores": (
+                preference.stores
+                if preference.stores
+                else ""
+            ),
+
+            "hobbies": (
+                preference.hobbies
+                if preference.hobbies
+                else ""
+            )
+
+        }
+
+    # =====================================================
+    # CALCULATE AI RECOMMENDATION SCORE
+    # =====================================================
+
+    for item in products_with_distance:
+
+        product = item["product"]
+
+        distance = item["distance"]
+
+        recommendation_score = (
+            calculate_recommendation_score(
+
+                product=product,
+
+                keyword=keyword,
+
+                budget=recommendation_budget,
+
+                colour=colour,
+
+                size=size,
+
+                store=store,
+
+                user_preferences=user_preferences,
+
+                distance=distance
+
+            )
+        )
+
+        item["recommendation_score"] = (
+            recommendation_score
+        )
+
+    # =====================================================
+    # SORT BY AI RECOMMENDATION
+    # =====================================================
+
+    if sort == "recommendation":
+
+        products_with_distance.sort(
+            key=lambda item:
+                item["recommendation_score"],
+            reverse=True
+        )
+
+    # =====================================================
+    # DISPLAY SEARCH PAGE
     # =====================================================
 
     return render_template(
+
         "products/search.html",
 
         products=products_with_distance,
@@ -354,6 +480,7 @@ def search():
         user_longitude=user_longitude,
 
         sort=sort
+
     )
 
 
@@ -361,7 +488,9 @@ def search():
 # PRODUCT DETAIL
 # =========================================================
 
-@products_bp.route("/<int:product_id>")
+@products_bp.route(
+    "/<int:product_id>"
+)
 @login_required
 def detail(product_id):
 
@@ -370,6 +499,9 @@ def detail(product_id):
     )
 
     return render_template(
+
         "products/detail.html",
+
         product=product
+
     )

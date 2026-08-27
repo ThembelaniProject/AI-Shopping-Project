@@ -3,6 +3,8 @@
         "Colour",
         "colours",
         "Compu",
+        "Cpolyline",
+        "Csvg",
         "endfor",
         "endwith",
         "ilike",
@@ -10,6 +12,7 @@
         "minmax",
         "nbsp",
         "personalised",
-        "rgba"
+        "rgba",
+        "Segoe"
     ]
 }

@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .prefs-page {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: clamp(1.25rem, 4vw, 2rem) clamp(1rem, 4vw, 1.5rem) 3rem;
+    }
+
+    .page-header {
+        margin-bottom: 1.75rem;
+        text-align: center;
+    }
+
+    .page-header h1 {
+        font-size: clamp(1.5rem, 4vw, 1.85rem);
+        font-weight: 700;
+        margin-bottom: 0.4rem;
+        background: linear-gradient(135deg, #818cf8, #c084fc);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .page-header p {
+        color: #94a3b8;
+        font-size: 0.95rem;
+        line-height: 1.5;
+        max-width: 420px;
+        margin: 0 auto;
+    }
+
+    /* Flash alerts */
+    .alert {
+        padding: 0.85rem 1rem;
+        border-radius: 10px;
+        font-size: 0.875rem;
+        margin-bottom: 1.25rem;
+        display: flex;
+        align-items: flex-start;
+        gap: 0.6rem;
+        line-height: 1.4;
+        animation: fadeIn 0.3s ease;
+    }
+
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(-6px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .alert-error,
+    .alert-danger {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #fca5a5;
+    }
+
+    .alert-success {
+        background: rgba(34, 197, 94, 0.15);
+        border: 1px solid rgba(34, 197, 94, 0.4);
+        color: #86efac;
+    }
+
+    .alert-info,
+    .alert-warning {
+        background: rgba(99, 102, 241, 0.15);
+        border: 1px solid rgba(99, 102, 241, 0.4);
+        color: #a5b4fc;
+    }
+
+    /* Card */
+    .preferences-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 16px;
+        padding: clamp(1.5rem, 4vw, 2rem);
+        box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.45);
+        animation: slideUp 0.4s ease-out;
+    }
+
+    @keyframes slideUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .form-group {
+        margin-bottom: 1.35rem;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 500;
+        color: #f1f5f9;
+        margin-bottom: 0.4rem;
+    }
+
+    .form-group input[type="text"],
+    .form-group textarea {
+        width: 100%;
+        padding: 0.8rem 1rem;
+        background: #0f172a;
+        border: 1px solid #334155;
+        border-radius: 10px;
+        color: #f1f5f9;
+        font-size: 15px;
+        font-family: inherit;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        outline: none;
+        -webkit-appearance: none;
+        appearance: none;
+        resize: vertical;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+        border-color: #6366f1;
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+    }
+
+    .form-group input::placeholder,
+    .form-group textarea::placeholder {
+        color: #64748b;
+    }
+
+    .form-group small {
+        display: block;
+        margin-top: 0.4rem;
+        font-size: 0.8rem;
+        color: #64748b;
+        line-height: 1.4;
+    }
+
+    .form-group textarea {
+        min-height: 110px;
+    }
+
+    /* Button */
+    .btn-primary {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.45rem;
+        width: 100%;
+        padding: 0.9rem 1.5rem;
+        margin-top: 0.5rem;
+        background: linear-gradient(135deg, #6366f1, #7c3aed);
+        color: white;
+        border: none;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: transform 0.15s, box-shadow 0.15s;
+        min-height: 48px;
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn-primary:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+    }
+
+    .btn-primary:active {
+        transform: translateY(0);
+    }
+
+    .btn-primary svg {
+        width: 18px;
+        height: 18px;
+    }
+
+    @media (max-width: 480px) {
+        .btn-primary:hover {
+            transform: none;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+        .preferences-card,
+        .alert {
+            animation: none;
+        }
+        .btn-primary {
+            transition: none;
+        }
+    }
+</style>
+
+<div class="prefs-page">
+    <div class="page-header">
+        <h1>My Shopping Preferences</h1>
+        <p>Tell us what you like so our AI can recommend better products for you.</p>
+    </div>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category }}">
+                    {{ message }}
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="preferences-card">
+        <form method="POST" action="{{ url_for('preferences.preferences') }}">
+
+            <div class="form-group">
+                <label for="styles">Preferred Styles</label>
+                <input
+                    type="text"
+                    id="styles"
+                    name="styles"
+                    value="{% if preference %}{{ preference.styles or '' }}{% endif %}"
+                    placeholder="e.g. casual, modern, sporty"
+                >
+                <small>Enter styles separated by commas.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="colours">Preferred Colours</label>
+                <input
+                    type="text"
+                    id="colours"
+                    name="colours"
+                    value="{% if preference %}{{ preference.colours or '' }}{% endif %}"
+                    placeholder="e.g. black, blue, white"
+                >
+                <small>Enter colours separated by commas.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="stores">Preferred Stores</label>
+                <input
+                    type="text"
+                    id="stores"
+                    name="stores"
+                    value="{% if preference %}{{ preference.stores or '' }}{% endif %}"
+                    placeholder="e.g. Takealot, Woolworths"
+                >
+                <small>Enter stores separated by commas.</small>
+            </div>
+
+            <div class="form-group">
+                <label for="hobbies">Hobbies / Interests</label>
+                <textarea
+                    id="hobbies"
+                    name="hobbies"
+                    rows="5"
+                    placeholder="e.g. gaming, photography, fitness"
+                >{% if preference %}{{ preference.hobbies or '' }}{% endif %}</textarea>
+                <small>Tell the AI what you are interested in.</small>
+            </div>
+
+            <button type="submit" class="btn btn-primary">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                    <polyline points="17 21 17 13 7 13 7 21"/>
+                    <polyline points="7 3 7 8 15 8"/>
+                </svg>
+                Save Preferences
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}
