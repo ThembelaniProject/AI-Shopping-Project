@@ -1,0 +1,187 @@
+{% extends "base.html" %}
+
+{% block title %}
+My Orders - AI Shopping
+{% endblock %}
+
+{% block content %}
+
+<div class="container py-5">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+
+        <div>
+            <h1 class="text-white mb-1">
+                My Orders
+            </h1>
+
+            <p class="text-secondary mb-0">
+                View your previous orders and their status.
+            </p>
+        </div>
+
+        <a
+            href="{% url 'products:search' %}"
+            class="btn btn-outline-light"
+        >
+            Continue Shopping
+        </a>
+
+    </div>
+
+    {% if orders %}
+
+        <div class="card bg-dark text-white border-secondary shadow">
+
+            <div class="card-body p-0">
+
+                <div class="table-responsive">
+
+                    <table class="table table-dark table-hover mb-0">
+
+                        <thead>
+
+                            <tr>
+                                <th>Order</th>
+                                <th>Date</th>
+                                <th>Payment</th>
+                                <th>Status</th>
+                                <th>Total</th>
+                                <th></th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            {% for order in orders %}
+
+                                <tr>
+
+                                    <td>
+                                        <strong>
+                                            #{{ order.id }}
+                                        </strong>
+                                    </td>
+
+                                    <td>
+                                        {{ order.created_at|date:"d M Y, H:i" }}
+                                    </td>
+
+                                    <td>
+
+                                        {% if order.payment_method == "cash" %}
+                                            Cash on Delivery
+                                        {% else %}
+                                            Card
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td>
+
+                                        {% if order.status == "pending" %}
+
+                                            <span class="badge bg-warning text-dark">
+                                                Pending
+                                            </span>
+
+                                        {% elif order.status == "confirmed" %}
+
+                                            <span class="badge bg-info">
+                                                Confirmed
+                                            </span>
+
+                                        {% elif order.status == "shipped" %}
+
+                                            <span class="badge bg-primary">
+                                                Shipped
+                                            </span>
+
+                                        {% elif order.status == "delivered" %}
+
+                                            <span class="badge bg-success">
+                                                Delivered
+                                            </span>
+
+                                        {% elif order.status == "cancelled" %}
+
+                                            <span class="badge bg-danger">
+                                                Cancelled
+                                            </span>
+
+                                        {% else %}
+
+                                            <span class="badge bg-secondary">
+                                                {{ order.status|title }}
+                                            </span>
+
+                                        {% endif %}
+
+                                    </td>
+
+                                    <td>
+                                        <strong>
+                                            R{{ order.total|floatformat:2 }}
+                                        </strong>
+                                    </td>
+
+                                    <td>
+
+                                        <a
+                                            href="{% url 'shopping:order_detail' order.id %}"
+                                            class="btn btn-sm btn-outline-success"
+                                        >
+                                            View
+                                        </a>
+
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    {% else %}
+
+        <div class="card bg-dark text-white border-secondary shadow">
+
+            <div class="card-body text-center py-5">
+
+                <div class="display-4 mb-3">
+                    🛍️
+                </div>
+
+                <h2>
+                    No Orders Yet
+                </h2>
+
+                <p class="text-secondary">
+                    You haven't placed any orders yet.
+                </p>
+
+                <a
+                    href="{% url 'products:search' %}"
+                    class="btn btn-success mt-2"
+                >
+                    Start Shopping
+                </a>
+
+            </div>
+
+        </div>
+
+    {% endif %}
+
+</div>
+
+{% endblock %}

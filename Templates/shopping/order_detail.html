@@ -1,0 +1,309 @@
+{% extends "base.html" %}
+
+{% block title %}Order #{{ order.id }} - AI Shopping{% endblock %}
+
+{% block extra_css %}
+<style>
+/* =========================================
+   ORDER STATUS TRACKER
+   ========================================= */
+
+.status-tracker {
+    position: relative;
+    padding: 1.5rem 0;
+}
+
+.status-line {
+    position: absolute;
+    top: 42px;
+    left: 12.5%;
+    right: 12.5%;
+    height: 4px;
+    background-color: #3a3f47;
+    border-radius: 10px;
+    z-index: 0;
+}
+
+.status-circle {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+    font-weight: 700;
+    border: 3px solid #1a1d21;
+    border-radius: 50%;
+    position: relative;
+    z-index: 2;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.25);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+}
+
+.status-circle:hover {
+    transform: scale(1.08);
+}
+
+.status-label {
+    display: block;
+    margin-top: 0.5rem;
+    font-size: 13px;
+    font-weight: 600;
+    color: #adb5bd;
+    letter-spacing: 0.3px;
+}
+
+/* Status colors */
+.status-circle.pending {
+    background-color: #ffc107;
+    color: #212529;
+    box-shadow: 0 0 0 5px rgba(255, 193, 7, 0.2), 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.status-circle.confirmed {
+    background-color: #0dcaf0;
+    color: #fff;
+    box-shadow: 0 0 0 5px rgba(13, 202, 240, 0.2), 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.status-circle.shipped {
+    background-color: #0d6efd;
+    color: #fff;
+    box-shadow: 0 0 0 5px rgba(13, 110, 253, 0.2), 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.status-circle.delivered,
+.status-circle.completed {
+    background-color: #198754;
+    color: #fff;
+    box-shadow: 0 3px 12px rgba(25, 135, 84, 0.3);
+}
+
+.status-circle.inactive {
+    background-color: #495057;
+    color: #adb5bd;
+}
+
+/* Mobile */
+@media (max-width: 576px) {
+    .status-circle {
+        width: 36px;
+        height: 36px;
+        font-size: 15px;
+        border-width: 2px;
+    }
+
+    .status-line {
+        top: 39px;
+        height: 3px;
+    }
+
+    .status-label {
+        font-size: 11px;
+        white-space: nowrap;
+    }
+}
+
+@media (max-width: 380px) {
+    .status-circle {
+        width: 32px;
+        height: 32px;
+        font-size: 13px;
+    }
+
+    .status-line {
+        top: 36px;
+    }
+
+    .status-label {
+        font-size: 10px;
+    }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+
+    <!-- Header -->
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+        <div>
+            <h1 class="text-white mb-1">Order #{{ order.id }}</h1>
+            <p class="text-secondary mb-0">
+                Placed {{ order.created_at|date:"d M Y, H:i" }}
+            </p>
+        </div>
+
+        <div class="d-flex gap-2">
+            <a href="{% url 'shopping:order_history' %}" class="btn btn-outline-light">
+                Back to Orders
+            </a>
+
+            {% if order.status != "cancelled" and order.status != "delivered" and order.status != "completed" %}
+                <a href="{% url 'shopping:cancel_order' order.id %}" class="btn btn-danger">
+                    Cancel Order
+                </a>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Order Status -->
+    <div class="card bg-dark text-white border-secondary shadow mb-4">
+        <div class="card-body">
+            <h2 class="h5 mb-4">Order Status</h2>
+
+            {% if order.status == "cancelled" %}
+                <div class="alert alert-danger mb-0">
+                    <strong>Order Cancelled</strong><br>
+                    This order has been cancelled.
+                </div>
+            {% else %}
+                <div class="status-tracker">
+                    <div class="status-line"></div>
+
+                    <div class="row text-center position-relative">
+
+                        <!-- Pending -->
+                        <div class="col-3">
+                            {% if order.status == "pending" %}
+                                <div class="status-circle pending mx-auto">⏳</div>
+                            {% else %}
+                                <div class="status-circle completed mx-auto">✓</div>
+                            {% endif %}
+                            <span class="status-label">Pending</span>
+                        </div>
+
+                        <!-- Confirmed -->
+                        <div class="col-3">
+                            {% if order.status == "confirmed" %}
+                                <div class="status-circle confirmed mx-auto">✓</div>
+                            {% elif order.status == "shipped" or order.status == "delivered" or order.status == "completed" %}
+                                <div class="status-circle completed mx-auto">✓</div>
+                            {% else %}
+                                <div class="status-circle inactive mx-auto">📋</div>
+                            {% endif %}
+                            <span class="status-label">Confirmed</span>
+                        </div>
+
+                        <!-- Shipped -->
+                        <div class="col-3">
+                            {% if order.status == "shipped" %}
+                                <div class="status-circle shipped mx-auto">🚚</div>
+                            {% elif order.status == "delivered" or order.status == "completed" %}
+                                <div class="status-circle completed mx-auto">✓</div>
+                            {% else %}
+                                <div class="status-circle inactive mx-auto">🚚</div>
+                            {% endif %}
+                            <span class="status-label">Shipped</span>
+                        </div>
+
+                        <!-- Delivered -->
+                        <div class="col-3">
+                            {% if order.status == "delivered" or order.status == "completed" %}
+                                <div class="status-circle delivered mx-auto">📦</div>
+                            {% else %}
+                                <div class="status-circle inactive mx-auto">📦</div>
+                            {% endif %}
+                            <span class="status-label">Delivered</span>
+                        </div>
+
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Order Items -->
+    <div class="card bg-dark text-white border-secondary shadow mb-4">
+        <div class="card-body">
+            <h2 class="h5 mb-4">Items Ordered</h2>
+
+            {% for item in order.items.all %}
+                <div class="d-flex justify-content-between align-items-center border-bottom border-secondary py-3">
+                    <div>
+                        <h3 class="h6 mb-1">{{ item.product_name }}</h3>
+                        <p class="text-secondary mb-0">
+                            R{{ item.price|floatformat:2 }} × {{ item.quantity }}
+                        </p>
+                    </div>
+                    <strong>R{{ item.item_total|floatformat:2 }}</strong>
+                </div>
+            {% empty %}
+                <p class="text-secondary mb-0">No items were found for this order.</p>
+            {% endfor %}
+        </div>
+    </div>
+
+    <!-- Delivery + Payment -->
+    <div class="row g-4">
+
+        <!-- Delivery Information -->
+        <div class="col-md-6">
+            <div class="card bg-dark text-white border-secondary shadow h-100">
+                <div class="card-body">
+                    <h2 class="h5 mb-3">Delivery Information</h2>
+
+                    <p class="mb-1"><strong>{{ order.full_name }}</strong></p>
+                    <p class="text-secondary mb-1">{{ order.email }}</p>
+                    <p class="text-secondary mb-3">{{ order.phone }}</p>
+
+                    <p class="mb-1">{{ order.address }}</p>
+                    <p class="mb-0">{{ order.city }}, {{ order.postal_code }}</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Information -->
+        <div class="col-md-6">
+            <div class="card bg-dark text-white border-secondary shadow h-100">
+                <div class="card-body">
+                    <h2 class="h5 mb-3">Payment Information</h2>
+
+                    <p class="mb-3">
+                        {% if order.payment_method == "cash" %}
+                            Cash on Delivery
+                        {% else %}
+                            Credit / Debit Card
+                        {% endif %}
+                    </p>
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Subtotal</span>
+                        <span>R{{ order.subtotal|floatformat:2 }}</span>
+                    </div>
+
+                    <div class="d-flex justify-content-between mb-2">
+                        <span>Shipping</span>
+                        <span>
+                            {% if order.shipping_total %}
+                                R{{ order.shipping_total|floatformat:2 }}
+                            {% else %}
+                                Free
+                            {% endif %}
+                        </span>
+                    </div>
+
+                    <hr class="border-secondary">
+
+                    <div class="d-flex justify-content-between fs-4 fw-bold">
+                        <span>Total</span>
+                        <span class="text-success">R{{ order.total|floatformat:2 }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Actions -->
+    <div class="mt-4 d-flex flex-wrap gap-2">
+        <a href="{% url 'shopping:order_history' %}" class="btn btn-outline-light">
+            View All Orders
+        </a>
+        <a href="{% url 'products:search' %}" class="btn btn-success">
+            Continue Shopping
+        </a>
+    </div>
+
+</div>
+{% endblock %}
