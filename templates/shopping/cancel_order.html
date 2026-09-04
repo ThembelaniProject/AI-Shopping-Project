@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}
+Cancel Order #{{ order.id }} - AI Shopping
+{% endblock %}
+
+{% block content %}
+
+<div class="container py-5">
+
+    <div class="card bg-dark text-white border-danger shadow">
+
+        <div class="card-body p-4">
+
+            <h1 class="mb-3">
+                Cancel Order #{{ order.id }}
+            </h1>
+
+            <p class="text-secondary">
+                Are you sure you want to cancel this order?
+            </p>
+
+            <div class="alert alert-warning">
+                This action will change the order status to
+                <strong>cancelled</strong>.
+            </div>
+
+            <form method="post">
+                {% csrf_token %}
+
+                <button
+                    type="submit"
+                    class="btn btn-danger"
+                >
+                    Yes, Cancel Order
+                </button>
+
+                <a
+                    href="{% url 'shopping:order_detail' order.id %}"
+                    class="btn btn-outline-light ms-2"
+                >
+                    No, Go Back
+                </a>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}

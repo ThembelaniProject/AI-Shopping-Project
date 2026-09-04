@@ -1,0 +1,788 @@
+
+{% extends "base.html" %}
+
+{% block title %}
+    AI Shopping Dashboard
+{% endblock %}
+
+{% block extra_css %}
+<!-- Bootstrap 5 -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+<style>
+    :root {
+        --primary: #6366f1;
+        --primary-hover: #4f46e5;
+        --bg: #0f172a;
+        --card-bg: #1e293b;
+        --text: #f1f5f9;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --success: #22c55e;
+        --input-bg: #0f172a;
+        --shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.45);
+        --radius: 16px;
+    }
+
+    * {
+        box-sizing: border-box;
+    }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family:
+            Inter,
+            system-ui,
+            -apple-system,
+            BlinkMacSystemFont,
+            "Segoe UI",
+            sans-serif;
+    }
+
+    .dashboard {
+        width: 100%;
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 2rem;
+    }
+
+    /* ================================
+       WELCOME
+    ================================= */
+
+    .welcome {
+        margin-bottom: 2rem;
+    }
+
+    .welcome h1 {
+        margin: 0 0 0.5rem;
+        font-size: clamp(1.8rem, 4vw, 2.4rem);
+        font-weight: 700;
+    }
+
+    .welcome p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 1rem;
+    }
+
+    .ai-text {
+        color: #a5b4fc;
+    }
+
+    /* ================================
+       MAIN SEARCH CARD
+    ================================= */
+
+    .search-card {
+        background:
+            linear-gradient(
+                135deg,
+                rgba(99, 102, 241, 0.16),
+                rgba(124, 58, 237, 0.08)
+            ),
+            var(--card-bg);
+
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: clamp(1.5rem, 4vw, 2.5rem);
+        box-shadow: var(--shadow);
+        margin-bottom: 2rem;
+    }
+
+    .search-card h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1.4rem;
+    }
+
+    .search-card-description {
+        margin: 0 0 1.5rem;
+        color: var(--text-muted);
+    }
+
+    .search-form {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 0.75rem;
+    }
+
+    .search-input {
+        width: 100%;
+        padding: 1rem 1.1rem;
+        background: var(--input-bg);
+        border: 1px solid var(--border);
+        border-radius: 11px;
+        color: var(--text);
+        font-size: 1rem;
+        outline: none;
+    }
+
+    .search-input:focus {
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    }
+
+    .search-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+
+        padding: 0 1.5rem;
+
+        background:
+            linear-gradient(
+                135deg,
+                var(--primary),
+                #7c3aed
+            );
+
+        color: white;
+        border: none;
+        border-radius: 11px;
+
+        font-size: 0.95rem;
+        font-weight: 600;
+
+        cursor: pointer;
+        min-height: 52px;
+
+        transition:
+            transform 0.15s,
+            box-shadow 0.15s;
+    }
+
+    .search-button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+    }
+
+    /* ================================
+       QUICK FILTERS
+    ================================= */
+
+    .quick-filters {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.65rem;
+        margin-top: 1.25rem;
+    }
+
+    .quick-filter {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+
+        padding: 0.55rem 0.85rem;
+
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid var(--border);
+        border-radius: 999px;
+
+        color: var(--text-muted);
+        font-size: 0.85rem;
+
+        text-decoration: none;
+        transition: 0.2s;
+    }
+
+    .quick-filter:hover {
+        color: var(--text);
+        border-color: var(--primary);
+        background: rgba(99, 102, 241, 0.12);
+    }
+
+    /* ================================
+       SECTION
+    ================================= */
+
+    .section {
+        margin-bottom: 2rem;
+    }
+
+    .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .section-header h2 {
+        margin: 0;
+        font-size: 1.25rem;
+    }
+
+    .section-header a {
+        color: #a5b4fc;
+        text-decoration: none;
+        font-size: 0.9rem;
+    }
+
+    .section-header a:hover {
+        text-decoration: underline;
+    }
+
+    /* ================================
+       CATEGORY CARDS
+    ================================= */
+
+    .categories {
+        display: grid;
+        grid-template-columns:
+            repeat(
+                auto-fit,
+                minmax(150px, 1fr)
+            );
+
+        gap: 1rem;
+    }
+
+    .category {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        min-height: 130px;
+
+        padding: 1.25rem;
+
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+
+        text-decoration: none;
+        color: var(--text);
+
+        transition:
+            transform 0.2s,
+            border-color 0.2s;
+    }
+
+    .category:hover {
+        transform: translateY(-3px);
+        border-color: rgba(99, 102, 241, 0.6);
+    }
+
+    .category-icon {
+        font-size: 2rem;
+        margin-bottom: 0.6rem;
+    }
+
+    .category-name {
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    /* ================================
+       FEATURE CARDS
+    ================================= */
+
+    .features {
+        display: grid;
+        grid-template-columns:
+            repeat(
+                auto-fit,
+                minmax(240px, 1fr)
+            );
+
+        gap: 1rem;
+    }
+
+    .feature {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1.4rem;
+    }
+
+    .feature-icon {
+        width: 46px;
+        height: 46px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border-radius: 12px;
+
+        background: rgba(99, 102, 241, 0.13);
+
+        font-size: 1.35rem;
+
+        margin-bottom: 1rem;
+    }
+
+    .feature h3 {
+        margin: 0 0 0.4rem;
+        font-size: 1rem;
+    }
+
+    .feature p {
+        margin: 0;
+        color: var(--text-muted);
+        line-height: 1.5;
+        font-size: 0.875rem;
+    }
+
+    /* ================================
+       AI INFO
+    ================================= */
+
+    .ai-info {
+        display: grid;
+        grid-template-columns:
+            repeat(
+                auto-fit,
+                minmax(260px, 1fr)
+            );
+
+        gap: 1rem;
+
+        padding: 1.4rem;
+
+        background:
+            rgba(168, 85, 247, 0.08);
+
+        border:
+            1px solid
+            rgba(168, 85, 247, 0.25);
+
+        border-radius: var(--radius);
+    }
+
+    .ai-info h3 {
+        margin: 0 0 0.5rem;
+        color: #e9d5ff;
+    }
+
+    .ai-info p {
+        margin: 0;
+        color: var(--text-muted);
+        line-height: 1.5;
+        font-size: 0.9rem;
+    }
+
+    /* ---------- Category Cards ---------- */
+.category-card {
+  position: relative;
+  border-radius: var(--radius);
+  overflow: hidden;
+  height: 180px;
+  text-decoration: none;
+  color: white;
+  transition: transform 0.3s, box-shadow 0.3s;
+}
+
+.category-card:hover {
+  transform: translateY(-6px);
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+}
+
+.category-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.5s;
+}
+
+.category-card:hover img {
+  transform: scale(1.08);
+}
+
+.category-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.85) 0%, rgba(0, 0, 0, 0.2) 60%);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 1.25rem;
+}
+
+.category-overlay h5 {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+
+/* ---------- Feature Cards ---------- */
+.feature-card {
+  background: var(--card-bg);
+  backdrop-filter: var(--glass);
+  border: 1px solid var(--card-border);
+  border-radius: var(--radius);
+  padding: 1.75rem;
+  height: 100%;
+  transition: all 0.25s;
+}
+
+.feature-card:hover {
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-4px);
+}
+
+.feature-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
+  background: var(--primary-light);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+/* ---------- AI Info Section ---------- */
+.ai-info-section {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.12), rgba(168, 85, 247, 0.08));
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  border-radius: var(--radius);
+  padding: 2.5rem;
+}
+
+/* ---------- Section Titles ---------- */
+.section-title {
+  font-weight: 700;
+  font-size: 1.5rem;
+  margin-bottom: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+    /* ================================
+       RESPONSIVE
+    ================================= */
+
+    @media (max-width: 640px) {
+
+        .dashboard {
+            padding: 1.25rem;
+        }
+
+        .search-form {
+            grid-template-columns: 1fr;
+        }
+
+        .search-button {
+            width: 100%;
+            padding: 0.9rem;
+        }
+
+        .categories {
+            grid-template-columns:
+                repeat(2, 1fr);
+        }
+    }
+</style>
+{% endblock %}
+
+
+{% block content %}
+
+<main class="dashboard">
+
+    <!-- ================================
+         WELCOME
+    ================================= -->
+
+    <section class="welcome">
+
+        <h1>
+            Welcome back{% if user.is_authenticated %},
+            {{ user.first_name|default:user.username }}{% endif %} 👋
+        </h1>
+
+        <p>
+            Find the best products, prices and stores with your
+            <span class="ai-text">AI Shopping Assistant</span>.
+        </p>
+
+    </section>
+
+
+    <!-- ================================
+         MAIN AI SEARCH
+    ================================= -->
+
+    <section class="search-card">
+
+        <h2>
+            🤖 What are you looking for?
+        </h2>
+
+        <p class="search-card-description">
+            Tell us what you need and we'll help you find products
+            that match your requirements.
+        </p>
+
+
+        <form
+            method="GET"
+            action="{% url 'products:search' %}"
+            class="search-form"
+        >
+
+            <input
+                type="text"
+                name="keyword"
+                value="{{ request.GET.keyword|default:'' }}"
+                class="search-input"
+                placeholder="e.g. laptop, Nike shoes, gaming keyboard..."
+                required
+            >
+
+            <button
+                type="submit"
+                class="search-button"
+            >
+                🔍
+                Find Products
+            </button>
+
+        </form>
+
+
+        <!-- QUICK SEARCH OPTIONS -->
+
+        <div class="quick-filters">
+
+            <a
+                href="{% url 'products:search' %}?keyword=laptop"
+                class="quick-filter"
+            >
+                💻 Laptops
+            </a>
+
+            <a
+                href="{% url 'products:search' %}?keyword=phone"
+                class="quick-filter"
+            >
+                📱 Phones
+            </a>
+
+            <a
+                href="{% url 'products:search' %}?keyword=shoes"
+                class="quick-filter"
+            >
+                👟 Shoes
+            </a>
+
+            <a
+                href="{% url 'products:search' %}?keyword=clothing"
+                class="quick-filter"
+            >
+                👕 Clothing
+            </a>
+
+            <a
+                href="{% url 'products:search' %}?keyword=gaming"
+                class="quick-filter"
+            >
+                🎮 Gaming
+            </a>
+
+        </div>
+
+    </section>
+
+
+
+    <!-- ========== CATEGORIES ========== -->
+  <section class="mb-5">
+    <h2 class="section-title">Shop by Category</h2>
+    <div class="row g-3">
+      <div class="col-6 col-md-4 col-lg-2">
+        <a href="{% url 'products:search' %}?keyword=electronics" class="category-card d-block">
+          <img src="https://images.unsplash.com/photo-1498049794561-7780e7231661?auto=format&fit=crop&w=600&q=80" alt="Electronics">
+          <div class="category-overlay">
+            <h5>Electronics</h5>
+          </div>
+        </a>
+      </div>
+      <div class="col-6 col-md-4 col-lg-2">
+        <a href="{% url 'products:search' %}?keyword=computers" class="category-card d-block">
+          <img src="https://images.unsplash.com/photo-1517336714731-489689fd1ca8?auto=format&fit=crop&w=600&q=80" alt="Computers">
+          <div class="category-overlay">
+            <h5>Computers</h5>
+          </div>
+        </a>
+      </div>
+      <div class="col-6 col-md-4 col-lg-2">
+        <a href="{% url 'products:search' %}?keyword=clothing" class="category-card d-block">
+          <img src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=600&q=80" alt="Clothing">
+          <div class="category-overlay">
+            <h5>Clothing</h5>
+          </div>
+        </a>
+      </div>
+      <div class="col-6 col-md-4 col-lg-2">
+        <a href="{% url 'products:search' %}?keyword=shoes" class="category-card d-block">
+          <img src="https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=600&q=80" alt="Shoes">
+          <div class="category-overlay">
+            <h5>Shoes</h5>
+          </div>
+        </a>
+      </div>
+      <div class="col-6 col-md-4 col-lg-2">
+        <a href="{% url 'products:search' %}?keyword=furniture" class="category-card d-block">
+          <img src="https://images.unsplash.com/photo-1555041469-a586c61ea9bc?auto=format&fit=crop&w=600&q=80" alt="Furniture">
+          <div class="category-overlay">
+            <h5>Furniture</h5>
+          </div>
+        </a>
+      </div>
+      <div class="col-6 col-md-4 col-lg-2">
+        <a href="{% url 'products:search' %}?keyword=gaming" class="category-card d-block">
+          <img src="https://images.unsplash.com/photo-1593305841991-05c297ba4575?auto=format&fit=crop&w=600&q=80" alt="Gaming">
+          <div class="category-overlay">
+            <h5>Gaming</h5>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+
+    <!-- ================================
+         AI FEATURES
+    ================================= -->
+
+    <section class="section">
+
+        <div class="section-header">
+
+            <h2>
+                Smart Shopping
+            </h2>
+
+        </div>
+
+
+        <div class="features">
+
+            <div class="feature">
+
+                <div class="feature-icon">
+                    💰
+                </div>
+
+                <h3>
+                    Budget Friendly
+                </h3>
+
+                <p>
+                    Enter your budget and find products that
+                    fit within the amount you can afford.
+                </p>
+
+            </div>
+
+
+            <div class="feature">
+
+                <div class="feature-icon">
+                    📍
+                </div>
+
+                <h3>
+                    Find Nearby
+                </h3>
+
+                <p>
+                    Search for products based on your location
+                    and maximum distance.
+                </p>
+
+            </div>
+
+
+            <div class="feature">
+
+                <div class="feature-icon">
+                    🏪
+                </div>
+
+                <h3>
+                    Compare Stores
+                </h3>
+
+                <p>
+                    Compare products from different stores
+                    and find better prices.
+                </p>
+
+            </div>
+
+
+            <div class="feature">
+
+                <div class="feature-icon">
+                    🤖
+                </div>
+
+                <h3>
+                    AI Recommendations
+                </h3>
+
+                <p>
+                    Get personalised recommendations based
+                    on your searches, preferences and history.
+                </p>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- ================================
+         AI EXPLANATION
+    ================================= -->
+
+    <section class="section">
+
+        <div class="ai-info">
+
+            <div>
+
+                <h3>
+                    🤖 Your AI Shopping Assistant
+                </h3>
+
+                <p>
+                    Our system can analyse your product requirements,
+                    budget, preferences, location and shopping history
+                    to help rank the most relevant products.
+                </p>
+
+            </div>
+
+
+            <div>
+
+                <h3>
+                    🔎 Search Multiple Sources
+                </h3>
+
+                <p>
+                    Products can be collected from connected store
+                    APIs and product sources, normalised into a common
+                    format and compared in one place.
+                </p>
+
+            </div>
+
+        </div>
+
+    </section>
+
+</main>
+
+{% endblock %}
+
