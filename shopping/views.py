@@ -20,7 +20,7 @@ def home(request):
     if request.user.is_authenticated:
         return redirect("shopping:dashboard")
 
-    return render(request, "Index.html")
+    return render(request, "index.html")
 
 
 @login_required
