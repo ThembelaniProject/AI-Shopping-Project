@@ -25,7 +25,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # ENVIRONMENT VARIABLES
 # ============================================================
 
-# Load .env from the project root
+# Load local .env file.
+# Environment variables already set by Vercel/server take priority.
 load_dotenv(BASE_DIR / ".env")
 
 
@@ -58,6 +59,10 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    SECURE_BROWSER_XSS_FILTER = True
+    X_FRAME_OPTIONS = "DENY"
 
 
 # ============================================================
@@ -151,9 +156,18 @@ WSGI_APPLICATION = "config.wsgi.application"
 # DATABASE
 # ============================================================
 
+DATABASE_URL = os.environ.get("DATABASE_URL")
+
+if not DATABASE_URL:
+    raise RuntimeError(
+        "DATABASE_URL environment variable is not configured."
+    )
+
 DATABASES = {
     "default": dj_database_url.config(
-        default=os.environ.get("DATABASE_URL")
+        default=DATABASE_URL,
+        conn_max_age=600,
+        ssl_require=True,
     )
 }
 
@@ -167,17 +181,14 @@ AUTH_PASSWORD_VALIDATORS = [
         "NAME":
             "django.contrib.auth.password_validation.UserAttributeSimilarityValidator",
     },
-
     {
         "NAME":
             "django.contrib.auth.password_validation.MinimumLengthValidator",
     },
-
     {
         "NAME":
             "django.contrib.auth.password_validation.CommonPasswordValidator",
     },
-
     {
         "NAME":
             "django.contrib.auth.password_validation.NumericPasswordValidator",
@@ -202,7 +213,7 @@ USE_TZ = True
 # STATIC FILES
 # ============================================================
 
-STATIC_URL = "static/"
+STATIC_URL = "/static/"
 
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
