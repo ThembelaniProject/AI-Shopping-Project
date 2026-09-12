@@ -242,3 +242,12 @@ LOGIN_URL = "accounts:login"
 LOGIN_REDIRECT_URL = "shopping:dashboard"
 
 LOGOUT_REDIRECT_URL = "accounts:login"
+
+
+PARSE_API_KEY = os.getenv("PARSE_API_KEY")
+
+print("PARSE_API_KEY loaded:", bool(PARSE_API_KEY))
+print(
+    "PARSE_API_KEY length:",
+    len(PARSE_API_KEY) if PARSE_API_KEY else 0
+)

@@ -2,6 +2,10 @@ from django.conf import settings
 from django.db import models
 
 
+# ==========================================================
+# ORDER
+# ==========================================================
+
 class Order(models.Model):
 
     STATUS_CHOICES = [
@@ -18,13 +22,25 @@ class Order(models.Model):
         related_name="orders",
     )
 
-    full_name = models.CharField(max_length=150)
+    full_name = models.CharField(
+        max_length=150,
+    )
+
     email = models.EmailField()
-    phone = models.CharField(max_length=30)
+
+    phone = models.CharField(
+        max_length=30,
+    )
 
     address = models.TextField()
-    city = models.CharField(max_length=100)
-    postal_code = models.CharField(max_length=20)
+
+    city = models.CharField(
+        max_length=100,
+    )
+
+    postal_code = models.CharField(
+        max_length=20,
+    )
 
     payment_method = models.CharField(
         max_length=30,
@@ -56,8 +72,17 @@ class Order(models.Model):
     )
 
     def __str__(self):
-        return f"Order #{self.id} - {self.user}"
-    
+
+        return (
+            f"Order #{self.id} - "
+            f"{self.user}"
+        )
+
+
+# ==========================================================
+# ORDER ITEM
+# ==========================================================
+
 class OrderItem(models.Model):
 
     order = models.ForeignKey(
@@ -66,7 +91,11 @@ class OrderItem(models.Model):
         related_name="items",
     )
 
-    product_id = models.PositiveIntegerField()
+    # IMPORTANT:
+    # Checkers product IDs can be strings.
+    product_id = models.CharField(
+        max_length=255,
+    )
 
     product_name = models.CharField(
         max_length=255,
@@ -85,4 +114,5 @@ class OrderItem(models.Model):
     )
 
     def __str__(self):
+
         return self.product_name

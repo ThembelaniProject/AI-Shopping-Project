@@ -9,8 +9,8 @@ app_name = "products"
 urlpatterns = [
     path("search/", views.search, name="search"),
     path(
-        "<int:product_id>/",
+        "<str:product_id>/",
         views.detail,
-        name="detail"
+        name="detail",
     ),
 ]

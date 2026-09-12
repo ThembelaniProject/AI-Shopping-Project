@@ -48,35 +48,89 @@
     .products-page {
         position: relative;
         z-index: 1;
-
         width: 100%;
         max-width: 1200px;
-
         margin: 0 auto;
-
         padding:
             clamp(1.25rem, 4vw, 2rem)
             clamp(1rem, 4vw, 2rem)
             3rem;
     }
 
+    /* ==========================================
+   SALE PRICE
+========================================== */
+
+.sale-price-box {
+    margin-bottom: 1rem;
+}
+
+/* SAVE R8 */
+
+.save-badge {
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
+    padding: 0.35rem 0.65rem;
+    margin-bottom: 0.45rem;
+
+    background: #dc2626;
+    color: white;
+
+    border-radius: 6px;
+
+    font-size: 0.8rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+}
+
+/* R29.99 */
+
+.sale-price {
+    font-size: 1.55rem;
+    font-weight: 800;
+    line-height: 1.1;
+    color: #f87171;
+}
+
+/* R37.99 */
+
+.regular-price {
+    margin-top: 0.25rem;
+
+    color: #94a3b8;
+
+    font-size: 1rem;
+    font-weight: 500;
+
+    text-decoration: line-through;
+    text-decoration-thickness: 2px;
+}
+
+/* Deal expires */
+
+.deal-expiry {
+    margin-top: 0.5rem;
+
+    color: #fbbf24;
+
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+
     .page-title {
         font-size: clamp(1.5rem, 4vw, 1.85rem);
         font-weight: 700;
-
         margin: 0 0 0.35rem;
     }
 
     .page-subtitle {
         color: var(--text-muted);
-
         font-size: 0.95rem;
-
         margin: 0 0 1.75rem;
-
         line-height: 1.5;
     }
-
 
     /* ==========================================
        SEARCH CARD
@@ -84,18 +138,11 @@
 
     .search-card {
         background: var(--card-bg);
-
         border: 1px solid var(--border);
-
         border-radius: var(--radius);
-
-        padding:
-            clamp(1.35rem, 4vw, 1.85rem);
-
+        padding: clamp(1.35rem, 4vw, 1.85rem);
         box-shadow: var(--shadow);
-
         margin-bottom: 2rem;
-
         animation: slideUp 0.4s ease-out;
     }
 
@@ -114,11 +161,8 @@
     .search-card h2 {
         font-size: 1.2rem;
         font-weight: 600;
-
-        margin:
-            0 0 1.25rem;
+        margin: 0 0 1.25rem;
     }
-
 
     /* ==========================================
        FORM
@@ -126,16 +170,11 @@
 
     .form-grid {
         display: grid;
-
-        grid-template-columns:
-            repeat(
-                auto-fit,
-                minmax(200px, 1fr)
-            );
-
-        gap:
-            1.1rem
-            1.25rem;
+        grid-template-columns: repeat(
+            auto-fit,
+            minmax(200px, 1fr)
+        );
+        gap: 1.1rem 1.25rem;
     }
 
     .form-group {
@@ -146,9 +185,7 @@
     .form-group label {
         font-size: 0.85rem;
         font-weight: 500;
-
         margin-bottom: 0.4rem;
-
         color: var(--text);
     }
 
@@ -156,27 +193,15 @@
     input[type="number"],
     select {
         width: 100%;
-
-        padding:
-            0.75rem
-            0.9rem;
-
+        padding: 0.75rem 0.9rem;
         background: var(--input-bg);
-
-        border:
-            1px solid
-            var(--border);
-
+        border: 1px solid var(--border);
         border-radius: 10px;
-
         color: var(--text);
-
         font-size: 15px;
-
         transition:
             border-color 0.2s,
             box-shadow 0.2s;
-
         outline: none;
     }
 
@@ -184,16 +209,10 @@
         background-image: url(
             "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E"
         );
-
         background-repeat: no-repeat;
-
-        background-position:
-            right 0.75rem center;
-
+        background-position: right 0.75rem center;
         padding-right: 2.2rem;
-
         cursor: pointer;
-
         appearance: none;
         -webkit-appearance: none;
     }
@@ -201,7 +220,6 @@
     input:focus,
     select:focus {
         border-color: var(--primary);
-
         box-shadow:
             0 0 0 3px
             rgba(99, 102, 241, 0.25);
@@ -211,66 +229,44 @@
         color: #64748b;
     }
 
-
     /* ==========================================
        ACTIONS
     ========================================== */
 
     .form-actions {
         display: flex;
-
         flex-wrap: wrap;
-
         align-items: center;
-
-        gap:
-            0.75rem
-            1rem;
-
+        gap: 0.75rem 1rem;
         margin-top: 1.5rem;
     }
 
     .search-btn {
         display: inline-flex;
-
         align-items: center;
         justify-content: center;
-
         gap: 0.45rem;
-
-        padding:
-            0.85rem
-            1.5rem;
-
+        padding: 0.85rem 1.5rem;
         background:
             linear-gradient(
                 135deg,
                 var(--primary),
                 #7c3aed
             );
-
         color: white;
-
         border: none;
-
         border-radius: 10px;
-
         font-size: 0.95rem;
-
         font-weight: 600;
-
         cursor: pointer;
-
         transition:
             transform 0.15s,
             box-shadow 0.15s;
-
         min-height: 46px;
     }
 
     .search-btn:hover {
         transform: translateY(-1px);
-
         box-shadow:
             0 8px 20px
             rgba(99, 102, 241, 0.35);
@@ -287,24 +283,16 @@
 
     .clear-link {
         color: #f87171;
-
         text-decoration: none;
-
         font-size: 0.9rem;
-
         font-weight: 500;
-
-        padding:
-            0.4rem
-            0.2rem;
+        padding: 0.4rem 0.2rem;
     }
 
     .clear-link:hover {
         color: #fca5a5;
-
         text-decoration: underline;
     }
-
 
     /* ==========================================
        LOCATION
@@ -312,24 +300,15 @@
 
     .location-info {
         margin-top: 1.25rem;
-
-        padding:
-            0.9rem
-            1rem;
-
+        padding: 0.9rem 1rem;
         background:
             rgba(99, 102, 241, 0.12);
-
         border:
             1px solid
             rgba(99, 102, 241, 0.3);
-
         border-radius: 10px;
-
         font-size: 0.875rem;
-
         color: #a5b4fc;
-
         line-height: 1.5;
     }
 
@@ -337,68 +316,46 @@
         color: #c7d2fe;
     }
 
-
     /* ==========================================
        RESULTS HEADER
     ========================================== */
 
     .results-header {
         display: flex;
-
         flex-wrap: wrap;
-
         justify-content: space-between;
-
         align-items: center;
-
         gap: 0.5rem;
-
         margin-bottom: 1.25rem;
     }
 
     .results-header h2 {
         font-size: 1.2rem;
-
         font-weight: 600;
-
         display: flex;
-
         align-items: center;
-
         gap: 0.5rem;
-
         margin: 0;
     }
 
     .ai-badge {
         font-size: 0.75rem;
-
         font-weight: 600;
-
-        padding:
-            0.2rem
-            0.55rem;
-
+        padding: 0.2rem 0.55rem;
         border-radius: 999px;
-
         background:
             rgba(168, 85, 247, 0.2);
-
         border:
             1px solid
             rgba(168, 85, 247, 0.4);
-
         color: #d8b4fe;
     }
 
     .results-count {
         color: var(--text-muted);
-
         font-size: 0.9rem;
-
         margin: 0;
     }
-
 
     /* ==========================================
        PRODUCTS
@@ -406,60 +363,73 @@
 
     .products {
         display: grid;
-
         grid-template-columns:
             repeat(
                 auto-fill,
                 minmax(280px, 1fr)
             );
-
         gap: 1.25rem;
     }
 
     .product-card {
         background: var(--card-bg);
-
-        border:
-            1px solid
-            var(--border);
-
+        border: 1px solid var(--border);
         border-radius: var(--radius);
-
         padding: 1.35rem;
-
         box-shadow: var(--shadow);
-
         display: flex;
-
         flex-direction: column;
-
         transition:
             border-color 0.2s,
             transform 0.2s;
-
-        animation:
-            slideUp 0.4s ease-out;
+        animation: slideUp 0.4s ease-out;
     }
 
     .product-card:hover {
         border-color:
             rgba(99, 102, 241, 0.45);
-
-        transform:
-            translateY(-3px);
+        transform: translateY(-3px);
     }
 
     .product-card h3 {
         font-size: 1.1rem;
-
         font-weight: 600;
-
-        margin:
-            0 0 0.5rem;
-
+        margin: 0 0 0.5rem;
         line-height: 1.3;
     }
 
+    /* ==========================================
+       PRODUCT IMAGE
+    ========================================== */
+
+    .product-image-wrapper {
+        width: 100%;
+        height: 200px;
+        margin-bottom: 1rem;
+        border-radius: 10px;
+        background: #0f172a;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+    .image-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--text-muted);
+        font-size: 0.85rem;
+    }
+
+    .product-image {
+        width: 100%;
+        height: 100%;
+        object-fit: contain;
+        display: block;
+    }
 
     /* ==========================================
        AI MATCH
@@ -467,47 +437,31 @@
 
     .ai-match {
         display: flex;
-
         align-items: center;
-
         gap: 0.5rem;
-
-        padding:
-            0.65rem
-            0.85rem;
-
+        padding: 0.65rem 0.85rem;
         margin-bottom: 0.85rem;
-
         background:
             rgba(168, 85, 247, 0.12);
-
         border:
             1px solid
             rgba(168, 85, 247, 0.35);
-
         border-radius: 10px;
-
         font-size: 0.875rem;
-
         color: #d8b4fe;
     }
 
     .ai-match strong {
         color: #e9d5ff;
-
         font-weight: 600;
     }
 
     .ai-match .score {
         margin-left: auto;
-
         font-weight: 700;
-
         font-size: 1rem;
-
         color: #f0abfc;
     }
-
 
     /* ==========================================
        PRICE
@@ -515,14 +469,10 @@
 
     .product-price {
         font-size: 1.5rem;
-
         font-weight: 700;
-
         color: #a5b4fc;
-
         margin-bottom: 0.85rem;
     }
-
 
     /* ==========================================
        META
@@ -530,34 +480,24 @@
 
     .product-meta {
         display: grid;
-
         gap: 0.35rem;
-
         font-size: 0.875rem;
-
         color: var(--text-muted);
-
         margin-bottom: 0.85rem;
-
         flex-grow: 1;
     }
 
     .product-meta strong {
         color: var(--text);
-
         font-weight: 500;
     }
 
     .product-meta p {
         display: flex;
-
         gap: 0.35rem;
-
         line-height: 1.4;
-
         margin: 0;
     }
-
 
     /* ==========================================
        TOTAL
@@ -565,22 +505,12 @@
 
     .total-cost {
         font-size: 1rem;
-
         font-weight: 600;
-
         color: #86efac;
-
-        margin:
-            0.5rem 0
-            0.75rem;
-
+        margin: 0.5rem 0 0.75rem;
         padding-top: 0.6rem;
-
-        border-top:
-            1px solid
-            var(--border);
+        border-top: 1px solid var(--border);
     }
-
 
     /* ==========================================
        DESCRIPTION
@@ -588,23 +518,14 @@
 
     .product-desc {
         font-size: 0.85rem;
-
         color: var(--text-muted);
-
         line-height: 1.45;
-
-        margin:
-            0 0 1rem;
-
+        margin: 0 0 1rem;
         display: -webkit-box;
-
         -webkit-line-clamp: 3;
-
         -webkit-box-orient: vertical;
-
         overflow: hidden;
     }
-
 
     /* ==========================================
        VIEW BUTTON
@@ -612,38 +533,23 @@
 
     .view-btn {
         display: inline-flex;
-
         align-items: center;
-
         justify-content: center;
-
         gap: 0.4rem;
-
         width: 100%;
-
         padding: 0.75rem;
-
         background:
             rgba(99, 102, 241, 0.15);
-
         border:
             1px solid
             rgba(99, 102, 241, 0.35);
-
         color: #a5b4fc;
-
         text-decoration: none;
-
         border-radius: 10px;
-
         font-size: 0.9rem;
-
         font-weight: 600;
-
         min-height: 44px;
-
         margin-top: auto;
-
         transition:
             background 0.2s,
             border-color 0.2s,
@@ -653,10 +559,7 @@
     .view-btn:hover {
         background:
             rgba(99, 102, 241, 0.25);
-
-        border-color:
-            var(--primary);
-
+        border-color: var(--primary);
         color: #c7d2fe;
     }
 
@@ -665,47 +568,29 @@
         height: 16px;
     }
 
-
     /* ==========================================
        EMPTY STATE
     ========================================== */
 
     .empty {
         background: var(--card-bg);
-
-        border:
-            1px solid
-            var(--border);
-
+        border: 1px solid var(--border);
         border-radius: var(--radius);
-
-        padding:
-            3rem
-            1.5rem;
-
+        padding: 3rem 1.5rem;
         text-align: center;
-
         box-shadow: var(--shadow);
     }
 
     .empty-icon {
         width: 64px;
         height: 64px;
-
-        margin:
-            0 auto
-            1.25rem;
-
+        margin: 0 auto 1.25rem;
         border-radius: 50%;
-
         background:
             rgba(99, 102, 241, 0.12);
-
         display: flex;
-
         align-items: center;
         justify-content: center;
-
         color: #818cf8;
     }
 
@@ -716,128 +601,20 @@
 
     .empty h3 {
         font-size: 1.2rem;
-
-        margin:
-            0 0 0.4rem;
+        margin: 0 0 0.4rem;
     }
 
     .empty p {
         color: var(--text-muted);
-
         font-size: 0.95rem;
-
         margin: 0;
     }
-/* ==========================================
-   PRODUCT IMAGE
-========================================== */
-
-.product-image-wrapper {
-    width: 100%;
-    height: 200px;
-
-    margin-bottom: 1rem;
-
-    border-radius: 10px;
-
-    background: #0f172a;
-
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    overflow: hidden;
-}
-.image-placeholder {
-    width: 100%;
-    height: 100%;
-
-    display: none;
-
-    align-items: center;
-    justify-content: center;
-
-    color: var(--text-muted);
-
-    font-size: 0.85rem;
-}
-
-
-.product-image {
-    width: 100%;
-    height: 100%;
-
-    object-fit: contain;
-
-    display: block;
-}
-
-
-/* ==========================================
-   PRODUCT CARD BUTTON
-========================================== */
-
-.view-btn {
-    display: inline-flex;
-
-    align-items: center;
-    justify-content: center;
-
-    gap: 0.4rem;
-
-    width: 100%;
-
-    padding: 0.75rem;
-
-    background:
-        rgba(99, 102, 241, 0.15);
-
-    border:
-        1px solid
-        rgba(99, 102, 241, 0.35);
-
-    color: #a5b4fc;
-
-    text-decoration: none;
-
-    border-radius: 10px;
-
-    font-size: 0.9rem;
-
-    font-weight: 600;
-
-    min-height: 44px;
-
-    margin-top: auto;
-
-    transition:
-        background 0.2s,
-        border-color 0.2s,
-        color 0.2s;
-}
-
-.view-btn:hover {
-    background:
-        rgba(99, 102, 241, 0.25);
-
-    border-color:
-        var(--primary);
-
-    color: #c7d2fe;
-}
-
-.view-btn svg {
-    width: 16px;
-    height: 16px;
-}
 
     /* ==========================================
        RESPONSIVE
     ========================================== */
 
     @media (max-width: 640px) {
-
         .form-grid {
             grid-template-columns: 1fr;
         }
@@ -856,21 +633,17 @@
 
         .results-header {
             align-items: flex-start;
-
             flex-direction: column;
         }
     }
 
-
     @media (max-width: 480px) {
-
         .products-page {
             padding-bottom: 2rem;
         }
 
         .form-actions {
             flex-direction: column;
-
             align-items: stretch;
         }
 
@@ -883,9 +656,7 @@
         }
     }
 
-
     @media (prefers-reduced-motion: reduce) {
-
         .search-card,
         .product-card {
             animation: none;
@@ -924,7 +695,6 @@
             Search and Filter
         </h2>
 
-
         <form
             method="GET"
             action="{% url 'products:search' %}"
@@ -944,9 +714,7 @@
                 value="{{ user_longitude|default:'' }}"
             >
 
-
             <div class="form-grid">
-
 
                 <!-- KEYWORD -->
 
@@ -1269,24 +1037,26 @@
     </section>
 
 
-<!-- ==========================================
+    <!-- ==========================================
          API ERROR MESSAGE
-    ===========================================-->
+    =========================================== -->
+
     {% if api_error %}
 
-    <div class="empty">
+        <div class="empty">
 
-        <h3>
-            Product API unavailable
-        </h3>
+            <h3>
+                Product API unavailable
+            </h3>
 
-        <p>
-            {{ api_error }}
-        </p>
+            <p>
+                {{ api_error }}
+            </p>
 
-    </div>
+        </div>
 
-{% endif %}
+    {% endif %}
+
 
     <!-- ==========================================
          RESULTS HEADER
@@ -1326,262 +1096,303 @@
     </div>
 
 
-   
-
     <!-- ==========================================
-     PRODUCTS
-=========================================== -->
+         PRODUCTS
+    =========================================== -->
 
-{% if products %}
+    {% if products %}
 
-    <div class="products">
+        <div class="products">
 
-        {% for product in products %}
+            {% for product in products %}
 
-            <article class="product-card">
+                <article class="product-card">
 
-                <!-- PRODUCT IMAGE -->
-
-                {% if product.image %}
+                    <!-- PRODUCT IMAGE -->
 
                     <div class="product-image-wrapper">
 
-    {% if product.image %}
+                        {% if product.image %}
 
-        <img
-            src="{{ product.image }}"
-            alt="{{ product.name }}"
-            class="product-image"
-            loading="lazy"
-            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-        >
+                            <img
+                                src="{{ product.image }}"
+                                alt="{{ product.name }}"
+                                class="product-image"
+                                loading="lazy"
+                                onerror="
+                                    this.style.display='none';
+                                    this.parentElement
+                                        .querySelector('.image-placeholder')
+                                        .style.display='flex';
+                                "
+                            >
 
-        <div class="image-placeholder">
-            No image available
+                            <div
+                                class="image-placeholder"
+                                style="display: none;"
+                            >
+                                No image available
+                            </div>
+
+                        {% else %}
+
+                            <div class="image-placeholder">
+                                No image available
+                            </div>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    <!-- AI MATCH -->
+
+                    {% if product.match_score %}
+
+                        <div class="ai-match">
+
+                            <strong>
+                                AI Match
+                            </strong>
+
+                            <span class="score">
+                                {{ product.match_score }}%
+                            </span>
+
+                        </div>
+
+                    {% endif %}
+
+
+                    <!-- PRODUCT NAME -->
+
+                    <h3>
+                        {{ product.name }}
+                    </h3>
+
+
+                    <!-- PRICE -->
+
+                    <!-- ==========================================
+     PRICE / SALE
+=========================================== -->
+
+{% if product.on_sale and product.regular_price > product.price %}
+
+    <div class="sale-price-box">
+
+        <div class="save-badge">
+            SAVE R{{ product.discount_amount|floatformat:0 }}
         </div>
 
-    {% else %}
-
-        <div class="image-placeholder">
-            No image available
+        <div class="sale-price">
+            R{{ product.price|floatformat:2 }}
         </div>
 
-    {% endif %}
+        <div class="regular-price">
+            R{{ product.regular_price|floatformat:2 }}
+        </div>
 
-</div>
+        {% if product.deal_expiry %}
 
+            <div class="deal-expiry">
+                Deal expires {{ product.deal_expiry }}
+            </div>
 
-                {% endif %}
-
-
-                <!-- PRODUCT NAME -->
-
-                <h3>
-                    {{ product.name }}
-                </h3>
-
-
-                <!-- PRICE -->
-
-                <div class="product-price">
-                    R{{ product.price|floatformat:2 }}
-                </div>
-
-
-                <!-- PRODUCT INFORMATION -->
-
-                <div class="product-meta">
-
-                    {% if product.brand %}
-
-                        <p>
-                            <strong>Brand:</strong>
-                            {{ product.brand }}
-                        </p>
-
-                    {% endif %}
-
-
-                    {% if product.category %}
-
-                        <p>
-                            <strong>Category:</strong>
-                            {{ product.category }}
-                        </p>
-
-                    {% endif %}
-
-
-                    <p>
-                        <strong>Colour:</strong>
-
-                        {{ product.colour|default:"Not specified" }}
-
-                    </p>
-
-
-                    <p>
-                        <strong>Size:</strong>
-
-                        {{ product.size|default:"Not specified" }}
-
-                    </p>
-
-
-                    <p>
-                        <strong>Store:</strong>
-
-                        {{ product.store|default:"Unknown" }}
-
-                    </p>
-
-
-                    <p>
-                        <strong>Location:</strong>
-
-                        {{ product.location|default:"Online" }}
-
-                    </p>
-
-
-                    <p>
-                        <strong>Shipping:</strong>
-
-                        R{{ product.shipping_cost|floatformat:2 }}
-
-                    </p>
-
-
-                    <p>
-                        <strong>Stock:</strong>
-
-                        {{ product.stock|default:"0" }}
-
-                    </p>
-
-
-                    {% if product.rating %}
-
-                        <p>
-                            <strong>Rating:</strong>
-
-                            ⭐ {{ product.rating }}
-
-                        </p>
-
-                    {% endif %}
-
-                </div>
-
-
-                <!-- TOTAL COST -->
-
-                <p class="total-cost">
-
-                    Total:
-
-                    R{{ product.total_cost|floatformat:2 }}
-
-                </p>
-
-
-                <!-- DESCRIPTION -->
-
-                {% if product.description %}
-
-                    <p class="product-desc">
-                        {{ product.description }}
-                    </p>
-
-                {% endif %}
-
-
-                <!-- VIEW PRODUCT -->
-
-                {% if product.external_id %}
-
-    <a
-    href="{% url 'products:detail' product.external_id %}"
-    class="view-btn"
->
-
-        View Product
-
-        <svg
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            aria-hidden="true"
-        >
-            <line
-                x1="5"
-                y1="12"
-                x2="19"
-                y2="12"
-            />
-
-            <polyline
-                points="12 5 19 12 12 19"
-            />
-        </svg>
-    </a>
-
-{% endif %}
-
-
-            </article>
-
-        {% endfor %}
+        {% endif %}
 
     </div>
 
 {% else %}
 
-    <!-- EMPTY STATE -->
-
-    <div class="empty">
-
-        <div class="empty-icon">
-
-            <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                aria-hidden="true"
-            >
-
-                <circle
-                    cx="11"
-                    cy="11"
-                    r="8"
-                />
-
-                <line
-                    x1="21"
-                    y1="21"
-                    x2="16.65"
-                    y2="16.65"
-                />
-
-            </svg>
-
-        </div>
-
-
-        <h3>
-            No products found
-        </h3>
-
-
-        <p>
-            Try changing your search criteria.
-        </p>
-
+    <div class="product-price">
+        R{{ product.price|floatformat:2 }}
     </div>
 
 {% endif %}
+
+
+
+                    <!-- PRODUCT INFORMATION -->
+
+                    <div class="product-meta">
+
+                        {% if product.brand %}
+
+                            <p>
+                                <strong>Brand:</strong>
+                                {{ product.brand }}
+                            </p>
+
+                        {% endif %}
+
+
+                        {% if product.category %}
+
+                            <p>
+                                <strong>Category:</strong>
+                                {{ product.category }}
+                            </p>
+
+                        {% endif %}
+
+
+                        <p>
+                            <strong>Colour:</strong>
+                            {{ product.colour|default:"Not specified" }}
+                        </p>
+
+
+                        <p>
+                            <strong>Size:</strong>
+                            {{ product.size|default:"Not specified" }}
+                        </p>
+
+
+                        <p>
+                            <strong>Store:</strong>
+                            {{ product.store|default:"Unknown" }}
+                        </p>
+
+
+                        <p>
+                            <strong>Location:</strong>
+                            {{ product.location|default:"Online" }}
+                        </p>
+
+
+                        <p>
+                            <strong>Shipping:</strong>
+                            R{{ product.shipping_cost|floatformat:2 }}
+                        </p>
+
+
+                    
+
+
+                        {% if product.rating %}
+
+                            <p>
+                                <strong>Rating:</strong>
+                                ⭐ {{ product.rating }}
+                            </p>
+
+                        {% endif %}
+
+                    </div>
+
+
+                    <!-- TOTAL COST -->
+
+                    <p class="total-cost">
+
+                        Total:
+
+                        R{{ product.total_cost|floatformat:2 }}
+
+                    </p>
+
+
+                    <!-- DESCRIPTION -->
+
+                    {% if product.description %}
+
+                        <p class="product-desc">
+                            {{ product.description }}
+                        </p>
+
+                    {% endif %}
+
+
+                    <!-- VIEW PRODUCT -->
+
+                    {% if product.external_id %}
+
+                        <a
+                            href="{% url 'products:detail' product.external_id %}"
+                            class="view-btn"
+                        >
+
+                            View Product
+
+                            <svg
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                stroke-width="2"
+                                aria-hidden="true"
+                            >
+
+                                <line
+                                    x1="5"
+                                    y1="12"
+                                    x2="19"
+                                    y2="12"
+                                />
+
+                                <polyline
+                                    points="12 5 19 12 12 19"
+                                />
+
+                            </svg>
+
+                        </a>
+
+                    {% endif %}
+
+                </article>
+
+            {% endfor %}
+
+        </div>
+
+    {% else %}
+
+        <!-- EMPTY STATE -->
+
+        <div class="empty">
+
+            <div class="empty-icon">
+
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    aria-hidden="true"
+                >
+
+                    <circle
+                        cx="11"
+                        cy="11"
+                        r="8"
+                    />
+
+                    <line
+                        x1="21"
+                        y1="21"
+                        x2="16.65"
+                        y2="16.65"
+                    />
+
+                </svg>
+
+            </div>
+
+
+            <h3>
+                No products found
+            </h3>
+
+
+            <p>
+                Try changing your search criteria.
+            </p>
+
+        </div>
+
+    {% endif %}
+
 </main>
 
 {% endblock %}
@@ -1611,11 +1422,6 @@
             ) {
                 return;
             }
-
-
-           
-
-           
 
         }
     );

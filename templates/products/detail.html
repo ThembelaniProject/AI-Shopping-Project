@@ -1,18 +1,29 @@
 {% extends "base.html" %}
 
 {% block title %}
-{{ product.name|default:"Product Details" }} - AI Shopping
+    {{ product.name|default:"Product Details" }} - AI Shopping
 {% endblock %}
+
 
 {% block extra_css %}
 
 <style>
+
+/* =========================================
+   PAGE
+========================================= */
+
 .detail-page {
     width: 100%;
     max-width: 1100px;
     margin: 0 auto;
     padding: 2rem 1rem 4rem;
 }
+
+
+/* =========================================
+   BACK LINK
+========================================= */
 
 .back-link {
     display: inline-flex;
@@ -23,12 +34,20 @@
     text-decoration: none;
 
     font-size: 0.9rem;
+
     margin-bottom: 1.5rem;
+
+    transition: color 0.2s ease;
 }
 
 .back-link:hover {
     color: #c7d2fe;
 }
+
+
+/* =========================================
+   PRODUCT DETAIL
+========================================= */
 
 .product-detail {
     display: grid;
@@ -48,13 +67,13 @@
     padding: 2rem;
 
     box-shadow:
-        0 20px 40px
-        rgba(0, 0, 0, 0.4);
+        0 20px 40px rgba(0, 0, 0, 0.4);
 }
 
-/* =========================
+
+/* =========================================
    IMAGE
-========================= */
+========================================= */
 
 .detail-image {
     width: 100%;
@@ -72,6 +91,8 @@
 }
 
 .detail-image img {
+    display: block;
+
     width: 100%;
     height: 400px;
 
@@ -80,11 +101,18 @@
 
 .no-image {
     color: #64748b;
+
+    text-align: center;
 }
 
-/* =========================
-   PRODUCT INFO
-========================= */
+
+/* =========================================
+   PRODUCT INFORMATION
+========================================= */
+
+.detail-info {
+    min-width: 0;
+}
 
 .detail-info h1 {
     margin: 0 0 1rem;
@@ -93,7 +121,14 @@
     line-height: 1.2;
 
     color: #f8fafc;
+
+    overflow-wrap: anywhere;
 }
+
+
+/* =========================================
+   PRICE
+========================================= */
 
 .detail-price {
     color: #a5b4fc;
@@ -112,17 +147,23 @@
     margin-bottom: 1.5rem;
 }
 
+
+/* =========================================
+   DESCRIPTION
+========================================= */
+
 .detail-description {
     color: #94a3b8;
 
     line-height: 1.7;
 
-    margin-bottom: 1.5rem;
+    margin: 0 0 1.5rem;
 }
 
-/* =========================
+
+/* =========================================
    PRODUCT META
-========================= */
+========================================= */
 
 .detail-meta {
     display: grid;
@@ -139,6 +180,7 @@
     display: flex;
 
     justify-content: space-between;
+    align-items: flex-start;
 
     gap: 1rem;
 
@@ -149,21 +191,26 @@
 
 .detail-meta strong {
     color: #f1f5f9;
+
+    flex-shrink: 0;
 }
 
 .stock {
     color: #86efac;
+
     font-weight: 600;
 }
 
 .stock-out {
     color: #f87171;
+
     font-weight: 600;
 }
 
-/* =========================
+
+/* =========================================
    SHOPPING BOX
-========================= */
+========================================= */
 
 .shopping-box {
     margin-top: 1.5rem;
@@ -187,9 +234,10 @@
     margin-bottom: 0.7rem;
 }
 
-/* =========================
+
+/* =========================================
    QUANTITY
-========================= */
+========================================= */
 
 .quantity-row {
     display: flex;
@@ -202,7 +250,7 @@
 }
 
 .quantity-control {
-    display: flex;
+    display: inline-flex;
 
     align-items: center;
 
@@ -211,52 +259,98 @@
     border-radius: 8px;
 
     overflow: hidden;
+
+    position: relative;
+
+    z-index: 10;
 }
 
 .quantity-control button {
-    width: 42px;
-    height: 42px;
+    width: 48px;
+    height: 44px;
+
+    padding: 0;
+    margin: 0;
 
     border: 0;
+    outline: none;
 
     background: #1e293b;
 
     color: #f8fafc;
 
-    font-size: 1.2rem;
+    font-size: 1.4rem;
+    line-height: 1;
 
     cursor: pointer;
+
+    pointer-events: auto;
+
+    position: relative;
+    z-index: 20;
+
+    transition:
+        background 0.2s ease,
+        opacity 0.2s ease;
 }
 
 .quantity-control button:hover {
     background: #334155;
 }
 
+.quantity-control button:active {
+    background: #475569;
+}
+
+.quantity-control button:disabled {
+    opacity: 0.4;
+
+    cursor: not-allowed;
+}
+
 .quantity-control input {
-    width: 55px;
-    height: 42px;
+    width: 60px;
+    height: 44px;
+
+    padding: 0;
+    margin: 0;
 
     border: 0;
 
     border-left: 1px solid #475569;
     border-right: 1px solid #475569;
 
+    border-radius: 0;
+
+    outline: none;
+
     background: #0f172a;
 
-    color: white;
+    color: #ffffff;
 
     text-align: center;
 
     font-size: 1rem;
+
+    position: relative;
+    z-index: 20;
 }
 
-.quantity-control input:focus {
-    outline: none;
+.quantity-control input::-webkit-outer-spin-button,
+.quantity-control input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+
+    margin: 0;
 }
 
-/* =========================
-   SUMMARY
-========================= */
+.quantity-control input[type="number"] {
+    -moz-appearance: textfield;
+}
+
+
+/* =========================================
+   ORDER SUMMARY
+========================================= */
 
 .order-summary {
     display: grid;
@@ -275,6 +369,8 @@
 
     justify-content: space-between;
 
+    gap: 1rem;
+
     color: #94a3b8;
 }
 
@@ -290,9 +386,10 @@
     font-weight: 700;
 }
 
-/* =========================
+
+/* =========================================
    BUTTONS
-========================= */
+========================================= */
 
 .shopping-actions {
     display: grid;
@@ -331,23 +428,48 @@
     transform: translateY(-1px);
 }
 
+.shop-button:disabled {
+    opacity: 0.5;
+
+    cursor: not-allowed;
+
+    transform: none;
+}
+
+
+/* =========================================
+   ADD TO CART
+========================================= */
+
 .add-cart {
     background: #6366f1;
-    color: white;
+
+    color: #ffffff;
 }
 
 .add-cart:hover {
     background: #4f46e5;
 }
 
+
+/* =========================================
+   BUY NOW
+========================================= */
+
 .buy-now {
     background: #22c55e;
+
     color: #052e16;
 }
 
 .buy-now:hover {
     background: #16a34a;
 }
+
+
+/* =========================================
+   EXTERNAL STORE
+========================================= */
 
 .external-link {
     background: transparent;
@@ -361,59 +483,24 @@
     background: #1e293b;
 }
 
-.shop-button:disabled {
-    opacity: 0.5;
 
-    cursor: not-allowed;
-
-    transform: none;
-}
-
-/* =========================
-   MESSAGE
-========================= */
-
-.cart-message {
-    display: none;
-
-    margin-top: 1rem;
-
-    padding: 0.8rem 1rem;
-
-    border-radius: 8px;
-
-    background:
-        rgba(34, 197, 94, 0.1);
-
-    border:
-        1px solid
-        rgba(34, 197, 94, 0.3);
-
-    color: #86efac;
-
-    font-size: 0.9rem;
-}
-
-.cart-message.show {
-    display: block;
-}
-
-/* =========================
-   ERROR
-========================= */
+/* =========================================
+   ERROR CARD
+========================================= */
 
 .error-card {
     background: #1e293b;
 
-    border:
-        1px solid
-        #ef4444;
+    border: 1px solid #ef4444;
 
     border-radius: 14px;
 
     padding: 2rem;
 
     text-align: center;
+
+    box-shadow:
+        0 20px 40px rgba(0, 0, 0, 0.3);
 }
 
 .error-card h2 {
@@ -424,11 +511,14 @@
 
 .error-card p {
     color: #94a3b8;
+
+    line-height: 1.6;
 }
 
-/* =========================
+
+/* =========================================
    MOBILE
-========================= */
+========================================= */
 
 @media (max-width: 700px) {
 
@@ -466,491 +556,568 @@
 
 }
 
+
+/* =========================================
+   VERY SMALL SCREENS
+========================================= */
+
+@media (max-width: 400px) {
+
+    .detail-page {
+        padding-left: 0.75rem;
+        padding-right: 0.75rem;
+    }
+
+    .product-detail {
+        padding: 1rem;
+    }
+
+    .quantity-control button {
+        width: 44px;
+    }
+
+    .quantity-control input {
+        width: 52px;
+    }
+
+}
+
 </style>
+
 {% endblock %}
+
 
 {% block content %}
 
 <main class="detail-page">
-<!-- BACK -->
 
-<a
-    href="{{ request.META.HTTP_REFERER|default:'/' }}"
-    class="back-link"
->
-    ← Back to Search
-</a>
 
-{% if api_error %}
+    <!-- =========================================
+         BACK LINK
+    ========================================== -->
 
-    <div class="error-card">
+    <a
+        href="{{ return_url|default:request.META.HTTP_REFERER|default:'/' }}"
+        class="back-link"
+    >
+        ← Back to Search
+    </a>
 
-        <h2>
-            Product unavailable
-        </h2>
 
-        <p>
-            {{ api_error }}
-        </p>
+    <!-- =========================================
+         API ERROR
+    ========================================== -->
 
-    </div>
+    {% if api_error %}
 
-{% elif product %}
+        <div class="error-card">
 
-    <article class="product-detail">
+            <h2>
+                Product unavailable
+            </h2>
 
-        <!-- =========================
-             PRODUCT IMAGE
-        ========================== -->
-
-        <div class="detail-image">
-
-            {% if product.image %}
-
-                <img
-                    src="{{ product.image }}"
-                    alt="{{ product.name }}"
-                    loading="lazy"
-                    onerror="
-                        this.style.display='none';
-                        this.nextElementSibling.style.display='block';
-                    "
-                >
-
-                <span
-                    class="no-image"
-                    style="display:none;"
-                >
-                    Image unavailable
-                </span>
-
-            {% else %}
-
-                <span class="no-image">
-                    No image available
-                </span>
-
-            {% endif %}
+            <p>
+                {{ api_error }}
+            </p>
 
         </div>
 
-        <!-- =========================
-             PRODUCT INFORMATION
-        ========================== -->
 
-        <div class="detail-info">
+    <!-- =========================================
+         PRODUCT FOUND
+    ========================================== -->
 
-            <h1>
-                {{ product.name }}
-            </h1>
+    {% elif product %}
 
-            <div class="detail-price">
+        <article class="product-detail">
 
-                R<span id="unit-price">
-                    {{ product.price|floatformat:2 }}
-                </span>
+
+            <!-- =====================================
+                 PRODUCT IMAGE
+            ====================================== -->
+
+            <div class="detail-image">
+
+                {% if product.image %}
+
+                    <img
+                        src="{{ product.image }}"
+                        alt="{{ product.name|default:'Product image' }}"
+                        loading="lazy"
+                        onerror="
+                            this.style.display='none';
+                            this.nextElementSibling.style.display='block';
+                        "
+                    >
+
+                    <span
+                        class="no-image"
+                        style="display: none;"
+                    >
+                        Image unavailable
+                    </span>
+
+                {% else %}
+
+                    <span class="no-image">
+                        No image available
+                    </span>
+
+                {% endif %}
 
             </div>
 
-            <div class="price-note">
-                Price per item
-            </div>
 
-            {% if product.description %}
+            <!-- =====================================
+                 PRODUCT INFORMATION
+            ====================================== -->
 
-                <p class="detail-description">
+            <div class="detail-info">
 
-                    {{ product.description }}
 
-                </p>
+                <!-- PRODUCT NAME -->
 
-            {% endif %}
+                <h1>
+                    {{ product.name }}
+                </h1>
 
-            <!-- PRODUCT META -->
 
-            <div class="detail-meta">
+                <!-- PRICE -->
 
-                {% if product.brand %}
+                <div class="detail-price">
 
-                    <p>
+                    R<span id="unit-price">
+                        {{ product.price|floatformat:2 }}
+                    </span>
 
-                        <strong>
-                            Brand
-                        </strong>
+                </div>
 
-                        <span>
-                            {{ product.brand }}
-                        </span>
 
+                <div class="price-note">
+                    Price per item
+                </div>
+
+
+                <!-- DESCRIPTION -->
+
+                {% if product.description %}
+
+                    <p class="detail-description">
+                        {{ product.description }}
                     </p>
 
                 {% endif %}
 
-                {% if product.category %}
+
+                <!-- =================================
+                     PRODUCT META
+                ================================== -->
+
+                <div class="detail-meta">
+
+
+                    {% if product.brand %}
+
+                        <p>
+                            <strong>Brand</strong>
+
+                            <span>
+                                {{ product.brand }}
+                            </span>
+                        </p>
+
+                    {% endif %}
+
+
+                    {% if product.category %}
+
+                        <p>
+                            <strong>Category</strong>
+
+                            <span>
+                                {{ product.category }}
+                            </span>
+                        </p>
+
+                    {% endif %}
+
+
+                    {% if product.colour %}
+
+                        <p>
+                            <strong>Colour</strong>
+
+                            <span>
+                                {{ product.colour }}
+                            </span>
+                        </p>
+
+                    {% endif %}
+
+
+                    {% if product.size %}
+
+                        <p>
+                            <strong>Size</strong>
+
+                            <span>
+                                {{ product.size }}
+                            </span>
+                        </p>
+
+                    {% endif %}
+
+
+                    {% if product.store %}
+
+                        <p>
+                            <strong>Store</strong>
+
+                            <span>
+                                {{ product.store }}
+                            </span>
+                        </p>
+
+                    {% endif %}
+
+
+                    {% if product.location %}
+
+                        <p>
+                            <strong>Location</strong>
+
+                            <span>
+                                {{ product.location }}
+                            </span>
+                        </p>
+
+                    {% endif %}
+
+
+                    <!-- SHIPPING -->
 
                     <p>
-
-                        <strong>
-                            Category
-                        </strong>
+                        <strong>Shipping</strong>
 
                         <span>
-                            {{ product.category }}
-                        </span>
 
+                            {% if product.shipping_cost > 0 %}
+
+                                R{{ product.shipping_cost|floatformat:2 }}
+
+                            {% else %}
+
+                                Free
+
+                            {% endif %}
+
+                        </span>
                     </p>
 
-                {% endif %}
 
-                {% if product.colour %}
+                    <!-- RATING -->
 
-                    <p>
+                    {% if product.rating > 0 %}
 
-                        <strong>
-                            Colour
-                        </strong>
+                        <p>
+                            <strong>Rating</strong>
 
-                        <span>
-                            {{ product.colour }}
-                        </span>
+                            <span>
+                                ⭐ {{ product.rating }}
+                            </span>
+                        </p>
 
-                    </p>
+                    {% endif %}
 
-                {% endif %}
 
-                {% if product.size %}
+                </div>
 
-                    <p>
 
-                        <strong>
-                            Size
-                        </strong>
+                <!-- =================================
+                     SHOPPING
+                ================================== -->
 
-                        <span>
-                            {{ product.size }}
-                        </span>
+                {% if product.stock > 0 %}
 
-                    </p>
 
-                {% endif %}
+                    <div class="shopping-box">
 
-                {% if product.store %}
 
-                    <p>
+                        <!-- =================================
+                             ADD TO CART FORM
+                        ================================== -->
 
-                        <strong>
-                            Store
-                        </strong>
+                        <form
+                            id="cart-form"
+                            method="post"
+                            action="{% url 'shopping:add_to_cart' product.external_id %}"
+                        >
 
-                        <span>
-                            {{ product.store }}
-                        </span>
+                            {% csrf_token %}
 
-                    </p>
 
-                {% endif %}
+                            <!-- QUANTITY -->
 
-                {% if product.location %}
+                            <label
+                                class="shopping-label"
+                                for="quantity"
+                            >
+                                Quantity
+                            </label>
 
-                    <p>
 
-                        <strong>
-                            Location
-                        </strong>
+                            <div class="quantity-row">
 
-                        <span>
-                            {{ product.location }}
-                        </span>
+                                <div class="quantity-control">
 
-                    </p>
 
-                {% endif %}
+                                    <!-- DECREASE -->
 
-                <p>
+                                    <button
+                                        type="button"
+                                        id="decrease"
+                                        aria-label="Decrease quantity"
+                                        title="Decrease quantity"
+                                    >
+                                        −
+                                    </button>
 
-                    <strong>
-                        Shipping
-                    </strong>
 
-                    <span>
+                                    <!-- INPUT -->
 
-                        {% if product.shipping_cost %}
+                                    <input
+                                        type="number"
+                                        id="quantity"
+                                        name="quantity"
+                                        value="1"
+                                        min="1"
+                                        max="{{ product.stock }}"
+                                        step="1"
+                                        inputmode="numeric"
+                                        aria-label="Quantity"
+                                        autocomplete="off"
+                                    >
 
-                            R{{ product.shipping_cost|floatformat:2 }}
 
-                        {% else %}
+                                    <!-- INCREASE -->
 
-                            Free
+                                    <button
+                                        type="button"
+                                        id="increase"
+                                        aria-label="Increase quantity"
+                                        title="Increase quantity"
+                                    >
+                                        +
+                                    </button>
+
+
+                                </div>
+
+                            </div>
+
+
+                            <!-- =================================
+                                 ORDER SUMMARY
+                            ================================== -->
+
+                            <div class="order-summary">
+
+
+                                <!-- PRODUCT -->
+
+                                <div class="summary-row">
+
+                                    <span>
+                                        Product
+                                    </span>
+
+                                    <span>
+                                        R<span id="subtotal">
+                                            {{ product.price|floatformat:2 }}
+                                        </span>
+                                    </span>
+
+                                </div>
+
+
+                                <!-- SHIPPING -->
+
+                                <div class="summary-row">
+
+                                    <span>
+                                        Shipping
+                                    </span>
+
+                                    <span>
+
+                                        {% if product.shipping_cost > 0 %}
+
+                                            R<span id="shipping">
+                                                {{ product.shipping_cost|floatformat:2 }}
+                                            </span>
+
+                                        {% else %}
+
+                                            Free
+
+                                        {% endif %}
+
+                                    </span>
+
+                                </div>
+
+
+                                <!-- TOTAL -->
+
+                                <div class="summary-row total">
+
+                                    <span>
+                                        Total
+                                    </span>
+
+                                    <span>
+                                        R<span id="total">
+                                            {{ product.total_cost|floatformat:2 }}
+                                        </span>
+                                    </span>
+
+                                </div>
+
+
+                            </div>
+
+
+                            <!-- =================================
+                                 ADD TO CART BUTTON
+                            ================================== -->
+
+                            <div class="shopping-actions">
+
+                                <button
+                                    type="submit"
+                                    id="add-cart-button"
+                                    class="shop-button add-cart"
+                                >
+                                    🛒 Add to Cart
+                                </button>
+
+                            </div>
+
+
+                        </form>
+
+
+                        <!-- =================================
+                             BUY NOW
+                        ================================== -->
+
+                        {% if product.url %}
+
+                            <a
+                                href="{{ product.url }}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="shop-button buy-now"
+                                style="margin-top: 0.7rem;"
+                            >
+                                Buy Now →
+                            </a>
 
                         {% endif %}
 
-                    </span>
 
-                </p>
+                    </div>
 
-                <p>
 
-                    <strong>
-                        Stock
-                    </strong>
+                {% else %}
 
-                    {% if product.stock and product.stock > 0 %}
 
-                        <span class="stock">
+                    <!-- =================================
+                         OUT OF STOCK
+                    ================================== -->
 
-                            {{ product.stock }}
-                            available
+                    <div class="shopping-box">
 
-                        </span>
-
-                    {% else %}
-
-                        <span class="stock-out">
-
+                        <button
+                            type="button"
+                            class="shop-button"
+                            disabled
+                        >
                             Out of Stock
+                        </button>
 
-                        </span>
+                    </div>
 
-                    {% endif %}
-
-                </p>
-
-                {% if product.rating %}
-
-                    <p>
-
-                        <strong>
-                            Rating
-                        </strong>
-
-                        <span>
-                            ⭐ {{ product.rating }}
-                        </span>
-
-                    </p>
 
                 {% endif %}
 
+
+                <!-- =====================================
+                     VIEW STORE
+                ====================================== -->
+
+                {% if product.url %}
+
+                    <a
+                        href="{{ product.url }}"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="shop-button external-link"
+                        style="margin-top: 0.75rem;"
+                    >
+                        View on
+                        {{ product.store|default:"Store" }}
+                        ↗
+                    </a>
+
+                {% endif %}
+
+
             </div>
 
-            <!-- =========================
-                 SHOPPING
-            ========================== -->
+        </article>
 
-            {% if product.stock and product.stock > 0 %}
 
-                <div class="shopping-box">
+    <!-- =========================================
+         PRODUCT NOT FOUND
+    ========================================== -->
 
-                    <!-- CSRF -->
+    {% else %}
 
-                    <form
-                        id="cart-form"
-                        method="post"
-                        action="{% url 'shopping:add_to_cart' product.external_id %}"
-                    >
+        <div class="error-card">
 
-                        {% csrf_token %}
+            <h2>
+                Product not found
+            </h2>
 
-                        <label
-                            class="shopping-label"
-                            for="quantity"
-                        >
-                            Quantity
-                        </label>
-
-                        <div class="quantity-row">
-
-                            <div class="quantity-control">
-
-                                <button
-                                    type="button"
-                                    id="decrease"
-                                    aria-label="Decrease quantity"
-                                >
-                                    −
-                                </button>
-
-                                <input
-                                    type="number"
-                                    id="quantity"
-                                    name="quantity"
-                                    value="1"
-                                    min="1"
-                                    max="{{ product.stock }}"
-                                    aria-label="Quantity"
-                                >
-
-                                <button
-                                    type="button"
-                                    id="increase"
-                                    aria-label="Increase quantity"
-                                >
-                                    +
-                                </button>
-
-                            </div>
-
-                        </div>
-
-                        <!-- ORDER SUMMARY -->
-
-                        <div class="order-summary">
-
-                            <div class="summary-row">
-
-                                <span>
-                                    Product
-                                </span>
-
-                                <span>
-
-                                    R<span id="subtotal">
-                                        {{ product.price|floatformat:2 }}
-                                    </span>
-
-                                </span>
-
-                            </div>
-
-                            <div class="summary-row">
-
-                                <span>
-                                    Shipping
-                                </span>
-
-                                <span>
-
-                                    {% if product.shipping_cost %}
-
-                                        R<span id="shipping">
-                                            {{ product.shipping_cost|floatformat:2 }}
-                                        </span>
-
-                                    {% else %}
-
-                                        Free
-
-                                    {% endif %}
-
-                                </span>
-
-                            </div>
-
-                            <div class="summary-row total">
-
-                                <span>
-                                    Total
-                                </span>
-
-                                <span>
-
-                                    R<span id="total">
-                                        {{ product.total_cost|floatformat:2 }}
-                                    </span>
-
-                                </span>
-
-                            </div>
-
-                        </div>
-
-                        <!-- ACTIONS -->
-
-                        <div class="shopping-actions">
-
-                            <button
-                                type="submit"
-                                class="shop-button add-cart"
-                            >
-                                🛒 Add to Cart
-                            </button>
-
-                        </div>
-
-                    </form>
-
-                    <!-- BUY NOW -->
-
-                    {% if product.url %}
-
-                        <a
-                            href="{{ product.url }}"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="shop-button buy-now"
-                            style="margin-top: 0.7rem;"
-                        >
-                            Buy Now →
-                        </a>
-
-                    {% endif %}
-
-                </div>
-
-            {% else %}
-
-                <div class="shopping-box">
-
-                    <button
-                        type="button"
-                        class="shop-button"
-                        disabled
-                    >
-                        Out of Stock
-                    </button>
-
-                </div>
-
-            {% endif %}
-
-            <!-- EXTERNAL STORE -->
-
-            {% if product.url %}
-
-                <a
-                    href="{{ product.url }}"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="shop-button external-link"
-                    style="margin-top: 0.75rem;"
-                >
-                    View on
-                    {{ product.store|default:"Store" }}
-                    ↗
-                </a>
-
-            {% endif %}
+            <p>
+                We couldn't find the product you're looking for.
+            </p>
 
         </div>
 
-    </article>
+    {% endif %}
 
-{% else %}
-
-    <div class="error-card">
-
-        <h2>
-            Product not found
-        </h2>
-
-        <p>
-            We couldn't find the product you're looking for.
-        </p>
-
-    </div>
-
-{% endif %}
 
 </main>
-{% if product and product.stock %}
 
+
+<!-- =========================================
+     QUANTITY + CART JAVASCRIPT
+========================================= -->
+
+{% if product and product.stock > 0 %}
 
 <script>
 
 document.addEventListener("DOMContentLoaded", function () {
 
-    const cartForm =
-        document.getElementById("cart-form");
+    "use strict";
+
+
+    /* =========================================
+       ELEMENTS
+    ========================================= */
 
     const quantityInput =
         document.getElementById("quantity");
@@ -967,32 +1134,60 @@ document.addEventListener("DOMContentLoaded", function () {
     const totalElement =
         document.getElementById("total");
 
+    const cartForm =
+        document.getElementById("cart-form");
 
-    if (!cartForm || !quantityInput) {
+    const submitButton =
+        document.getElementById("add-cart-button");
+
+
+    /* =========================================
+       SAFETY CHECK
+    ========================================= */
+
+    if (
+        !quantityInput ||
+        !decreaseButton ||
+        !increaseButton ||
+        !cartForm
+    ) {
+
+        console.error(
+            "Product detail: required elements not found."
+        );
+
         return;
     }
 
 
-    const unitPrice = Number(
-        "{{ product.price|default:'0' }}"
-    );
+    /* =========================================
+       PRODUCT VALUES
+    ========================================= */
 
-    const shippingCost = Number(
-        "{{ product.shipping_cost|default:'0' }}"
-    );
-
-    const maxStock = Number(
-        "{{ product.stock|default:'1' }}"
-    );
+    const unitPrice =
+        parseFloat(
+            "{{ product.price|default:'0' }}"
+        ) || 0;
 
 
-    /*
-    ==========================================
-    UPDATE TOTALS
-    ==========================================
-    */
+    const shippingCost =
+        parseFloat(
+            "{{ product.shipping_cost|default:'0' }}"
+        ) || 0;
 
-    function updateTotals() {
+
+    const maxStock =
+        parseInt(
+            "{{ product.stock|default:'1' }}",
+            10
+        ) || 1;
+
+
+    /* =========================================
+       GET QUANTITY
+    ========================================= */
+
+    function getQuantity() {
 
         let quantity =
             parseInt(
@@ -1000,18 +1195,35 @@ document.addEventListener("DOMContentLoaded", function () {
                 10
             );
 
-        if (
-            isNaN(quantity) ||
-            quantity < 1
-        ) {
+
+        if (Number.isNaN(quantity)) {
             quantity = 1;
         }
 
-        if (
-            quantity > maxStock
-        ) {
+
+        if (quantity < 1) {
+            quantity = 1;
+        }
+
+
+        if (quantity > maxStock) {
             quantity = maxStock;
         }
+
+
+        return quantity;
+    }
+
+
+    /* =========================================
+       UPDATE TOTALS
+    ========================================= */
+
+    function updateTotals() {
+
+        const quantity =
+            getQuantity();
+
 
         quantityInput.value =
             quantity;
@@ -1020,145 +1232,191 @@ document.addEventListener("DOMContentLoaded", function () {
         const subtotal =
             unitPrice * quantity;
 
+
         const total =
             subtotal + shippingCost;
 
 
-        subtotalElement.textContent =
-            subtotal.toFixed(2);
+        if (subtotalElement) {
 
-        totalElement.textContent =
-            total.toFixed(2);
+            subtotalElement.textContent =
+                subtotal.toFixed(2);
+        }
+
+
+        if (totalElement) {
+
+            totalElement.textContent =
+                total.toFixed(2);
+        }
+
+
+        decreaseButton.disabled =
+            quantity <= 1;
+
+
+        increaseButton.disabled =
+            quantity >= maxStock;
+
     }
 
 
-    /*
-    ==========================================
-    DECREASE
-    ==========================================
-    */
+    /* =========================================
+       PLUS
+    ========================================= */
 
-    if (decreaseButton) {
+    increaseButton.addEventListener(
+        "click",
+        function (event) {
 
-        decreaseButton.addEventListener(
-            "click",
-            function () {
-
-                let quantity =
-                    parseInt(
-                        quantityInput.value,
-                        10
-                    ) || 1;
+            event.preventDefault();
 
 
-                if (quantity > 1) {
-                    quantity--;
-                }
+            let quantity =
+                getQuantity();
 
+
+            if (quantity < maxStock) {
+
+                quantity += 1;
 
                 quantityInput.value =
                     quantity;
 
-
                 updateTotals();
+
             }
-        );
-    }
 
-
-    /*
-    ==========================================
-    INCREASE
-    ==========================================
-    */
-
-    if (increaseButton) {
-
-        increaseButton.addEventListener(
-            "click",
-            function () {
-
-                let quantity =
-                    parseInt(
-                        quantityInput.value,
-                        10
-                    ) || 1;
-
-
-                if (
-                    quantity < maxStock
-                ) {
-                    quantity++;
-                }
-
-
-                quantityInput.value =
-                    quantity;
-
-
-                updateTotals();
-            }
-        );
-    }
-
-
-    /*
-    ==========================================
-    MANUAL QUANTITY
-    ==========================================
-    */
-
-    quantityInput.addEventListener(
-        "input",
-        updateTotals
+        }
     );
 
 
-    /*
-    ==========================================
-    ADD TO DJANGO CART
-    ==========================================
-    */
+    /* =========================================
+       MINUS
+    ========================================= */
+
+    decreaseButton.addEventListener(
+        "click",
+        function (event) {
+
+            event.preventDefault();
+
+
+            let quantity =
+                getQuantity();
+
+
+            if (quantity > 1) {
+
+                quantity -= 1;
+
+                quantityInput.value =
+                    quantity;
+
+                updateTotals();
+
+            }
+
+        }
+    );
+
+
+    /* =========================================
+       MANUAL INPUT
+    ========================================= */
+
+    quantityInput.addEventListener(
+        "input",
+        function () {
+
+            /*
+             * Allow the user to temporarily
+             * clear the input.
+             */
+
+            if (
+                quantityInput.value === ""
+            ) {
+                return;
+            }
+
+
+            let quantity =
+                parseInt(
+                    quantityInput.value,
+                    10
+                );
+
+
+            if (Number.isNaN(quantity)) {
+                return;
+            }
+
+
+            if (quantity < 1) {
+                quantity = 1;
+            }
+
+
+            if (quantity > maxStock) {
+                quantity = maxStock;
+            }
+
+
+            quantityInput.value =
+                quantity;
+
+
+            updateTotals();
+
+        }
+    );
+
+
+    /* =========================================
+       INPUT CHANGE
+    ========================================= */
+
+    quantityInput.addEventListener(
+        "change",
+        function () {
+
+            updateTotals();
+
+        }
+    );
+
+
+    /* =========================================
+       ADD TO CART
+    ========================================= */
 
     cartForm.addEventListener(
         "submit",
         async function (event) {
 
-            /*
-             * IMPORTANT:
-             * Stop the normal form submission.
-             *
-             * We want JavaScript to send the
-             * request and handle Django's JSON.
-             */
-
             event.preventDefault();
 
 
-            const submitButton =
+            const quantity =
+                getQuantity();
+
+
+            quantityInput.value =
+                quantity;
+
+
+            /* =================================
+               CSRF
+            ================================= */
+
+            const csrfInput =
                 cartForm.querySelector(
-                    'button[type="submit"]'
+                    "[name='csrfmiddlewaretoken']"
                 );
 
 
-            const quantity =
-                parseInt(
-                    quantityInput.value,
-                    10
-                ) || 1;
-
-
-            /*
-             * Get CSRF token from form.
-             */
-
-            const csrfToken =
-                cartForm.querySelector(
-                    "[name=csrfmiddlewaretoken]"
-                )?.value;
-
-
-            if (!csrfToken) {
+            if (!csrfInput) {
 
                 alert(
                     "Security token missing. Please refresh the page."
@@ -1168,9 +1426,9 @@ document.addEventListener("DOMContentLoaded", function () {
             }
 
 
-            /*
-             * Prevent double clicks.
-             */
+            /* =================================
+               DISABLE BUTTON
+            ================================= */
 
             if (submitButton) {
 
@@ -1179,6 +1437,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                 submitButton.textContent =
                     "Adding...";
+
             }
 
 
@@ -1193,13 +1452,14 @@ document.addEventListener("DOMContentLoaded", function () {
                             headers: {
 
                                 "X-CSRFToken":
-                                    csrfToken,
+                                    csrfInput.value,
 
                                 "X-Requested-With":
                                     "XMLHttpRequest",
 
                                 "Content-Type":
-                                    "application/x-www-form-urlencoded"
+                                    "application/x-www-form-urlencoded; charset=UTF-8"
+
                             },
 
                             body:
@@ -1211,87 +1471,111 @@ document.addEventListener("DOMContentLoaded", function () {
                     );
 
 
-                /*
-                 * Read Django JSON response.
-                 */
+                /* =================================
+                   READ RESPONSE
+                ================================= */
 
-                const data =
-                    await response.json();
+                let data = {};
 
 
-                /*
-                ==========================================
-                SUCCESS
-                ==========================================
-                */
+                try {
+
+                    data =
+                        await response.json();
+
+                } catch (jsonError) {
+
+                    console.error(
+                        "Cart response was not JSON:",
+                        jsonError
+                    );
+
+                }
+
+
+                /* =================================
+                   SUCCESS
+                ================================= */
 
                 if (
-    response.ok &&
-    data.success
-) {
-
-    /*
-     * Update navbar cart count
-     */
-
-    const cartCount =
-        document.getElementById("cart-count");
+                    response.ok &&
+                    data.success
+                ) {
 
 
-    if (cartCount) {
+                    /* =============================
+                       UPDATE CART COUNT
+                    ============================= */
 
-        cartCount.textContent =
-            data.cart_count ?? 0;
-
-
-        /*
-         * Animate the cart badge
-         */
-
-        cartCount.classList.remove(
-            "bump"
-        );
+                    const cartCount =
+                        document.getElementById(
+                            "cart-count"
+                        );
 
 
-        void cartCount.offsetWidth;
+                    if (cartCount) {
+
+                        cartCount.textContent =
+                            data.cart_count ?? 0;
 
 
-        cartCount.classList.add(
-            "bump"
-        );
-    }
+                        cartCount.classList.remove(
+                            "bump"
+                        );
 
 
-    /*
-     * Change button
-     */
-
-    if (submitButton) {
-
-        submitButton.textContent =
-            "✓ Added to Cart";
-    }
+                        void cartCount.offsetWidth;
 
 
-    /*
-     * IMPORTANT:
-     *
-     * Do NOT redirect immediately.
-     *
-     * The user can now see the
-     * cart count increase.
-     */
+                        cartCount.classList.add(
+                            "bump"
+                        );
 
-    return;
-}
+                    }
 
 
+                    /* =============================
+                       BUTTON SUCCESS
+                    ============================= */
 
-                /*
-                ==========================================
-                DJANGO ERROR
-                ==========================================
-                */
+                    if (submitButton) {
+
+                        submitButton.disabled =
+                            false;
+
+                        submitButton.textContent =
+                            "✓ Added to Cart";
+
+                    }
+
+
+                    /*
+                     * Keep the successful state
+                     * visible briefly.
+                     */
+
+                    setTimeout(
+                        function () {
+
+                            if (submitButton) {
+
+                                submitButton.textContent =
+                                    "🛒 Add to Cart";
+
+                            }
+
+                        },
+                        2000
+                    );
+
+
+                    return;
+                }
+
+
+                /* =================================
+                   SERVER ERROR
+                ================================= */
 
                 alert(
                     data.error ||
@@ -1306,6 +1590,7 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     submitButton.textContent =
                         "🛒 Add to Cart";
+
                 }
 
 
@@ -1329,25 +1614,24 @@ document.addEventListener("DOMContentLoaded", function () {
 
                     submitButton.textContent =
                         "🛒 Add to Cart";
+
                 }
+
             }
 
         }
     );
 
 
-    /*
-    ==========================================
-    INITIAL TOTALS
-    ==========================================
-    */
+    /* =========================================
+       INITIALISE
+    ========================================= */
 
     updateTotals();
 
 });
 
 </script>
-
 
 {% endif %}
 

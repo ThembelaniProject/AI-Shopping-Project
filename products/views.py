@@ -2,69 +2,151 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
+
 from preferences.models import Preference
 
 from .services.store_api import (
-search_products,
-get_product,
-StoreAPIError,
+    search_products,
+    get_product,
+    StoreAPIError,
 )
+
+
+# ==========================================================
+# IMAGE HELPER
+# ==========================================================
+
+def get_product_image(product):
+
+    fields = [
+        "image",
+        "imageURL",
+        "imageUrl",
+        "imageProductCardURL",
+        "imageProductCardUrl",
+        "imagePDPURL",
+        "imagePDPUrl",
+        "thumbnail",
+        "thumbnailURL",
+        "thumbnailUrl",
+        "productImage",
+        "productImageUrl",
+        "mainImage",
+        "mainImageUrl",
+    ]
+
+    for field in fields:
+
+        value = product.get(field)
+
+        if isinstance(value, str):
+
+            value = value.strip()
+
+            if value:
+                return value
+
+    images = product.get(
+        "images",
+        []
+    )
+
+    if isinstance(images, list):
+
+        for image in images:
+
+            if isinstance(image, str):
+
+                image = image.strip()
+
+                if image:
+                    return image
+
+            elif isinstance(image, dict):
+
+                for field in [
+                    "url",
+                    "image",
+                    "imageUrl",
+                    "imageURL",
+                    "src",
+                ]:
+
+                    value = image.get(field)
+
+                    if isinstance(value, str):
+
+                        value = value.strip()
+
+                        if value:
+                            return value
+
+    return ""
+
+
+# ==========================================================
+# SEARCH
+# ==========================================================
 
 @login_required
 def search(request):
-        # ==========================================
+
+    # ======================================================
     # USER PREFERENCES
-    # ==========================================
+    # ======================================================
 
     try:
+
         preferences = Preference.objects.get(
             user=request.user
         )
+
     except Preference.DoesNotExist:
+
         preferences = None
 
-    # ==========================================
+    # ======================================================
     # SEARCH PARAMETERS
-    # ==========================================
+    # ======================================================
 
     keyword = request.GET.get(
         "keyword",
-        ""
+        "",
     ).strip()
 
     budget = request.GET.get(
         "budget",
-        ""
+        "",
     ).strip()
 
     colour = request.GET.get(
         "colour",
-        ""
+        "",
     ).strip()
 
     size = request.GET.get(
         "size",
-        ""
+        "",
     ).strip()
 
     store = request.GET.get(
         "store",
-        ""
+        "",
     ).strip()
 
     location = request.GET.get(
         "location",
-        ""
+        "",
     ).strip()
 
     max_shipping = request.GET.get(
         "max_shipping",
-        ""
+        "",
     ).strip()
 
     max_distance = request.GET.get(
         "max_distance",
-        ""
+        "",
     ).strip()
 
     sort = request.GET.get(
@@ -75,19 +157,20 @@ def search(request):
     user_latitude = request.GET.get(
         "user_latitude",
         "",
-    )
+    ).strip()
 
     user_longitude = request.GET.get(
         "user_longitude",
         "",
-    )
+    ).strip()
 
     products = []
+
     api_error = None
 
-    # ==========================================
+    # ======================================================
     # SEARCH API
-    # ==========================================
+    # ======================================================
 
     if keyword:
 
@@ -102,9 +185,9 @@ def search(request):
 
             api_error = str(exc)
 
-    # ==========================================
+    # ======================================================
     # NORMALISE PRODUCT DATA
-    # ==========================================
+    # ======================================================
 
     for item in products:
 
@@ -148,9 +231,13 @@ def search(request):
             "",
         )
 
+        item["image"] = get_product_image(
+            item
+        )
+
         item.setdefault(
-            "image",
-            "",
+            "images",
+            [],
         )
 
         item.setdefault(
@@ -158,9 +245,9 @@ def search(request):
             "",
         )
 
-        # --------------------------------------
-        # Price
-        # --------------------------------------
+        # ==================================================
+        # CURRENT PRICE
+        # ==================================================
 
         try:
 
@@ -180,11 +267,135 @@ def search(request):
             InvalidOperation,
         ):
 
-            item["price"] = Decimal("0")
+            item["price"] = Decimal(
+                "0.00"
+            )
 
-        # --------------------------------------
-        # Shipping
-        # --------------------------------------
+        # ==================================================
+        # REGULAR PRICE
+        # ==================================================
+
+        try:
+
+            item["regular_price"] = Decimal(
+                str(
+                    item.get(
+                        "regular_price",
+                        item["price"],
+                    )
+                    or item["price"]
+                )
+            )
+
+        except (
+            ValueError,
+            TypeError,
+            InvalidOperation,
+        ):
+
+            item["regular_price"] = item[
+                "price"
+            ]
+
+        # ==================================================
+        # SALE PRICE
+        # ==================================================
+
+        sale_price = item.get(
+            "sale_price"
+        )
+
+        if sale_price is not None:
+
+            try:
+
+                item["sale_price"] = Decimal(
+                    str(sale_price)
+                )
+
+            except (
+                ValueError,
+                TypeError,
+                InvalidOperation,
+            ):
+
+                item["sale_price"] = None
+
+        # ==================================================
+        # ON SALE
+        # ==================================================
+
+        item["on_sale"] = bool(
+            item.get(
+                "on_sale",
+                False,
+            )
+        )
+
+        # ==================================================
+        # DISCOUNT AMOUNT
+        # ==================================================
+
+        try:
+
+            item["discount_amount"] = Decimal(
+                str(
+                    item.get(
+                        "discount_amount",
+                        0,
+                    )
+                    or 0
+                )
+            )
+
+        except (
+            ValueError,
+            TypeError,
+            InvalidOperation,
+        ):
+
+            item["discount_amount"] = Decimal(
+                "0.00"
+            )
+
+        # ==================================================
+        # DISCOUNT PERCENTAGE
+        # ==================================================
+
+        try:
+
+            item["discount_percentage"] = Decimal(
+                str(
+                    item.get(
+                        "discount_percentage",
+                        0,
+                    )
+                    or 0
+                )
+            )
+
+        except (
+            ValueError,
+            TypeError,
+            InvalidOperation,
+        ):
+
+            item["discount_percentage"] = Decimal(
+                "0.00"
+            )
+
+        # ==================================================
+        # DEAL EXPIRY
+        # ==================================================
+
+        item.setdefault(
+            "deal_expiry",
+            "",
+        )
+
+        # ==================================================
+        # SHIPPING
+        # ==================================================
 
         try:
 
@@ -204,11 +415,13 @@ def search(request):
             InvalidOperation,
         ):
 
-            item["shipping_cost"] = Decimal("0")
+            item["shipping_cost"] = Decimal(
+                "0.00"
+            )
 
-        # --------------------------------------
-        # Rating
-        # --------------------------------------
+        # ==================================================
+        # RATING
+        # ==================================================
 
         try:
 
@@ -228,11 +441,13 @@ def search(request):
             InvalidOperation,
         ):
 
-            item["rating"] = Decimal("0")
+            item["rating"] = Decimal(
+                "0.00"
+            )
 
-        # --------------------------------------
-        # Stock
-        # --------------------------------------
+        # ==================================================
+        # STOCK
+        # ==================================================
 
         try:
 
@@ -251,29 +466,35 @@ def search(request):
 
             item["stock"] = 0
 
-        # --------------------------------------
-        # Distance
-        # --------------------------------------
+        # ==================================================
+        # DISTANCE
+        # ==================================================
 
         item.setdefault(
             "distance",
             None,
         )
 
-    # ==========================================
+    # ======================================================
     # BUDGET FILTER
-    # ==========================================
+    #
+    # IMPORTANT:
+    # This uses the sale price when a product is on sale.
+    # ======================================================
 
     if budget:
 
         try:
 
-            max_budget = Decimal(budget)
+            max_budget = Decimal(
+                budget
+            )
 
             products = [
                 item
                 for item in products
-                if item["price"] <= max_budget
+                if item["price"]
+                <= max_budget
             ]
 
         except (
@@ -284,9 +505,9 @@ def search(request):
 
             pass
 
-    # ==========================================
+    # ======================================================
     # COLOUR FILTER
-    # ==========================================
+    # ======================================================
 
     if colour:
 
@@ -296,15 +517,17 @@ def search(request):
             item
             for item in products
             if colour_lower
-            in item.get(
-                "colour",
-                "",
+            in str(
+                item.get(
+                    "colour",
+                    "",
+                )
             ).lower()
         ]
 
-    # ==========================================
+    # ======================================================
     # SIZE FILTER
-    # ==========================================
+    # ======================================================
 
     if size:
 
@@ -314,15 +537,17 @@ def search(request):
             item
             for item in products
             if size_lower
-            in item.get(
-                "size",
-                "",
+            in str(
+                item.get(
+                    "size",
+                    "",
+                )
             ).lower()
         ]
 
-    # ==========================================
+    # ======================================================
     # STORE FILTER
-    # ==========================================
+    # ======================================================
 
     if store:
 
@@ -332,15 +557,17 @@ def search(request):
             item
             for item in products
             if store_lower
-            in item.get(
-                "store",
-                "",
+            in str(
+                item.get(
+                    "store",
+                    "",
+                )
             ).lower()
         ]
 
-    # ==========================================
+    # ======================================================
     # LOCATION FILTER
-    # ==========================================
+    # ======================================================
 
     if location:
 
@@ -350,15 +577,17 @@ def search(request):
             item
             for item in products
             if location_lower
-            in item.get(
-                "location",
-                "",
+            in str(
+                item.get(
+                    "location",
+                    "",
+                )
             ).lower()
         ]
 
-    # ==========================================
+    # ======================================================
     # SHIPPING FILTER
-    # ==========================================
+    # ======================================================
 
     if max_shipping:
 
@@ -383,12 +612,9 @@ def search(request):
 
             pass
 
-    # ==========================================
+    # ======================================================
     # DISTANCE
-    # ==========================================
-
-    # DummyJSON does not currently provide
-    # real store coordinates.
+    # ======================================================
 
     for item in products:
 
@@ -397,9 +623,9 @@ def search(request):
             None,
         )
 
-    # ==========================================
-    # MAX DISTANCE FILTER
-    # ==========================================
+    # ======================================================
+    # MAX DISTANCE
+    # ======================================================
 
     if max_distance:
 
@@ -412,9 +638,13 @@ def search(request):
             products = [
                 item
                 for item in products
-                if item.get("distance") is not None
+                if item.get(
+                    "distance"
+                ) is not None
                 and Decimal(
-                    str(item["distance"])
+                    str(
+                        item["distance"]
+                    )
                 ) <= distance_limit
             ]
 
@@ -426,9 +656,9 @@ def search(request):
 
             pass
 
-    # ==========================================
+    # ======================================================
     # TOTAL COST
-    # ==========================================
+    # ======================================================
 
     for item in products:
 
@@ -437,17 +667,13 @@ def search(request):
             + item["shipping_cost"]
         )
 
-    # ==========================================
+    # ======================================================
     # RECOMMENDATION SCORE
-    # ==========================================
+    # ======================================================
 
     def recommendation_score(item):
 
         score = Decimal("0")
-
-        # ======================================
-        # PRODUCT DATA
-        # ======================================
 
         name = str(
             item.get(
@@ -491,20 +717,19 @@ def search(request):
             )
         ).lower()
 
-        # ======================================
+        # --------------------------------------------------
         # RATING
-        # ======================================
+        # --------------------------------------------------
+
+        rating = item.get(
+            "rating",
+            Decimal("0")
+        )
 
         try:
 
             rating = Decimal(
-                str(
-                    item.get(
-                        "rating",
-                        0,
-                    )
-                    or 0
-                )
+                str(rating)
             )
 
         except (
@@ -515,22 +740,26 @@ def search(request):
 
             rating = Decimal("0")
 
-        score += rating * Decimal("10")
+        score += (
+            rating
+            * Decimal("10")
+        )
 
-        # ======================================
+        # --------------------------------------------------
         # PRICE
-        # ======================================
+        #
+        # Uses current/sale price.
+        # --------------------------------------------------
+
+        price = item.get(
+            "price",
+            Decimal("0")
+        )
 
         try:
 
             price = Decimal(
-                str(
-                    item.get(
-                        "price",
-                        0,
-                    )
-                    or 0
-                )
+                str(price)
             )
 
         except (
@@ -548,9 +777,9 @@ def search(request):
                 / price
             )
 
-        # ======================================
+        # --------------------------------------------------
         # STOCK
-        # ======================================
+        # --------------------------------------------------
 
         try:
 
@@ -577,39 +806,31 @@ def search(request):
 
             score -= Decimal("20")
 
-        # ======================================
+        # --------------------------------------------------
         # SEARCH RELEVANCE
-        # ======================================
+        # --------------------------------------------------
 
         if keyword:
 
             search_term = keyword.lower()
 
             if search_term in name:
-
                 score += Decimal("30")
 
             if search_term in category:
-
                 score += Decimal("15")
 
             if search_term in brand:
-
                 score += Decimal("10")
 
             if search_term in description:
-
                 score += Decimal("5")
 
-        # ======================================
+        # --------------------------------------------------
         # USER PREFERENCES
-        # ======================================
+        # --------------------------------------------------
 
         if preferences:
-
-            # ----------------------------------
-            # COLOURS
-            # ----------------------------------
 
             preferred_colours = [
                 value.strip().lower()
@@ -620,17 +841,10 @@ def search(request):
 
             for preferred_colour in preferred_colours:
 
-                if (
-                    preferred_colour
-                    in product_colour
-                ):
+                if preferred_colour in product_colour:
 
                     score += Decimal("25")
                     break
-
-            # ----------------------------------
-            # STORES
-            # ----------------------------------
 
             preferred_stores = [
                 value.strip().lower()
@@ -641,17 +855,10 @@ def search(request):
 
             for preferred_store in preferred_stores:
 
-                if (
-                    preferred_store
-                    in product_store
-                ):
+                if preferred_store in product_store:
 
                     score += Decimal("20")
                     break
-
-            # ----------------------------------
-            # STYLES
-            # ----------------------------------
 
             preferred_styles = [
                 value.strip().lower()
@@ -670,10 +877,6 @@ def search(request):
 
                     score += Decimal("20")
                     break
-
-            # ----------------------------------
-            # HOBBIES
-            # ----------------------------------
 
             preferred_hobbies = [
                 value.strip().lower()
@@ -695,22 +898,22 @@ def search(request):
 
         return score
 
-    # ==========================================
-    # SORTING
-    # ==========================================
+    # ======================================================
+    # SORT
+    # ======================================================
 
     if sort == "price_asc":
 
         products.sort(
             key=lambda item:
-            item["price"]
+                item["price"]
         )
 
     elif sort == "price_desc":
 
         products.sort(
             key=lambda item:
-            item["price"],
+                item["price"],
             reverse=True,
         )
 
@@ -718,29 +921,29 @@ def search(request):
 
         products.sort(
             key=lambda item:
-            item["shipping_cost"]
+                item["shipping_cost"]
         )
 
     elif sort == "name_asc":
 
         products.sort(
             key=lambda item:
-            str(
-                item.get(
-                    "name",
-                    "",
-                )
-            ).lower()
+                str(
+                    item.get(
+                        "name",
+                        "",
+                    )
+                ).lower()
         )
 
     elif sort == "distance_asc":
 
         products.sort(
-            key=lambda item:
-            (
+            key=lambda item: (
                 item["distance"]
-                if item.get("distance")
-                is not None
+                if item.get(
+                    "distance"
+                ) is not None
                 else Decimal("999999")
             )
         )
@@ -752,9 +955,9 @@ def search(request):
             reverse=True,
         )
 
-    # ==========================================
-    # ADD RECOMMENDATION SCORE
-    # ==========================================
+    # ======================================================
+    # RECOMMENDATION SCORE
+    # ======================================================
 
     if sort == "recommendation":
 
@@ -764,9 +967,9 @@ def search(request):
                 recommendation_score(item)
             )
 
-    # ==========================================
+    # ======================================================
     # CONTEXT
-    # ==========================================
+    # ======================================================
 
     context = {
 
@@ -805,6 +1008,11 @@ def search(request):
         context,
     )
 
+
+# ==========================================================
+# DETAIL
+# ==========================================================
+
 @login_required
 def detail(request, product_id):
 
@@ -814,9 +1022,13 @@ def detail(request, product_id):
             product_id
         )
 
-        # ======================================
-        # NORMALISE PRICE
-        # ======================================
+        product["image"] = get_product_image(
+            product
+        )
+
+        # ==================================================
+        # PRICE
+        # ==================================================
 
         try:
 
@@ -836,11 +1048,63 @@ def detail(request, product_id):
             InvalidOperation,
         ):
 
-            product["price"] = Decimal("0")
+            product["price"] = Decimal(
+                "0.00"
+            )
 
-        # ======================================
-        # NORMALISE SHIPPING
-        # ======================================
+        # ==================================================
+        # REGULAR PRICE
+        # ==================================================
+
+        try:
+
+            product["regular_price"] = Decimal(
+                str(
+                    product.get(
+                        "regular_price",
+                        product["price"],
+                    )
+                    or product["price"]
+                )
+            )
+
+        except (
+            ValueError,
+            TypeError,
+            InvalidOperation,
+        ):
+
+            product["regular_price"] = (
+                product["price"]
+            )
+
+        # ==================================================
+        # SALE PRICE
+        # ==================================================
+
+        if product.get(
+            "sale_price"
+        ) is not None:
+
+            try:
+
+                product["sale_price"] = Decimal(
+                    str(
+                        product["sale_price"]
+                    )
+                )
+
+            except (
+                ValueError,
+                TypeError,
+                InvalidOperation,
+            ):
+
+                product["sale_price"] = None
+
+        # ==================================================
+        # SHIPPING
+        # ==================================================
 
         try:
 
@@ -860,20 +1124,22 @@ def detail(request, product_id):
             InvalidOperation,
         ):
 
-            product["shipping_cost"] = Decimal("0")
+            product["shipping_cost"] = Decimal(
+                "0.00"
+            )
 
-        # ======================================
-        # TOTAL COST
-        # ======================================
+        # ==================================================
+        # TOTAL
+        # ==================================================
 
         product["total_cost"] = (
             product["price"]
             + product["shipping_cost"]
         )
 
-        # ======================================
+        # ==================================================
         # RETURN URL
-        # ======================================
+        # ==================================================
 
         return_url = request.GET.get(
             "return_url",
@@ -899,4 +1165,3 @@ def detail(request, product_id):
                 "api_error": str(exc),
             },
         )
-        

@@ -1,0 +1,1060 @@
+{% extends "base.html" %}
+
+{% block title %}
+    My Profile - AI Shopping
+{% endblock %}
+
+
+{% block extra_css %}
+
+<style>
+
+    .profile-page {
+
+        max-width: 900px;
+
+        margin: 0 auto;
+
+        padding:
+            2rem
+            1rem
+            4rem;
+
+    }
+
+
+    .profile-header {
+
+        margin-bottom: 2rem;
+
+    }
+
+
+    .profile-header h1 {
+
+        margin: 0 0 0.5rem;
+
+        font-size: 2rem;
+
+        color: #f1f5f9;
+
+    }
+
+
+    .profile-header p {
+
+        margin: 0;
+
+        color: #94a3b8;
+
+    }
+
+
+    .profile-grid {
+
+        display: grid;
+
+        grid-template-columns:
+            repeat(
+                auto-fit,
+                minmax(280px, 1fr)
+            );
+
+        gap: 1.25rem;
+
+    }
+
+
+    .profile-card {
+
+        background: #1e293b;
+
+        border: 1px solid #334155;
+
+        border-radius: 14px;
+
+        padding: 1.5rem;
+
+        box-shadow:
+            0 20px 40px
+            rgba(0, 0, 0, 0.25);
+
+    }
+
+
+    .profile-card h2 {
+
+        margin: 0 0 1.25rem;
+
+        color: #f1f5f9;
+
+        font-size: 1.15rem;
+
+    }
+
+
+    .profile-row {
+
+        display: flex;
+
+        justify-content: space-between;
+
+        gap: 1rem;
+
+        padding:
+            0.85rem 0;
+
+        border-bottom:
+            1px solid
+            #334155;
+
+    }
+
+
+    .profile-row:last-child {
+
+        border-bottom: none;
+
+    }
+
+
+    .profile-label {
+
+        color: #94a3b8;
+
+    }
+
+
+    .profile-value {
+
+        color: #f1f5f9;
+
+        font-weight: 600;
+
+        text-align: right;
+
+        word-break: break-word;
+
+    }
+
+
+    .amount-display {
+
+        padding: 1.25rem;
+
+        background:
+            rgba(
+                34,
+                197,
+                94,
+                0.10
+            );
+
+        border:
+            1px solid
+            rgba(
+                34,
+                197,
+                94,
+                0.30
+            );
+
+        border-radius: 12px;
+
+        margin-bottom: 1.25rem;
+
+    }
+
+
+    .amount-label {
+
+        color: #86efac;
+
+        font-size: 0.85rem;
+
+        margin-bottom: 0.35rem;
+
+    }
+
+
+    .amount {
+
+        color: #bbf7d0;
+
+        font-size: 2rem;
+
+        font-weight: 800;
+
+    }
+
+
+    .location-status {
+
+        padding: 1rem;
+
+        border-radius: 10px;
+
+        margin-bottom: 1rem;
+
+        background:
+            rgba(
+                99,
+                102,
+                241,
+                0.10
+            );
+
+        border:
+            1px solid
+            rgba(
+                99,
+                102,
+                241,
+                0.30
+            );
+
+        color: #c7d2fe;
+
+        line-height: 1.5;
+
+    }
+
+
+    .location-status.success {
+
+        background:
+            rgba(
+                34,
+                197,
+                94,
+                0.10
+            );
+
+        border-color:
+            rgba(
+                34,
+                197,
+                94,
+                0.30
+            );
+
+        color: #bbf7d0;
+
+    }
+
+
+    .location-status.error {
+
+        background:
+            rgba(
+                239,
+                68,
+                68,
+                0.10
+            );
+
+        border-color:
+            rgba(
+                239,
+                68,
+                68,
+                0.30
+            );
+
+        color: #fecaca;
+
+    }
+
+
+    .location-button {
+
+        width: 100%;
+
+        padding: 0.8rem 1rem;
+
+        border: none;
+
+        border-radius: 10px;
+
+        background:
+            linear-gradient(
+                135deg,
+                #6366f1,
+                #7c3aed
+            );
+
+        color: white;
+
+        font-weight: 600;
+
+        cursor: pointer;
+
+    }
+
+
+    .location-button:hover {
+
+        opacity: 0.9;
+
+    }
+
+
+    .location-button:disabled {
+
+        opacity: 0.6;
+
+        cursor: not-allowed;
+
+    }
+
+
+    .amount-form {
+
+        display: flex;
+
+        flex-direction: column;
+
+        gap: 0.75rem;
+
+    }
+
+
+    .amount-form label {
+
+        color: #cbd5e1;
+
+        font-size: 0.9rem;
+
+        font-weight: 500;
+
+    }
+
+
+    .amount-form input {
+
+        width: 100%;
+
+        box-sizing: border-box;
+
+        padding: 0.8rem;
+
+        background: #0f172a;
+
+        border: 1px solid #475569;
+
+        border-radius: 10px;
+
+        color: white;
+
+        font-size: 1rem;
+
+        outline: none;
+
+    }
+
+
+    .amount-form input:focus {
+
+        border-color: #6366f1;
+
+        box-shadow:
+            0 0 0 3px
+            rgba(
+                99,
+                102,
+                241,
+                0.2
+            );
+
+    }
+
+
+    .save-button {
+
+        padding: 0.8rem;
+
+        border: none;
+
+        border-radius: 10px;
+
+        background: #22c55e;
+
+        color: white;
+
+        font-weight: 700;
+
+        cursor: pointer;
+
+    }
+
+
+    .save-button:hover {
+
+        background: #16a34a;
+
+    }
+
+
+    .error-message {
+
+        margin-bottom: 1rem;
+
+        padding: 0.8rem 1rem;
+
+        background:
+            rgba(
+                239,
+                68,
+                68,
+                0.12
+            );
+
+        border:
+            1px solid
+            rgba(
+                239,
+                68,
+                68,
+                0.3
+            );
+
+        color: #fca5a5;
+
+        border-radius: 10px;
+
+    }
+
+
+    .profile-actions {
+
+        margin-top: 1.5rem;
+
+        display: flex;
+
+        gap: 0.75rem;
+
+        flex-wrap: wrap;
+
+    }
+
+
+    .profile-actions a {
+
+        display: inline-block;
+
+        padding: 0.7rem 1rem;
+
+        border-radius: 9px;
+
+        text-decoration: none;
+
+        color: #c7d2fe;
+
+        background:
+            rgba(
+                99,
+                102,
+                241,
+                0.12
+            );
+
+        border:
+            1px solid
+            rgba(
+                99,
+                102,
+                241,
+                0.3
+            );
+
+    }
+
+
+    @media (max-width: 600px) {
+
+        .profile-page {
+
+            padding:
+                1.25rem
+                1rem
+                3rem;
+
+        }
+
+    }
+
+</style>
+
+{% endblock %}
+
+
+{% block content %}
+
+<main class="profile-page">
+
+
+    <header class="profile-header">
+
+        <h1>
+            My Profile
+        </h1>
+
+        <p>
+            Manage your shopping budget and location.
+        </p>
+
+    </header>
+
+
+    {% if error %}
+
+        <div class="error-message">
+            {{ error }}
+        </div>
+
+    {% endif %}
+
+
+    <div class="profile-grid">
+
+
+        <!-- ==========================================
+             USER DETAILS
+        =========================================== -->
+
+        <section class="profile-card">
+
+            <h2>
+                Account Details
+            </h2>
+
+
+            <div class="profile-row">
+
+                <span class="profile-label">
+                    Username
+                </span>
+
+                <span class="profile-value">
+                    {{ user.username }}
+                </span>
+
+            </div>
+
+
+            <div class="profile-row">
+
+                <span class="profile-label">
+                    First name
+                </span>
+
+                <span class="profile-value">
+                    {{ user.first_name|default:"Not specified" }}
+                </span>
+
+            </div>
+
+
+            <div class="profile-row">
+
+                <span class="profile-label">
+                    Last name
+                </span>
+
+                <span class="profile-value">
+                    {{ user.last_name|default:"Not specified" }}
+                </span>
+
+            </div>
+
+
+            <div class="profile-row">
+
+                <span class="profile-label">
+                    Email
+                </span>
+
+                <span class="profile-value">
+                    {{ user.email|default:"Not specified" }}
+                </span>
+
+            </div>
+
+        </section>
+
+
+        <!-- ==========================================
+             SHOPPING BUDGET
+        =========================================== -->
+
+        <section class="profile-card">
+
+            <h2>
+                Shopping Budget
+            </h2>
+
+
+            <div class="amount-display">
+
+                <div class="amount-label">
+                    Available amount
+                </div>
+
+                <div class="amount">
+                    R{{ profile.available_amount|floatformat:2 }}
+                </div>
+
+                
+
+            </div>
+
+
+            <form
+                method="POST"
+                class="amount-form"
+            >
+
+                {% csrf_token %}
+
+                <label for="available_amount">
+
+                    How much can you spend?
+
+                </label>
+
+
+                <input
+                    type="number"
+                    id="available_amount"
+                    name="available_amount"
+                    min="0"
+                    step="0.01"
+                    value="{{ profile.available_amount }}"
+                    placeholder="e.g. 5000"
+                    required
+                >
+
+
+                <button
+                    type="submit"
+                    class="save-button"
+                >
+                    Save Amount
+                </button>
+
+            </form>
+
+        </section>
+
+
+        <!-- ==========================================
+             LOCATION
+        =========================================== -->
+
+        <section class="profile-card">
+
+            <h2>
+                My Location
+            </h2>
+
+
+            <div
+                id="location-status"
+                class="location-status"
+            >
+
+                {% if profile.latitude and profile.longitude %}
+
+                    Location is saved.
+
+                    <br>
+
+                    Latitude:
+                    {{ profile.latitude }}
+
+                    <br>
+
+                    Longitude:
+                    {{ profile.longitude }}
+
+                {% else %}
+
+                    Your location has not been detected yet.
+
+                {% endif %}
+
+            </div>
+
+
+            <button
+                type="button"
+                id="detect-location"
+                class="location-button"
+            >
+                📍 Detect My Location
+            </button>
+
+
+            <p
+                style="
+                    color:#94a3b8;
+                    font-size:0.82rem;
+                    line-height:1.5;
+                    margin-bottom:0;
+                "
+            >
+                Your browser will ask for permission to use
+                your location. This location is used to find
+                stores near you.
+            </p>
+
+        </section>
+
+
+        <!-- ==========================================
+             HOW IT WORKS
+        =========================================== -->
+
+        <section class="profile-card">
+
+            <h2>
+                How Your Profile Is Used
+            </h2>
+
+
+            <div class="profile-row">
+
+                <span class="profile-label">
+                    Location
+                </span>
+
+                <span class="profile-value">
+                    Find nearby stores
+                </span>
+
+            </div>
+
+
+            <div class="profile-row">
+
+                <span class="profile-label">
+                    Available amount
+                </span>
+
+                <span class="profile-value">
+                    Limit product prices
+                </span>
+
+            </div>
+
+
+            <div class="profile-row">
+
+                <span class="profile-label">
+                    Shopping
+                </span>
+
+                <span class="profile-value">
+                    Better recommendations
+                </span>
+
+            </div>
+
+        </section>
+
+
+    </div>
+
+
+    <div class="profile-actions">
+
+        <a href="{% url 'products:search' %}">
+            Find Products
+        </a>
+
+        <a href="{% url 'shopping:cart' %}">
+            View Cart
+        </a>
+
+    </div>
+
+</main>
+
+{% endblock %}
+
+
+{% block extra_js %}
+
+
+<script>
+
+document.addEventListener(
+    "DOMContentLoaded",
+    function () {
+
+        const locationStatus =
+            document.getElementById(
+                "location-status"
+            );
+
+        const latitudeElement =
+            document.getElementById(
+                "profile-latitude"
+            );
+
+        const longitudeElement =
+            document.getElementById(
+                "profile-longitude"
+            );
+
+
+        function setStatus(
+            message,
+            success = false
+        ) {
+
+            if (!locationStatus) {
+                return;
+            }
+
+            locationStatus.textContent =
+                message;
+
+            locationStatus.classList.toggle(
+                "success",
+                success
+            );
+
+        }
+
+
+        function getCookie(name) {
+
+            let cookieValue = null;
+
+            if (document.cookie &&
+                document.cookie !== "") {
+
+                const cookies =
+                    document.cookie.split(";");
+
+                for (
+                    let cookie of cookies
+                ) {
+
+                    cookie =
+                        cookie.trim();
+
+                    if (
+                        cookie.substring(
+                            0,
+                            name.length + 1
+                        ) ===
+                        (name + "=")
+                    ) {
+
+                        cookieValue =
+                            decodeURIComponent(
+                                cookie.substring(
+                                    name.length + 1
+                                )
+                            );
+
+                        break;
+                    }
+                }
+            }
+
+            return cookieValue;
+        }
+
+
+        function saveLocation(
+            latitude,
+            longitude
+        ) {
+
+            const csrfToken =
+                getCookie("csrftoken");
+
+
+            const formData =
+                new FormData();
+
+            formData.append(
+                "latitude",
+                latitude
+            );
+
+            formData.append(
+                "longitude",
+                longitude
+            );
+
+
+            fetch(
+                "{% url 'accounts:update_location' %}",
+                {
+                    method: "POST",
+
+                    body: formData,
+
+                    headers: {
+                        "X-CSRFToken":
+                            csrfToken,
+
+                        "X-Requested-With":
+                            "XMLHttpRequest"
+                    }
+                }
+            )
+            .then(function (response) {
+
+                return response.json();
+
+            })
+            .then(function (data) {
+
+                if (!data.success) {
+
+                    setStatus(
+                        data.error ||
+                        "Could not save location."
+                    );
+
+                    return;
+                }
+
+
+                if (latitudeElement) {
+
+                    latitudeElement.textContent =
+                        data.latitude;
+                }
+
+
+                if (longitudeElement) {
+
+                    longitudeElement.textContent =
+                        data.longitude;
+                }
+
+
+                setStatus(
+                    "Your location has been detected and saved.",
+                    true
+                );
+
+            })
+            .catch(function (error) {
+
+                console.error(
+                    "Location save error:",
+                    error
+                );
+
+                setStatus(
+                    "Your location was detected, but could not be saved."
+                );
+
+            });
+        }
+
+
+        function detectLocation() {
+
+            if (!navigator.geolocation) {
+
+                setStatus(
+                    "Your browser does not support automatic location detection."
+                );
+
+                return;
+            }
+
+
+            setStatus(
+                "Detecting your location..."
+            );
+
+
+            navigator.geolocation.getCurrentPosition(
+
+                function (position) {
+
+                    const latitude =
+                        position.coords.latitude;
+
+                    const longitude =
+                        position.coords.longitude;
+
+
+                    saveLocation(
+                        latitude,
+                        longitude
+                    );
+
+                },
+
+                function (error) {
+
+                    console.error(
+                        "Geolocation error:",
+                        error
+                    );
+
+
+                    let message =
+                        "Unable to detect your location.";
+
+
+                    if (
+                        error.code ===
+                        error.PERMISSION_DENIED
+                    ) {
+
+                        message =
+                            "Location permission was denied. Please allow location access in your browser.";
+
+                    } else if (
+                        error.code ===
+                        error.POSITION_UNAVAILABLE
+                    ) {
+
+                        message =
+                            "Your location is currently unavailable.";
+
+                    } else if (
+                        error.code ===
+                        error.TIMEOUT
+                    ) {
+
+                        message =
+                            "Location detection timed out.";
+                    }
+
+
+                    setStatus(message);
+                },
+
+                {
+                    enableHighAccuracy: true,
+
+                    timeout: 15000,
+
+                    maximumAge: 300000
+                }
+            );
+        }
+
+
+        // Automatically detect location
+        detectLocation();
+
+    }
+);
+
+</script>
+
+
+{% endblock %}

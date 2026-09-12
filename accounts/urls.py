@@ -14,4 +14,25 @@ urlpatterns = [
     ),
 
     path("register/", views.register_view, name="register"),
+   
+    # Profile
+    path(
+        "profile/",
+        views.profile,
+        name="profile",
+    ),
+
+    # Location
+    path(
+        "profile/update-location/",
+        views.update_location,
+        name="update_location",
+    ),
+
+    # Budget
+    path(
+        "profile/update-budget/",
+        views.update_budget,
+        name="update_budget",
+    ),
 ]

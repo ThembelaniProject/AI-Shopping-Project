@@ -36,6 +36,30 @@
     My Orders
 </a>
 
+<!-- =========================
+                 PROFILE
+            ========================== -->
+
+            {% if user.is_authenticated %}
+
+                <a
+                    href="{% url 'accounts:profile' %}"
+                    class="profile-link"
+                >
+
+                    <span class="profile-icon">
+                        👤
+                    </span>
+
+                    <span>
+                        Profile
+                    </span>
+
+                </a>
+
+            {% endif %}
+
+
 
 
             <!-- =========================
@@ -166,6 +190,57 @@
     .navbar-links a:hover {
         color: #a5b4fc;
     }
+
+    /* =========================
+       PROFILE
+    ========================= */
+
+    .profile-link {
+
+        display: inline-flex;
+
+        align-items: center;
+
+        gap: 0.4rem;
+
+        padding:
+            0.45rem 0.7rem;
+
+        border-radius: 8px;
+
+        background:
+            rgba(99, 102, 241, 0.10);
+
+        border:
+            1px solid
+            rgba(99, 102, 241, 0.25);
+
+        transition:
+            background 0.2s ease,
+            border-color 0.2s ease;
+
+    }
+
+
+    .profile-link:hover {
+
+        background:
+            rgba(99, 102, 241, 0.2);
+
+        border-color:
+            #6366f1;
+
+    }
+
+
+    .profile-icon {
+
+        font-size: 1rem;
+
+        line-height: 1;
+
+    }
+
 
 
     /* =========================
