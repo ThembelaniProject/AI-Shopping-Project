@@ -44,6 +44,11 @@ ALLOWED_HOSTS = [
     "127.0.0.1",
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://*.vercel.app",
+]
+
+
 
 # ============================================================
 # PRODUCTION SECURITY
@@ -245,9 +250,3 @@ LOGOUT_REDIRECT_URL = "accounts:login"
 
 
 PARSE_API_KEY = os.getenv("PARSE_API_KEY")
-
-print("PARSE_API_KEY loaded:", bool(PARSE_API_KEY))
-print(
-    "PARSE_API_KEY length:",
-    len(PARSE_API_KEY) if PARSE_API_KEY else 0
-)
