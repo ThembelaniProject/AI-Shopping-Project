@@ -16,34 +16,46 @@ class Order(models.Model):
         ("cancelled", "Cancelled"),
     ]
 
+    PAYMENT_STATUS_CHOICES = [
+        ("pending", "Pending"),
+        ("paid", "Paid"),
+        ("failed", "Failed"),
+        ("cancelled", "Cancelled"),
+    ]
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="orders",
     )
 
-    full_name = models.CharField(
-        max_length=150,
-    )
-
+    full_name = models.CharField(max_length=150)
     email = models.EmailField()
-
-    phone = models.CharField(
-        max_length=30,
-    )
+    phone = models.CharField(max_length=30)
 
     address = models.TextField()
-
-    city = models.CharField(
-        max_length=100,
-    )
-
-    postal_code = models.CharField(
-        max_length=20,
-    )
+    city = models.CharField(max_length=100)
+    postal_code = models.CharField(max_length=20)
 
     payment_method = models.CharField(
         max_length=30,
+    )
+
+    payment_status = models.CharField(
+        max_length=20,
+        choices=PAYMENT_STATUS_CHOICES,
+        default="pending",
+    )
+
+    payfast_payment_id = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True,
+    )
+
+    paid_at = models.DateTimeField(
+        blank=True,
+        null=True,
     )
 
     subtotal = models.DecimalField(
@@ -72,12 +84,7 @@ class Order(models.Model):
     )
 
     def __str__(self):
-
-        return (
-            f"Order #{self.id} - "
-            f"{self.user}"
-        )
-
+        return f"Order #{self.id} - {self.user}"
 
 # ==========================================================
 # ORDER ITEM

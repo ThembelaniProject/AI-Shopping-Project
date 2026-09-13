@@ -1,32 +1,49 @@
 from decimal import Decimal, InvalidOperation
+from hashlib import md5
+from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import JsonResponse
-from django.shortcuts import (
-get_object_or_404,
-redirect,
-render,
+from django.http import (
+    HttpResponse,
+    JsonResponse,
 )
+from django.shortcuts import (
+    get_object_or_404,
+    redirect,
+    render,
+)
+from django.urls import reverse
+from django.views.decorators.csrf import csrf_exempt
 
 from accounts.models import UserProfile
 
 from .models import Order, OrderItem
 
 from products.services.store_api import (
-get_product,
-StoreAPIError,
+    get_product,
+    StoreAPIError,
 )
+
+
+# ==========================================================
+# SETTINGS
+# ==========================================================
 
 CART_SESSION_KEY = "shopping_cart"
 
+PAYFAST_ORDER_SESSION_KEY = "payfast_order_id"
 
 DEFAULT_SHOPPING_BUDGET = Decimal("1650.00")
 
-
 DEFAULT_PRODUCT_STOCK = 200
 
+
+# ==========================================================
+# HOME
+# ==========================================================
 
 def home(request):
 
@@ -34,18 +51,27 @@ def home(request):
         return redirect("shopping:dashboard")
 
     return render(
-    request,
-    "index.html",
-)
+        request,
+        "index.html",
+    )
 
+
+# ==========================================================
+# DASHBOARD
+# ==========================================================
 
 @login_required
 def dashboard(request):
 
     return render(
         request,
-    "dashboard.html",
-)
+        "dashboard.html",
+    )
+
+
+# ==========================================================
+# USER PROFILE
+# ==========================================================
 
 def _get_user_profile(request):
 
@@ -58,6 +84,10 @@ def _get_user_profile(request):
 
     return profile
 
+
+# ==========================================================
+# CART HELPERS
+# ==========================================================
 
 def _get_cart(request):
 
@@ -80,6 +110,10 @@ def _get_product_stock(product):
     return DEFAULT_PRODUCT_STOCK
 
 
+# ==========================================================
+# BUILD CART
+# ==========================================================
+
 def _build_cart(request):
 
     cart = _get_cart(request)
@@ -94,16 +128,21 @@ def _build_cart(request):
         try:
             quantity = int(quantity)
 
-        except (ValueError, TypeError):
+        except (
+            ValueError,
+            TypeError,
+        ):
             continue
 
         if quantity <= 0:
             continue
 
         try:
+
             product = get_product(product_id)
 
         except StoreAPIError:
+
             continue
 
         # --------------------------------------------------
@@ -111,6 +150,7 @@ def _build_cart(request):
         # --------------------------------------------------
 
         try:
+
             price = Decimal(
                 str(
                     product.get(
@@ -126,6 +166,7 @@ def _build_cart(request):
             TypeError,
             InvalidOperation,
         ):
+
             price = Decimal("0.00")
 
         # --------------------------------------------------
@@ -133,6 +174,7 @@ def _build_cart(request):
         # --------------------------------------------------
 
         try:
+
             shipping = Decimal(
                 str(
                     product.get(
@@ -148,6 +190,7 @@ def _build_cart(request):
             TypeError,
             InvalidOperation,
         ):
+
             shipping = Decimal("0.00")
 
         if price < 0:
@@ -176,10 +219,17 @@ def _build_cart(request):
             or product_id
         )
 
+        product_name = (
+            product.get("title")
+            or product.get("name")
+            or f"Product #{product_id}"
+        )
+
         items.append(
             {
                 "product": product,
                 "product_id": actual_product_id,
+                "product_name": product_name,
                 "quantity": quantity,
                 "item_total": item_total,
                 "shipping_cost": shipping,
@@ -218,9 +268,11 @@ def _build_cart(request):
         budget_remaining = budget - total
 
         if total > budget:
+
             budget_exceeded = True
 
         elif total == budget:
+
             budget_reached = True
 
     return {
@@ -239,6 +291,10 @@ def _build_cart(request):
     }
 
 
+# ==========================================================
+# CART
+# ==========================================================
+
 @login_required
 def cart(request):
 
@@ -254,6 +310,10 @@ def cart(request):
     )
 
 
+# ==========================================================
+# ADD TO CART
+# ==========================================================
+
 @login_required
 def add_to_cart(request, product_id):
 
@@ -266,10 +326,6 @@ def add_to_cart(request, product_id):
             },
             status=405,
         )
-
-    # ------------------------------------------------------
-    # USER PROFILE / BUDGET
-    # ------------------------------------------------------
 
     profile = _get_user_profile(request)
 
@@ -320,7 +376,6 @@ def add_to_cart(request, product_id):
     # STOCK
     # ------------------------------------------------------
 
-    # Every product has 200 units.
     stock = _get_product_stock(product)
 
     if stock <= 0:
@@ -357,10 +412,6 @@ def add_to_cart(request, product_id):
 
         current_quantity = 0
 
-    # ------------------------------------------------------
-    # NEW QUANTITY
-    # ------------------------------------------------------
-
     new_quantity = current_quantity + quantity
 
     if new_quantity > stock:
@@ -377,7 +428,7 @@ def add_to_cart(request, product_id):
         )
 
     # ------------------------------------------------------
-    # PRODUCT PRICE
+    # PRICE
     # ------------------------------------------------------
 
     try:
@@ -444,7 +495,7 @@ def add_to_cart(request, product_id):
         shipping = Decimal("0.00")
 
     # ------------------------------------------------------
-    # CHECK RESULTING CART TOTAL
+    # BUDGET CHECK
     # ------------------------------------------------------
 
     current_cart_data = _build_cart(request)
@@ -457,10 +508,6 @@ def add_to_cart(request, product_id):
     )
 
     new_total = current_total + additional_cost
-
-    # ------------------------------------------------------
-    # BUDGET CHECK
-    # ------------------------------------------------------
 
     if new_total > budget:
 
@@ -496,10 +543,6 @@ def add_to_cart(request, product_id):
         cart,
     )
 
-    # ------------------------------------------------------
-    # UPDATED CART
-    # ------------------------------------------------------
-
     cart_data = _build_cart(request)
 
     return JsonResponse(
@@ -524,6 +567,10 @@ def add_to_cart(request, product_id):
     )
 
 
+# ==========================================================
+# UPDATE CART
+# ==========================================================
+
 @login_required
 def update_cart(request, product_id):
 
@@ -536,10 +583,6 @@ def update_cart(request, product_id):
             },
             status=405,
         )
-
-    # ------------------------------------------------------
-    # QUANTITY
-    # ------------------------------------------------------
 
     try:
 
@@ -564,10 +607,6 @@ def update_cart(request, product_id):
         )
 
     product_key = str(product_id)
-
-    # ------------------------------------------------------
-    # GET CART
-    # ------------------------------------------------------
 
     cart = _get_cart(request)
 
@@ -617,7 +656,7 @@ def update_cart(request, product_id):
         )
 
     # ------------------------------------------------------
-    # GET PRODUCT
+    # PRODUCT
     # ------------------------------------------------------
 
     try:
@@ -638,7 +677,6 @@ def update_cart(request, product_id):
     # STOCK
     # ------------------------------------------------------
 
-    # Every product has 200 units.
     stock = _get_product_stock(product)
 
     if quantity > stock:
@@ -655,7 +693,7 @@ def update_cart(request, product_id):
         )
 
     # ------------------------------------------------------
-    # GET PRICE
+    # PRICE
     # ------------------------------------------------------
 
     try:
@@ -730,7 +768,7 @@ def update_cart(request, product_id):
     budget = profile.available_amount
 
     # ------------------------------------------------------
-    # SAVE OLD QUANTITY
+    # OLD QUANTITY
     # ------------------------------------------------------
 
     try:
@@ -750,7 +788,7 @@ def update_cart(request, product_id):
         old_quantity = 1
 
     # ------------------------------------------------------
-    # TEMPORARILY UPDATE CART
+    # TEMPORARY UPDATE
     # ------------------------------------------------------
 
     cart[product_key] = quantity
@@ -819,7 +857,11 @@ def update_cart(request, product_id):
         }
     )
 
-   
+
+# ==========================================================
+# REMOVE FROM CART
+# ==========================================================
+
 @login_required
 def remove_from_cart(request, product_id):
 
@@ -865,7 +907,11 @@ def remove_from_cart(request, product_id):
         }
     )
 
-    
+
+# ==========================================================
+# CLEAR CART
+# ==========================================================
+
 @login_required
 def clear_cart(request):
 
@@ -892,6 +938,10 @@ def clear_cart(request):
     )
 
 
+# ==========================================================
+# CHECKOUT
+# ==========================================================
+
 @login_required
 def checkout(request):
 
@@ -908,11 +958,11 @@ def checkout(request):
             "shopping:cart"
         )
 
-    # ------------------------------------------------------
-    # BUDGET CHECK
-    # ------------------------------------------------------
-
     profile = _get_user_profile(request)
+
+    # ------------------------------------------------------
+    # INITIAL BUDGET CHECK
+    # ------------------------------------------------------
 
     if cart_data["total"] > profile.available_amount:
 
@@ -982,119 +1032,63 @@ def checkout(request):
     payment_method = request.POST.get(
         "payment_method",
         "",
-    ).strip()
-
-    # ------------------------------------------------------
-    # CARD NUMBER
-    # ------------------------------------------------------
-
-    card_number = request.POST.get(
-        "card_number",
-        "",
-    ).strip()
+    ).strip().lower()
 
     # ------------------------------------------------------
     # VALIDATION
     # ------------------------------------------------------
 
-    if not full_name:
-
-        messages.error(
-            request,
+    required_fields = [
+        (
+            full_name,
             "Please enter your full name.",
-        )
-
-        return render(
-            request,
-            "shopping/checkout.html",
-            {
-                "cart": cart_data,
-                "profile": profile,
-            },
-        )
-
-    if not email:
-
-        messages.error(
-            request,
+        ),
+        (
+            email,
             "Please enter your email address.",
-        )
-
-        return render(
-            request,
-            "shopping/checkout.html",
-            {
-                "cart": cart_data,
-                "profile": profile,
-            },
-        )
-
-    if not phone:
-
-        messages.error(
-            request,
+        ),
+        (
+            phone,
             "Please enter your phone number.",
-        )
-
-        return render(
-            request,
-            "shopping/checkout.html",
-            {
-                "cart": cart_data,
-                "profile": profile,
-            },
-        )
-
-    if not address:
-
-        messages.error(
-            request,
+        ),
+        (
+            address,
             "Please enter your delivery address.",
-        )
-
-        return render(
-            request,
-            "shopping/checkout.html",
-            {
-                "cart": cart_data,
-                "profile": profile,
-            },
-        )
-
-    if not city:
-
-        messages.error(
-            request,
+        ),
+        (
+            city,
             "Please enter your city.",
-        )
-
-        return render(
-            request,
-            "shopping/checkout.html",
-            {
-                "cart": cart_data,
-                "profile": profile,
-            },
-        )
-
-    if not postal_code:
-
-        messages.error(
-            request,
+        ),
+        (
+            postal_code,
             "Please enter your postal code.",
-        )
+        ),
+    ]
 
-        return render(
-            request,
-            "shopping/checkout.html",
-            {
-                "cart": cart_data,
-                "profile": profile,
-            },
-        )
+    for value, error_message in required_fields:
+
+        if not value:
+
+            messages.error(
+                request,
+                error_message,
+            )
+
+            return render(
+                request,
+                "shopping/checkout.html",
+                {
+                    "cart": cart_data,
+                    "profile": profile,
+                },
+            )
+
+    # ------------------------------------------------------
+    # PAYMENT METHOD
+    # ------------------------------------------------------
 
     if payment_method not in [
-        "card",
+        "payfast",
         "cash",
     ]:
 
@@ -1111,54 +1105,6 @@ def checkout(request):
                 "profile": profile,
             },
         )
-
-    # ------------------------------------------------------
-    # CARD VALIDATION
-    # ------------------------------------------------------
-    #
-    # Card number is REQUIRED for card payment.
-    # Card number is NOT required for cash on delivery.
-    # ------------------------------------------------------
-
-    if payment_method == "card":
-
-        card_digits = "".join(
-            character
-            for character in card_number
-            if character.isdigit()
-        )
-
-        if not card_digits:
-
-            messages.error(
-                request,
-                "Please enter your card number.",
-            )
-
-            return render(
-                request,
-                "shopping/checkout.html",
-                {
-                    "cart": cart_data,
-                    "profile": profile,
-                },
-            )
-
-        if len(card_digits) < 13 or len(card_digits) > 19:
-
-            messages.error(
-                request,
-                "Please enter a valid card number.",
-            )
-
-            return render(
-                request,
-                "shopping/checkout.html",
-                {
-                    "cart": cart_data,
-                    "profile": profile,
-                },
-            )
 
     # ------------------------------------------------------
     # FINAL CART VALIDATION
@@ -1248,12 +1194,10 @@ def checkout(request):
 
                 product = item["product"]
 
-                product_name = product.get(
-                    "title",
-                    product.get(
-                        "name",
-                        "Product",
-                    ),
+                product_name = (
+                    product.get("title")
+                    or product.get("name")
+                    or "Product"
                 )
 
                 try:
@@ -1274,7 +1218,9 @@ def checkout(request):
                     InvalidOperation,
                 ):
 
-                    price = Decimal("0.00")
+                    raise ValueError(
+                        "Invalid product price."
+                    )
 
                 OrderItem.objects.create(
 
@@ -1287,6 +1233,7 @@ def checkout(request):
                         or product.get(
                             "id"
                         )
+                        or item["product_id"]
                     ),
 
                     product_name=product_name,
@@ -1319,24 +1266,591 @@ def checkout(request):
             },
         )
 
-    # ------------------------------------------------------
-    # CLEAR CART
-    # ------------------------------------------------------
-
-    _save_cart(
-        request,
-        {},
-    )
-
-    # ------------------------------------------------------
-    # RESULT
-    # ------------------------------------------------------
+    # ======================================================
+    # CASH ON DELIVERY
+    # ======================================================
 
     if payment_method == "cash":
+
+        _save_cart(
+            request,
+            {},
+        )
 
         messages.success(
             request,
             f"Order #{order.id} placed successfully!",
+        )
+
+        return redirect(
+            "shopping:order_success",
+            order_id=order.id,
+        )
+
+    # ======================================================
+    # PAYFAST
+    # ======================================================
+
+    # Keep the order in the database.
+    #
+    # The cart is intentionally NOT cleared yet.
+    # It is cleared only after the PayFast payment flow
+    # has been successfully completed/confirmed.
+    # ======================================================
+
+    request.session[
+        PAYFAST_ORDER_SESSION_KEY
+    ] = order.id
+
+    request.session.modified = True
+
+    return redirect(
+        "shopping:payfast_payment",
+        order_id=order.id,
+    )
+
+
+# ==========================================================
+# PAYFAST HELPERS
+# ==========================================================
+
+def _payfast_is_sandbox():
+
+    return bool(
+        getattr(
+            settings,
+            "PAYFAST_SANDBOX",
+            True,
+        )
+    )
+
+
+def _get_payfast_url():
+
+    configured_url = getattr(
+        settings,
+        "PAYFAST_URL",
+        None,
+    )
+
+    if configured_url:
+
+        return configured_url
+
+    if _payfast_is_sandbox():
+
+        return (
+            "https://sandbox.payfast.co.za/eng/process"
+        )
+
+    return (
+        "https://www.payfast.co.za/eng/process"
+    )
+
+
+def _get_payfast_merchant_id():
+
+    return str(
+        getattr(
+            settings,
+            "PAYFAST_MERCHANT_ID",
+            "",
+        )
+        or ""
+    ).strip()
+
+
+def _get_payfast_merchant_key():
+
+    return str(
+        getattr(
+            settings,
+            "PAYFAST_MERCHANT_KEY",
+            "",
+        )
+        or ""
+    ).strip()
+
+
+def _get_payfast_passphrase():
+
+    return str(
+        getattr(
+            settings,
+            "PAYFAST_PASSPHRASE",
+            "",
+        )
+        or ""
+    ).strip()
+
+
+def _absolute_url(request, route_name, **kwargs):
+
+    return request.build_absolute_uri(
+        reverse(
+            route_name,
+            kwargs=kwargs,
+        )
+    )
+
+
+def _payfast_signature(data):
+
+    """
+    Generates the PayFast MD5 signature.
+
+    PayFast requires the values to be URL encoded in the
+    payment parameter order, trimmed, with the optional
+    passphrase appended before hashing.
+    """
+
+    # Never include the signature itself.
+    signature_data = {
+        key: value
+        for key, value in data.items()
+        if key != "signature"
+    }
+
+    parameter_string = urlencode(
+        signature_data
+    )
+
+    parameter_string = parameter_string.strip()
+
+    passphrase = _get_payfast_passphrase()
+
+    if passphrase:
+
+        parameter_string += (
+            f"&passphrase={passphrase}"
+        )
+
+    return md5(
+        parameter_string.encode("utf-8")
+    ).hexdigest()
+
+
+def _render_payfast_redirect(
+    request,
+    payment_url,
+    payment_data,
+):
+
+    """
+    Creates a small HTML form that automatically submits
+    the customer to PayFast.
+
+    This avoids requiring a separate payfast_redirect.html
+    template.
+    """
+
+    hidden_fields = []
+
+    for name, value in payment_data.items():
+
+        escaped_name = (
+            str(name)
+            .replace("&", "&amp;")
+            .replace('"', "&quot;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+
+        escaped_value = (
+            str(value)
+            .replace("&", "&amp;")
+            .replace('"', "&quot;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+        )
+
+        hidden_fields.append(
+            (
+                f'<input type="hidden" '
+                f'name="{escaped_name}" '
+                f'value="{escaped_value}">'
+            )
+        )
+
+    fields_html = "\n".join(
+        hidden_fields
+    )
+
+    escaped_action = (
+        payment_url
+        .replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+    html = f"""
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Redirecting to PayFast...</title>
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1"
+    >
+
+    <style>
+        body {{
+            background: #111;
+            color: #fff;
+            font-family: Arial, sans-serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+        }}
+
+        .box {{
+            text-align: center;
+            padding: 40px;
+        }}
+
+        .spinner {{
+            width: 42px;
+            height: 42px;
+            border: 4px solid #444;
+            border-top-color: #28a745;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 20px;
+        }}
+
+        @keyframes spin {{
+            to {{
+                transform: rotate(360deg);
+            }}
+        }}
+
+        button {{
+            background: #28a745;
+            border: 0;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+        }}
+    </style>
+</head>
+
+<body>
+
+    <div class="box">
+
+        <div class="spinner"></div>
+
+        <h2>
+            Redirecting to PayFast...
+        </h2>
+
+        <p>
+            Please wait while we securely
+            redirect you to PayFast.
+        </p>
+
+        <form
+            id="payfast_form"
+            method="POST"
+            action="{escaped_action}"
+        >
+
+            {fields_html}
+
+            <button type="submit">
+                Continue to PayFast
+            </button>
+
+        </form>
+
+    </div>
+
+    <script>
+        document.getElementById(
+            "payfast_form"
+        ).submit();
+    </script>
+
+</body>
+</html>
+"""
+
+    return HttpResponse(html)
+
+
+# ==========================================================
+# PAYFAST PAYMENT
+# ==========================================================
+
+@login_required
+def payfast_payment(
+    request,
+    order_id=None,
+):
+
+    """
+    Starts the PayFast payment.
+
+    order_id is normally supplied by the URL.
+
+    The optional fallback is intentional because your
+    current URL is apparently:
+
+        /shopping/payment/payfast/
+
+    instead of:
+
+        /shopping/payment/payfast/<order_id>/
+
+    If no order_id is supplied, we try the order saved in
+    the session.
+    """
+
+    # ------------------------------------------------------
+    # FALLBACK FOR OLD URL
+    # ------------------------------------------------------
+
+    if order_id is None:
+
+        order_id = request.session.get(
+            PAYFAST_ORDER_SESSION_KEY
+        )
+
+    if not order_id:
+
+        messages.error(
+            request,
+            "No PayFast order was found. Please start checkout again.",
+        )
+
+        return redirect(
+            "shopping:checkout"
+        )
+
+    # ------------------------------------------------------
+    # ORDER
+    # ------------------------------------------------------
+
+    order = get_object_or_404(
+        Order,
+        id=order_id,
+        user=request.user,
+    )
+
+    # ------------------------------------------------------
+    # PAYMENT METHOD
+    # ------------------------------------------------------
+
+    if order.payment_method != "payfast":
+
+        messages.error(
+            request,
+            "This order is not configured for PayFast.",
+        )
+
+        return redirect(
+            "shopping:order_detail",
+            order_id=order.id,
+        )
+
+    # ------------------------------------------------------
+    # ALREADY PAID / CONFIRMED
+    # ------------------------------------------------------
+
+    if order.status in [
+        "confirmed",
+        "shipped",
+        "delivered",
+    ]:
+
+        messages.info(
+            request,
+            "This order has already been paid.",
+        )
+
+        return redirect(
+            "shopping:order_success",
+            order_id=order.id,
+        )
+
+    # ------------------------------------------------------
+    # MERCHANT CREDENTIALS
+    # ------------------------------------------------------
+
+    merchant_id = _get_payfast_merchant_id()
+
+    merchant_key = _get_payfast_merchant_key()
+
+    if not merchant_id or not merchant_key:
+
+        messages.error(
+            request,
+            (
+                "PayFast is not configured correctly. "
+                "Please set PAYFAST_MERCHANT_ID and "
+                "PAYFAST_MERCHANT_KEY in your environment."
+            ),
+        )
+
+        return redirect(
+            "shopping:checkout"
+        )
+
+    # ------------------------------------------------------
+    # CUSTOMER NAME
+    # ------------------------------------------------------
+
+    name_parts = order.full_name.split(
+        " ",
+        1,
+    )
+
+    name_first = name_parts[0]
+
+    name_last = (
+        name_parts[1]
+        if len(name_parts) > 1
+        else ""
+    )
+
+    # ------------------------------------------------------
+    # PAYFAST URLS
+    # ------------------------------------------------------
+
+    return_url = _absolute_url(
+        request,
+        "shopping:payfast_return",
+        order_id=order.id,
+    )
+
+    cancel_url = _absolute_url(
+        request,
+        "shopping:payfast_cancel",
+        order_id=order.id,
+    )
+
+    notify_url = _absolute_url(
+        request,
+        "shopping:payfast_itn",
+    )
+
+    # ------------------------------------------------------
+    # PAYMENT DATA
+    # ------------------------------------------------------
+
+    payment_data = {
+        "merchant_id": merchant_id,
+        "merchant_key": merchant_key,
+
+        "return_url": return_url,
+        "cancel_url": cancel_url,
+        "notify_url": notify_url,
+
+        "name_first": name_first,
+        "name_last": name_last,
+
+        "email_address": order.email,
+
+        "m_payment_id": str(order.id),
+
+        "amount": f"{order.total:.2f}",
+
+        "item_name": (
+            f"AI Shopping Order #{order.id}"
+        ),
+
+        "item_description": (
+            f"Payment for order #{order.id}"
+        ),
+    }
+
+    # ------------------------------------------------------
+    # SIGNATURE
+    # ------------------------------------------------------
+
+    payment_data["signature"] = (
+        _payfast_signature(
+            payment_data
+        )
+    )
+
+    # ------------------------------------------------------
+    # SAVE ORDER SESSION
+    # ------------------------------------------------------
+
+    request.session[
+        PAYFAST_ORDER_SESSION_KEY
+    ] = order.id
+
+    request.session.modified = True
+
+    # ------------------------------------------------------
+    # REDIRECT
+    # ------------------------------------------------------
+
+    return _render_payfast_redirect(
+        request,
+        _get_payfast_url(),
+        payment_data,
+    )
+
+
+# ==========================================================
+# PAYFAST RETURN
+# ==========================================================
+
+@login_required
+def payfast_return(
+    request,
+    order_id,
+):
+
+    """
+    Customer is redirected here after PayFast.
+
+    IMPORTANT:
+    The return URL is not the authoritative payment
+    confirmation. The ITN is responsible for confirming
+    the transaction.
+    """
+
+    order = get_object_or_404(
+        Order,
+        id=order_id,
+        user=request.user,
+    )
+
+    if order.status in [
+        "confirmed",
+        "shipped",
+        "delivered",
+    ]:
+
+        _save_cart(
+            request,
+            {},
+        )
+
+        request.session.pop(
+            PAYFAST_ORDER_SESSION_KEY,
+            None,
+        )
+
+        request.session.modified = True
+
+        messages.success(
+            request,
+            (
+                f"Payment received for "
+                f"Order #{order.id}."
+            ),
         )
 
     else:
@@ -1344,8 +1858,9 @@ def checkout(request):
         messages.info(
             request,
             (
-                f"Order #{order.id} created. "
-                "Card payment still needs to be completed."
+                f"Order #{order.id} was returned "
+                "from PayFast. Payment confirmation "
+                "is still being processed."
             ),
         )
 
@@ -1355,35 +1870,293 @@ def checkout(request):
     )
 
 
+# ==========================================================
+# PAYFAST CANCEL
+# ==========================================================
+
 @login_required
-def order_success(request, order_id):
+def payfast_cancel(
+    request,
+    order_id,
+):
+
+    order = get_object_or_404(
+        Order,
+        id=order_id,
+        user=request.user,
+    )
+
+    if order.status == "pending":
+
+        messages.warning(
+            request,
+            (
+                f"PayFast payment for "
+                f"Order #{order.id} was cancelled."
+            ),
+        )
+
+    else:
+
+        messages.info(
+            request,
+            f"Order #{order.id} status: {order.status}.",
+        )
+
+    return redirect(
+        "shopping:order_detail",
+        order_id=order.id,
+    )
+
+
+# ==========================================================
+# PAYFAST ITN
+# ==========================================================
+
+@csrf_exempt
+def payfast_itn(request):
+
+    """
+    PayFast Instant Transaction Notification endpoint.
+
+    PayFast calls this server-to-server.
+
+    Do NOT require login here.
+    Do NOT require the user's browser session.
+    """
+
+    if request.method != "POST":
+
+        return HttpResponse(
+            "Method Not Allowed",
+            status=405,
+        )
+
+    # ------------------------------------------------------
+    # READ POST DATA
+    # ------------------------------------------------------
+
+    post_data = request.POST.copy()
+
+    received_signature = (
+        post_data.get(
+            "signature",
+            "",
+        )
+        or ""
+    ).strip()
+
+    if not received_signature:
+
+        return HttpResponse(
+            "Missing signature",
+            status=400,
+        )
+
+    # ------------------------------------------------------
+    # VERIFY SIGNATURE
+    # ------------------------------------------------------
+
+    signature_data = {
+        key: value
+        for key, value in post_data.items()
+        if key != "signature"
+    }
+
+    calculated_signature = (
+        _payfast_signature(
+            signature_data
+        )
+    )
+
+    if calculated_signature.lower() != (
+        received_signature.lower()
+    ):
+
+        return HttpResponse(
+            "Invalid signature",
+            status=400,
+        )
+
+    # ------------------------------------------------------
+    # GET ORDER
+    # ------------------------------------------------------
+
+    order_id = (
+        post_data.get(
+            "m_payment_id"
+        )
+        or post_data.get(
+            "custom_str1"
+        )
+    )
+
+    if not order_id:
+
+        return HttpResponse(
+            "Missing order ID",
+            status=400,
+        )
+
+    try:
+
+        order_id = int(order_id)
+
+    except (
+        ValueError,
+        TypeError,
+    ):
+
+        return HttpResponse(
+            "Invalid order ID",
+            status=400,
+        )
 
     try:
 
         order = Order.objects.get(
             id=order_id,
-            user=request.user,
         )
 
     except Order.DoesNotExist:
 
-        messages.error(
-            request,
-            "Order not found.",
+        return HttpResponse(
+            "Order not found",
+            status=404,
         )
 
-        return redirect(
-            "shopping:dashboard"
-        )
+    # ------------------------------------------------------
+    # VERIFY MERCHANT
+    # ------------------------------------------------------
 
-    return render(
-        request,
-        "shopping/order_success.html",
-        {
-            "order": order,
-        },
+    merchant_id = (
+        post_data.get(
+            "merchant_id",
+            "",
+        )
+        or ""
+    ).strip()
+
+    configured_merchant_id = (
+        _get_payfast_merchant_id()
     )
 
+    if merchant_id != configured_merchant_id:
+
+        return HttpResponse(
+            "Invalid merchant",
+            status=400,
+        )
+
+    # ------------------------------------------------------
+    # VERIFY PAYMENT STATUS
+    # ------------------------------------------------------
+
+    payment_status = (
+        post_data.get(
+            "payment_status",
+            "",
+        )
+        or ""
+    ).strip().upper()
+
+    if payment_status != "COMPLETE":
+
+        # Do not mark the order as paid.
+        return HttpResponse(
+            "Payment not complete",
+            status=200,
+        )
+
+    # ------------------------------------------------------
+    # VERIFY AMOUNT
+    # ------------------------------------------------------
+
+    try:
+
+        received_amount = Decimal(
+            str(
+                post_data.get(
+                    "amount_gross",
+                    post_data.get(
+                        "amount",
+                        "0",
+                    ),
+                )
+            )
+        )
+
+    except (
+        ValueError,
+        TypeError,
+        InvalidOperation,
+    ):
+
+        return HttpResponse(
+            "Invalid payment amount",
+            status=400,
+        )
+
+    expected_amount = (
+        order.total.quantize(
+            Decimal("0.01")
+        )
+    )
+
+    received_amount = (
+        received_amount.quantize(
+            Decimal("0.01")
+        )
+    )
+
+    if received_amount != expected_amount:
+
+        return HttpResponse(
+            "Payment amount mismatch",
+            status=400,
+        )
+
+    # ------------------------------------------------------
+    # UPDATE ORDER
+    # ------------------------------------------------------
+
+    with transaction.atomic():
+
+        order = (
+            Order.objects
+            .select_for_update()
+            .get(
+                id=order.id,
+            )
+        )
+
+        # --------------------------------------------------
+        # IDEMPOTENCY
+        # --------------------------------------------------
+        #
+        # PayFast can send notifications more than once.
+        # Do not process an already-confirmed order again.
+        # --------------------------------------------------
+
+        if order.status == "pending":
+
+            order.status = "confirmed"
+
+            order.save(
+                update_fields=[
+                    "status",
+                ]
+            )
+
+    return HttpResponse(
+        "OK",
+        status=200,
+    )
+
+
+# ==========================================================
+# VALIDATE CHECKOUT CART
+# ==========================================================
 
 def _validate_checkout_cart(request):
 
@@ -1400,6 +2173,7 @@ def _validate_checkout_cart(request):
     validated_items = []
 
     subtotal = Decimal("0.00")
+
     shipping_total = Decimal("0.00")
 
     for product_id, raw_quantity in cart.items():
@@ -1452,17 +2226,14 @@ def _validate_checkout_cart(request):
 
         # --------------------------------------------------
         # STOCK
-        # ------------------------------------------------------
+        # --------------------------------------------------
 
-        # Every product has 200 units.
         stock = _get_product_stock(product)
 
-        product_name = product.get(
-            "title",
-            product.get(
-                "name",
-                f"Product #{product_id}",
-            ),
+        product_name = (
+            product.get("title")
+            or product.get("name")
+            or f"Product #{product_id}"
         )
 
         if stock <= 0:
@@ -1480,9 +2251,9 @@ def _validate_checkout_cart(request):
                 None,
                 (
                     f'"{product_name}" only has '
-                    f'{stock} available, but your cart '
-                    f'contains {quantity}. '
-                    f'Please update your cart.'
+                    f"{stock} available, but your cart "
+                    f"contains {quantity}. "
+                    f"Please update your cart."
                 ),
             )
 
@@ -1553,6 +2324,7 @@ def _validate_checkout_cart(request):
             )
 
         if shipping < 0:
+
             shipping = Decimal("0.00")
 
         # --------------------------------------------------
@@ -1629,6 +2401,47 @@ def _validate_checkout_cart(request):
     )
 
 
+# ==========================================================
+# ORDER SUCCESS
+# ==========================================================
+
+@login_required
+def order_success(
+    request,
+    order_id,
+):
+
+    try:
+
+        order = Order.objects.get(
+            id=order_id,
+            user=request.user,
+        )
+
+    except Order.DoesNotExist:
+
+        messages.error(
+            request,
+            "Order not found.",
+        )
+
+        return redirect(
+            "shopping:dashboard"
+        )
+
+    return render(
+        request,
+        "shopping/order_success.html",
+        {
+            "order": order,
+        },
+    )
+
+
+# ==========================================================
+# ORDER HISTORY
+# ==========================================================
+
 @login_required
 def order_history(request):
 
@@ -1650,8 +2463,15 @@ def order_history(request):
     )
 
 
+# ==========================================================
+# ORDER DETAIL
+# ==========================================================
+
 @login_required
-def order_detail(request, order_id):
+def order_detail(
+    request,
+    order_id,
+):
 
     order = get_object_or_404(
         Order.objects.prefetch_related(
@@ -1670,9 +2490,15 @@ def order_detail(request, order_id):
     )
 
 
+# ==========================================================
+# CANCEL ORDER
+# ==========================================================
 
 @login_required
-def cancel_order(request, order_id):
+def cancel_order(
+    request,
+    order_id,
+):
 
     order = get_object_or_404(
         Order,
@@ -1684,12 +2510,18 @@ def cancel_order(request, order_id):
 
         if order.status not in [
             "cancelled",
-            "completed",
+            "confirmed",
+            "shipped",
+            "delivered",
         ]:
 
             order.status = "cancelled"
 
-            order.save()
+            order.save(
+                update_fields=[
+                    "status",
+                ]
+            )
 
         return redirect(
             "shopping:order_detail",

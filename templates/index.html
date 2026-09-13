@@ -1,3 +1,5 @@
+{% load static %}
+
 <!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
 <title>AI Shopping System</title>
 
@@ -29,24 +31,36 @@
     }
 
     body {
-        font-family: 'Segoe UI', system-ui, -apple-system,
-            BlinkMacSystemFont, sans-serif;
+    font-family: 'Segoe UI', system-ui, -apple-system,
+        BlinkMacSystemFont, sans-serif;
 
-        background: var(--bg);
-        color: var(--text);
+    background:
+        linear-gradient(
+            rgba(15, 23, 42, 0.72),
+            rgba(15, 23, 42, 0.82)
+        ),
+        url("{% static 'images/background.jpg' %}");
 
-        min-height: 100vh;
-        min-height: 100dvh;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-attachment: fixed;
 
-        display: flex;
-        align-items: center;
-        justify-content: center;
+    color: var(--text);
 
-        padding: clamp(1.25rem, 5vw, 2rem);
+    min-height: 100vh;
+    min-height: 100dvh;
 
-        position: relative;
-        overflow-x: hidden;
-    }
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    padding: clamp(1.25rem, 5vw, 2rem);
+
+    position: relative;
+    overflow-x: hidden;
+}
+
 
     /* Background orbs */
     body::before,

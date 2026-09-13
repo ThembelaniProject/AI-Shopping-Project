@@ -4,9 +4,17 @@ from . import views
 app_name = "shopping"
 
 urlpatterns = [
-    path("dashboard/", views.dashboard, name="dashboard"),
+    path(
+        "dashboard/",
+        views.dashboard,
+        name="dashboard",
+    ),
 
-    path("cart/", views.cart, name="cart"),
+    path(
+        "cart/",
+        views.cart,
+        name="cart",
+    ),
 
     path(
         "cart/add/<str:product_id>/",
@@ -37,6 +45,44 @@ urlpatterns = [
         views.checkout,
         name="checkout",
     ),
+
+    # ======================================================
+    # PAYFAST
+    # ======================================================
+
+    path(
+        "payment/payfast/<int:order_id>/",
+        views.payfast_payment,
+        name="payfast_payment",
+    ),
+
+    path(
+        "payment/payfast/",
+        views.payfast_payment,
+        name="payfast_payment_legacy",
+    ),
+
+    path(
+        "payment/payfast/return/<int:order_id>/",
+        views.payfast_return,
+        name="payfast_return",
+    ),
+
+    path(
+        "payment/payfast/cancel/<int:order_id>/",
+        views.payfast_cancel,
+        name="payfast_cancel",
+    ),
+
+    path(
+        "payment/payfast/itn/",
+        views.payfast_itn,
+        name="payfast_itn",
+    ),
+
+    # ======================================================
+    # ORDERS
+    # ======================================================
 
     path(
         "order-success/<int:order_id>/",

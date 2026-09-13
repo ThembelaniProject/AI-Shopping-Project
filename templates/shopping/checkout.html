@@ -7,401 +7,426 @@ Checkout - AI Shopping
 {% block content %}
 
 <main class="container py-5">
-<h1 class="mb-4">Checkout</h1>
 
-{% if messages %}
-    {% for message in messages %}
-        <div class="alert alert-{{ message.tags }} mb-4">
-            {{ message }}
-        </div>
-    {% endfor %}
-{% endif %}
+    <h1 class="mb-4">
+        Checkout
+    </h1>
 
-{% if cart.items %}
 
-    <div class="row g-4">
+    {% if messages %}
 
-        <!-- ==================================================
-             CUSTOMER INFORMATION
-        ================================================== -->
+        {% for message in messages %}
 
-        <div class="col-lg-7">
+            <div class="alert alert-{{ message.tags }} mb-4">
+                {{ message }}
+            </div>
 
-            <div class="card bg-dark text-white border-secondary shadow-sm">
+        {% endfor %}
 
-                <div class="card-body p-4">
+    {% endif %}
 
-                    <h2 class="h4 mb-4">
-                        Delivery Information
-                    </h2>
 
-                    <form method="POST" action="">
-                        {% csrf_token %}
+    {% if cart.items %}
 
-                        <!-- FULL NAME -->
-                        <div class="mb-3">
+        <div class="row g-4">
 
-                            <label
-                                for="full_name"
-                                class="form-label"
-                            >
-                                Full Name
-                            </label>
+            <!-- ==================================================
+                 CUSTOMER INFORMATION
+            ================================================== -->
 
-                            <input
-                                type="text"
-                                id="full_name"
-                                name="full_name"
-                                class="form-control"
-                                value="{{ request.POST.full_name|default:'' }}"
-                                autocomplete="name"
-                                required
-                            >
+            <div class="col-lg-7">
 
-                        </div>
+                <div class="card bg-dark text-white border-secondary shadow-sm">
 
-                        <!-- EMAIL -->
-                        <div class="mb-3">
+                    <div class="card-body p-4">
 
-                            <label
-                                for="email"
-                                class="form-label"
-                            >
-                                Email
-                            </label>
-
-                            <input
-                                type="email"
-                                id="email"
-                                name="email"
-                                class="form-control"
-                                value="{{ request.POST.email|default:request.user.email }}"
-                                autocomplete="email"
-                                required
-                            >
-
-                        </div>
-
-                        <!-- PHONE -->
-                        <div class="mb-3">
-
-                            <label
-                                for="phone"
-                                class="form-label"
-                            >
-                                Phone Number
-                            </label>
-
-                            <input
-                                type="tel"
-                                id="phone"
-                                name="phone"
-                                class="form-control"
-                                value="{{ request.POST.phone|default:'' }}"
-                                autocomplete="tel"
-                                required
-                            >
-
-                        </div>
-
-                        <!-- ADDRESS -->
-                        <div class="mb-3">
-
-                            <label
-                                for="address"
-                                class="form-label"
-                            >
-                                Street Address
-                            </label>
-
-                            <textarea
-                                id="address"
-                                name="address"
-                                class="form-control"
-                                rows="3"
-                                autocomplete="street-address"
-                                required
-                            >{{ request.POST.address|default:'' }}</textarea>
-
-                        </div>
-
-                        <!-- CITY + POSTAL CODE -->
-                        <div class="row">
-
-                            <div class="col-md-6 mb-3">
-
-                                <label
-                                    for="city"
-                                    class="form-label"
-                                >
-                                    City
-                                </label>
-
-                                <input
-                                    type="text"
-                                    id="city"
-                                    name="city"
-                                    class="form-control"
-                                    value="{{ request.POST.city|default:'' }}"
-                                    autocomplete="address-level2"
-                                    required
-                                >
-
-                            </div>
-
-                            <div class="col-md-6 mb-3">
-
-                                <label
-                                    for="postal_code"
-                                    class="form-label"
-                                >
-                                    Postal Code
-                                </label>
-
-                                <input
-                                    type="text"
-                                    id="postal_code"
-                                    name="postal_code"
-                                    class="form-control"
-                                    value="{{ request.POST.postal_code|default:'' }}"
-                                    autocomplete="postal-code"
-                                    required
-                                >
-
-                            </div>
-
-                        </div>
-
-                        <!-- ==================================================
-                             PAYMENT METHOD
-                        ================================================== -->
-
-                        <h2 class="h5 mt-4 mb-3">
-                            Payment Method
+                        <h2 class="h4 mb-4">
+                            Delivery Information
                         </h2>
 
-                        <div class="border border-secondary rounded p-3 mb-4">
 
-                            <!-- CREDIT / DEBIT CARD -->
+                        <form
+                            method="POST"
+                            action=""
+                        >
 
-                            <div class="form-check mb-3">
+                            {% csrf_token %}
+
+
+                            <!-- FULL NAME -->
+
+                            <div class="mb-3">
+
+                                <label
+                                    for="full_name"
+                                    class="form-label"
+                                >
+                                    Full Name
+                                </label>
 
                                 <input
-                                    class="form-check-input"
-                                    type="radio"
-                                    name="payment_method"
-                                    value="card"
-                                    id="payment_card"
-
-                                    {% if request.POST.payment_method == "card" %}
-                                        checked
-                                    {% endif %}
-
+                                    type="text"
+                                    id="full_name"
+                                    name="full_name"
+                                    class="form-control"
+                                    value="{{ request.POST.full_name|default:'' }}"
+                                    autocomplete="name"
                                     required
                                 >
 
+                            </div>
+
+
+                            <!-- EMAIL -->
+
+                            <div class="mb-3">
+
                                 <label
-                                    class="form-check-label"
-                                    for="payment_card"
+                                    for="email"
+                                    class="form-label"
                                 >
-                                    💳 Credit / Debit Card
+                                    Email
                                 </label>
 
-                                <div class="small text-secondary mt-1">
-                                    Pay securely using your credit or debit card.
-                                </div>
+                                <input
+                                    type="email"
+                                    id="email"
+                                    name="email"
+                                    class="form-control"
+                                    value="{{ request.POST.email|default:request.user.email }}"
+                                    autocomplete="email"
+                                    required
+                                >
 
                             </div>
 
-                            <!-- ==================================================
-                                 CARD DETAILS
-                            ================================================== -->
 
-                            <div
-                                id="card_details"
-                                class="card-details mb-4"
-                                style="display: none;"
-                            >
+                            <!-- PHONE -->
 
-                                <div class="bg-secondary bg-opacity-10 rounded p-3">
+                            <div class="mb-3">
+
+                                <label
+                                    for="phone"
+                                    class="form-label"
+                                >
+                                    Phone Number
+                                </label>
+
+                                <input
+                                    type="tel"
+                                    id="phone"
+                                    name="phone"
+                                    class="form-control"
+                                    value="{{ request.POST.phone|default:'' }}"
+                                    autocomplete="tel"
+                                    required
+                                >
+
+                            </div>
+
+
+                            <!-- ADDRESS -->
+
+                            <div class="mb-3">
+
+                                <label
+                                    for="address"
+                                    class="form-label"
+                                >
+                                    Street Address
+                                </label>
+
+                                <textarea
+                                    id="address"
+                                    name="address"
+                                    class="form-control"
+                                    rows="3"
+                                    autocomplete="street-address"
+                                    required
+                                >{{ request.POST.address|default:'' }}</textarea>
+
+                            </div>
+
+
+                            <!-- CITY + POSTAL -->
+
+                            <div class="row">
+
+                                <div class="col-md-6 mb-3">
 
                                     <label
-                                        for="card_number"
+                                        for="city"
                                         class="form-label"
                                     >
-                                        Card Number
+                                        City
                                     </label>
 
                                     <input
                                         type="text"
-                                        id="card_number"
-                                        name="card_number"
-                                        class="form-control form-control-lg"
-                                        value="{{ request.POST.card_number|default:'' }}"
-                                        inputmode="numeric"
-                                        autocomplete="cc-number"
-                                        maxlength="19"
-                                        placeholder="1234 5678 9012 3456"
+                                        id="city"
+                                        name="city"
+                                        class="form-control"
+                                        value="{{ request.POST.city|default:'' }}"
+                                        autocomplete="address-level2"
+                                        required
                                     >
 
-                                    <div class="small text-secondary mt-2">
-                                        Enter your 13–19 digit card number.
+                                </div>
+
+
+                                <div class="col-md-6 mb-3">
+
+                                    <label
+                                        for="postal_code"
+                                        class="form-label"
+                                    >
+                                        Postal Code
+                                    </label>
+
+                                    <input
+                                        type="text"
+                                        id="postal_code"
+                                        name="postal_code"
+                                        class="form-control"
+                                        value="{{ request.POST.postal_code|default:'' }}"
+                                        autocomplete="postal-code"
+                                        required
+                                    >
+
+                                </div>
+
+                            </div>
+
+
+                            <!-- ==================================================
+                                 PAYMENT
+                            ================================================== -->
+
+                           
+                           <h2 class="h5 mt-4 mb-3">
+    Payment Method
+</h2>
+
+<div class="border border-secondary rounded p-3 mb-4">
+
+    <div class="form-check mb-3">
+
+        <input
+            class="form-check-input"
+            type="radio"
+            name="payment_method"
+            value="payfast"
+            id="payment_payfast"
+            {% if request.POST.payment_method == "payfast" %}
+                checked
+            {% endif %}
+            required
+        >
+
+        <label
+            class="form-check-label"
+            for="payment_payfast"
+        >
+            💳 PayFast
+        </label>
+
+        <div class="small text-secondary mt-1">
+            Pay securely through PayFast.
+        </div>
+
+    </div>
+
+    <div class="form-check">
+
+        <input
+            class="form-check-input"
+            type="radio"
+            name="payment_method"
+            value="cash"
+            id="payment_cash"
+            {% if request.POST.payment_method == "cash" %}
+                checked
+            {% endif %}
+        >
+
+        <label
+            class="form-check-label"
+            for="payment_cash"
+        >
+            💵 Cash on Delivery
+        </label>
+
+        <div class="small text-secondary mt-1">
+            Pay when your order is delivered.
+        </div>
+
+    </div>
+
+</div>
+
+<button
+    type="submit"
+    class="btn btn-success w-100 py-3 fw-bold"
+>
+    Continue to Payment →
+</button>
+
+
+
+                            <!-- PLACE ORDER -->
+
+                            <button
+                                type="submit"
+                                class="btn btn-success w-100 py-3 fw-bold"
+                                id="place_order_button"
+                            >
+
+                                Place Order →
+
+                            </button>
+
+                        </form>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- ==================================================
+                 ORDER SUMMARY
+            ================================================== -->
+
+            <div class="col-lg-5">
+
+                <div class="card bg-dark text-white border-secondary shadow-sm">
+
+                    <div class="card-body p-4">
+
+                        <h2 class="h4 mb-4">
+                            Order Summary
+                        </h2>
+
+
+                        {% for item in cart.items %}
+
+                            <div class="d-flex justify-content-between align-items-start mb-3">
+
+                                <div class="pe-3">
+
+                                    <strong>
+
+                                        {{ item.product.name|default:item.product.title }}
+
+                                    </strong>
+
+
+                                    <div class="text-secondary small">
+
+                                        Quantity:
+                                        {{ item.quantity }}
+
+                                    </div>
+
+
+                                    <div class="text-secondary small">
+
+                                        R{{ item.product.price|floatformat:2 }}
+                                        each
+
                                     </div>
 
                                 </div>
 
-                            </div>
 
-                            <!-- CASH ON DELIVERY -->
+                                <span class="fw-semibold text-nowrap">
 
-                            <div class="form-check">
+                                    R{{ item.item_total|floatformat:2 }}
 
-                                <input
-                                    class="form-check-input"
-                                    type="radio"
-                                    name="payment_method"
-                                    value="cash"
-                                    id="payment_cash"
-
-                                    {% if request.POST.payment_method == "cash" %}
-                                        checked
-                                    {% endif %}
-                                >
-
-                                <label
-                                    class="form-check-label"
-                                    for="payment_cash"
-                                >
-                                    💵 Cash on Delivery
-                                </label>
-
-                                <div class="small text-secondary mt-1">
-                                    Pay when your order is delivered.
-                                </div>
+                                </span>
 
                             </div>
 
-                        </div>
+                        {% empty %}
 
-                        <!-- PLACE ORDER -->
+                            <p class="text-secondary">
+                                Your cart is empty.
+                            </p>
 
-                        <button
-                            type="submit"
-                            class="btn btn-success w-100 py-3 fw-bold"
-                        >
-                            Place Order →
-                        </button>
+                        {% endfor %}
 
-                    </form>
 
-                </div>
+                        <hr class="border-secondary">
 
-            </div>
 
-        </div>
+                        <!-- SUBTOTAL -->
 
-        <!-- ==================================================
-             ORDER SUMMARY
-        ================================================== -->
+                        <div class="d-flex justify-content-between mb-2">
 
-        <div class="col-lg-5">
+                            <span>
+                                Subtotal
+                            </span>
 
-            <div class="card bg-dark text-white border-secondary shadow-sm">
-
-                <div class="card-body p-4">
-
-                    <h2 class="h4 mb-4">
-                        Order Summary
-                    </h2>
-
-                    {% for item in cart.items %}
-
-                        <div class="d-flex justify-content-between align-items-start mb-3">
-
-                            <div class="pe-3">
-
-                                <strong>
-                                    {{ item.product.name|default:item.product.title }}
-                                </strong>
-
-                                <div class="text-secondary small">
-                                    Quantity: {{ item.quantity }}
-                                </div>
-
-                                <div class="text-secondary small">
-                                    R{{ item.product.price|floatformat:2 }} each
-                                </div>
-
-                            </div>
-
-                            <span class="fw-semibold text-nowrap">
-                                R{{ item.item_total|floatformat:2 }}
+                            <span>
+                                R{{ cart.subtotal|floatformat:2 }}
                             </span>
 
                         </div>
 
-                    {% empty %}
 
-                        <p class="text-secondary">
-                            Your cart is empty.
-                        </p>
+                        <!-- SHIPPING -->
 
-                    {% endfor %}
+                        <div class="d-flex justify-content-between mb-2">
 
-                    <hr class="border-secondary">
+                            <span>
+                                Shipping
+                            </span>
 
-                    <!-- SUBTOTAL -->
+                            <span>
 
-                    <div class="d-flex justify-content-between mb-2">
+                                {% if cart.shipping_total %}
 
-                        <span>
-                            Subtotal
-                        </span>
+                                    R{{ cart.shipping_total|floatformat:2 }}
 
-                        <span>
-                            R{{ cart.subtotal|floatformat:2 }}
-                        </span>
+                                {% else %}
 
-                    </div>
+                                    Free
 
-                    <!-- SHIPPING -->
+                                {% endif %}
 
-                    <div class="d-flex justify-content-between mb-2">
+                            </span>
 
-                        <span>
-                            Shipping
-                        </span>
+                        </div>
 
-                        <span>
 
-                            {% if cart.shipping_total %}
-                                R{{ cart.shipping_total|floatformat:2 }}
-                            {% else %}
-                                Free
-                            {% endif %}
+                        <hr class="border-secondary">
 
-                        </span>
 
-                    </div>
+                        <!-- TOTAL -->
 
-                    <hr class="border-secondary">
+                        <div class="d-flex justify-content-between fs-4 fw-bold">
 
-                    <!-- TOTAL -->
+                            <span>
+                                Total
+                            </span>
 
-                    <div class="d-flex justify-content-between fs-4 fw-bold">
+                            <span class="text-success">
 
-                        <span>
-                            Total
-                        </span>
+                                R{{ cart.total|floatformat:2 }}
 
-                        <span class="text-success">
-                            R{{ cart.total|floatformat:2 }}
-                        </span>
+                            </span>
 
-                    </div>
+                        </div>
 
-                    <div class="text-secondary small mt-3">
-                        🔒 Your checkout information is securely processed.
+
+                        <div class="text-secondary small mt-3">
+
+                            🔒 Card payments are securely processed
+                            by Payfast.
+
+                        </div>
+
                     </div>
 
                 </div>
@@ -410,165 +435,126 @@ Checkout - AI Shopping
 
         </div>
 
-    </div>
 
-{% else %}
+    {% else %}
 
-    <!-- ==================================================
-         EMPTY CART
-    ================================================== -->
 
-    <div class="card bg-dark text-white border-secondary">
+        <!-- ==================================================
+             EMPTY CART
+        ================================================== -->
 
-        <div class="card-body text-center py-5">
+        <div class="card bg-dark text-white border-secondary">
 
-            <div class="display-4 mb-3">
-                🛒
+            <div class="card-body text-center py-5">
+
+                <div class="display-4 mb-3">
+                    🛒
+                </div>
+
+
+                <h2 class="h4">
+                    Your cart is empty
+                </h2>
+
+
+                <p class="text-secondary mb-4">
+
+                    Add some products before proceeding
+                    to checkout.
+
+                </p>
+
+
+                <a
+                    href="{% url 'product_list' %}"
+                    class="btn btn-success"
+                >
+                    Continue Shopping
+                </a>
+
             </div>
-
-            <h2 class="h4">
-                Your cart is empty
-            </h2>
-
-            <p class="text-secondary mb-4">
-                Add some products before proceeding to checkout.
-            </p>
-
-            <a
-                href="{% url 'product_list' %}"
-                class="btn btn-success"
-            >
-                Continue Shopping
-            </a>
 
         </div>
 
-    </div>
+    {% endif %}
 
-{% endif %}
+</main>
 
-</main> <!-- ========================================================== PAYMENT METHOD JAVASCRIPT ========================================================== --> <script>
-document.addEventListener("DOMContentLoaded", function () {
 
-const cardRadio = document.getElementById("payment_card");
-const cashRadio = document.getElementById("payment_cash");
+<!-- ==========================================================
+     PAYMENT METHOD JAVASCRIPT
+========================================================== -->
 
-const cardDetails = document.getElementById("card_details");
-const cardNumber = document.getElementById("card_number");
+<script>
 
-function updatePaymentFields() {
-
-    /*
-     * CREDIT / DEBIT CARD
-     */
-
-    if (cardRadio.checked) {
-
-        // Show card number field
-        cardDetails.style.display = "block";
-
-        // Make card number required
-        cardNumber.required = true;
-
-    }
-
-    /*
-     * CASH ON DELIVERY
-     */
-
-    else if (cashRadio.checked) {
-
-        // Hide card number field
-        cardDetails.style.display = "none";
-
-        // Card number is not required
-        cardNumber.required = false;
-
-        // Clear card number
-        cardNumber.value = "";
-
-    }
-
-    /*
-     * NOTHING SELECTED
-     */
-
-    else {
-
-        cardDetails.style.display = "none";
-
-        cardNumber.required = false;
-
-    }
-
-}
-
-/*
- * CARD SELECTED
- */
-
-cardRadio.addEventListener(
-    "change",
-    updatePaymentFields
-);
-
-/*
- * CASH SELECTED
- */
-
-cashRadio.addEventListener(
-    "change",
-    updatePaymentFields
-);
-
-/*
- * FORMAT CARD NUMBER
- *
- * Turns:
- *
- * 1234567890123456
- *
- * into:
- *
- * 1234 5678 9012 3456
- */
-
-cardNumber.addEventListener(
-    "input",
+document.addEventListener(
+    "DOMContentLoaded",
     function () {
 
-        let value = this.value.replace(
-            /\D/g,
-            ""
-        );
+        const cardRadio =
+            document.getElementById(
+                "payment_card"
+            );
 
-        value = value.substring(
-            0,
-            19
-        );
+        const cashRadio =
+            document.getElementById(
+                "payment_cash"
+            );
 
-        let formatted = value.match(
-            /.{1,4}/g
-        );
+        const payfastInfo =
+            document.getElementById(
+                "payfast_info"
+            );
 
-        this.value = formatted
-            ? formatted.join(" ")
-            : "";
+
+        function updatePaymentMethod() {
+
+            if (
+                cardRadio &&
+                cardRadio.checked
+            ) {
+
+                payfastInfo.style.display =
+                    "block";
+
+            }
+
+            else {
+
+                payfastInfo.style.display =
+                    "none";
+
+            }
+
+        }
+
+
+        if (cardRadio) {
+
+            cardRadio.addEventListener(
+                "change",
+                updatePaymentMethod
+            );
+
+        }
+
+
+        if (cashRadio) {
+
+            cashRadio.addEventListener(
+                "change",
+                updatePaymentMethod
+            );
+
+        }
+
+
+        updatePaymentMethod();
 
     }
+
 );
 
-/*
- * INITIAL STATE
- *
- * This is important when Django
- * reloads the page after a validation
- * error.
- */
-
-updatePaymentFields();
-
-});
-
 </script>
+
 {% endblock %}

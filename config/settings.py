@@ -250,3 +250,15 @@ LOGOUT_REDIRECT_URL = "accounts:login"
 
 
 PARSE_API_KEY = os.getenv("PARSE_API_KEY")
+
+
+PAYFAST_MERCHANT_ID = os.environ.get("PAYFAST_MERCHANT_ID")
+PAYFAST_MERCHANT_KEY = os.environ.get("PAYFAST_MERCHANT_KEY")
+PAYFAST_PASSPHRASE = os.environ.get("PAYFAST_PASSPHRASE")
+
+PAYFAST_SANDBOX = os.environ.get("PAYFAST_SANDBOX", "True") == "True"
+
+if PAYFAST_SANDBOX:
+    PAYFAST_URL = "https://sandbox.payfast.co.za/eng/process"
+else:
+    PAYFAST_URL = "https://www.payfast.co.za/eng/process"
