@@ -1,162 +1,1017 @@
-{% extends "base.html" %}
+% extends "base.html" %}
 
 {% block content %}
 
-<div class="order-success">
+<style> * { box-sizing: border-box; }
+.payment-wrapper {
+    min-height: calc(100vh - 80px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 50px 20px;
+    position: relative;
+    overflow: hidden;
+    background:
+        radial-gradient(
+            circle at 10% 10%,
+            rgba(59, 130, 246, 0.16),
+            transparent 30%
+        ),
+        radial-gradient(
+            circle at 90% 90%,
+            rgba(16, 185, 129, 0.12),
+            transparent 30%
+        ),
+        linear-gradient(
+            135deg,
+            #f8fafc 0%,
+            #eef2ff 50%,
+            #f8fafc 100%
+        );
+}
 
-    <h1>Order #{{ order.id }}</h1>
+/* Decorative background circles */
+
+.bg-circle {
+    position: absolute;
+    border-radius: 50%;
+    pointer-events: none;
+    filter: blur(2px);
+}
+
+.bg-circle.one {
+    width: 260px;
+    height: 260px;
+    top: -100px;
+    left: -80px;
+    background: rgba(59, 130, 246, 0.08);
+}
+
+.bg-circle.two {
+    width: 340px;
+    height: 340px;
+    right: -140px;
+    bottom: -140px;
+    background: rgba(16, 185, 129, 0.08);
+}
+
+/* Main card */
+
+.payment-card {
+    width: 100%;
+    max-width: 560px;
+    position: relative;
+    z-index: 2;
+    padding: 42px 38px 30px;
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 28px;
+    box-shadow:
+        0 30px 80px rgba(15, 23, 42, 0.12),
+        0 10px 30px rgba(15, 23, 42, 0.06);
+    text-align: center;
+    animation: cardEnter 0.6s ease-out;
+}
+
+/* Top brand */
+
+.brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 28px;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+}
+
+.brand-icon {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    background: linear-gradient(
+        135deg,
+        #2563eb,
+        #4f46e5
+    );
+    color: white;
+    font-size: 14px;
+    box-shadow: 0 5px 15px rgba(37, 99, 235, 0.25);
+}
+
+/* Order information */
+
+.order-label {
+    margin: 0 0 5px;
+    color: #94a3b8;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+
+.order-number {
+    margin: 0 0 30px;
+    color: #0f172a;
+    font-size: 17px;
+    font-weight: 750;
+}
+
+/* Status icon */
+
+.status-icon {
+    width: 105px;
+    height: 105px;
+    margin: 0 auto 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+
+/* Success */
+
+.success-icon {
+    background: linear-gradient(
+        135deg,
+        #dcfce7,
+        #bbf7d0
+    );
+    color: #16a34a;
+    box-shadow:
+        0 0 0 10px rgba(34, 197, 94, 0.06),
+        0 15px 35px rgba(34, 197, 94, 0.15);
+    animation: successPop 0.65s ease-out;
+}
+
+.success-check {
+    width: 46px;
+    height: 26px;
+    border-left: 5px solid #16a34a;
+    border-bottom: 5px solid #16a34a;
+    transform: rotate(-45deg) translate(3px, -3px);
+    animation: drawCheck 0.6s 0.15s ease-out both;
+}
+
+/* Pending */
+
+.pending-icon {
+    background: #eff6ff;
+    box-shadow:
+        0 0 0 10px rgba(37, 99, 235, 0.05),
+        0 15px 35px rgba(37, 99, 235, 0.10);
+}
+
+.spinner {
+    width: 58px;
+    height: 58px;
+    border-radius: 50%;
+    border: 5px solid #dbeafe;
+    border-top-color: #2563eb;
+    animation: spin 1s linear infinite;
+}
+
+/* Cancelled */
+
+.cancelled-icon {
+    background: #fff7ed;
+    color: #ea580c;
+    box-shadow:
+        0 0 0 10px rgba(234, 88, 12, 0.05),
+        0 15px 35px rgba(234, 88, 12, 0.10);
+}
+
+/* Failed */
+
+.failed-icon {
+    background: #fef2f2;
+    color: #dc2626;
+    box-shadow:
+        0 0 0 10px rgba(220, 38, 38, 0.05),
+        0 15px 35px rgba(220, 38, 38, 0.10);
+}
+
+.status-symbol {
+    font-size: 48px;
+    line-height: 1;
+    font-weight: 300;
+}
+
+/* Text */
+
+.payment-title {
+    margin: 0 0 13px;
+    color: #0f172a;
+    font-size: 30px;
+    line-height: 1.2;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+}
+
+.payment-description {
+    max-width: 430px;
+    margin: 0 auto;
+    color: #64748b;
+    font-size: 15px;
+    line-height: 1.75;
+}
+
+/* Information box */
+
+.status-box {
+    margin-top: 25px;
+    padding: 16px 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    border-radius: 15px;
+    text-align: left;
+    font-size: 13px;
+    line-height: 1.6;
+}
+
+.status-box-icon {
+    flex-shrink: 0;
+    width: 25px;
+    height: 25px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    font-size: 13px;
+    font-weight: 800;
+}
+
+.success-box {
+    background: #f0fdf4;
+    color: #166534;
+    border: 1px solid #dcfce7;
+}
+
+.success-box .status-box-icon {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.pending-box {
+    background: #eff6ff;
+    color: #1e40af;
+    border: 1px solid #dbeafe;
+}
+
+.pending-box .status-box-icon {
+    background: #dbeafe;
+    color: #2563eb;
+}
+
+.cancelled-box {
+    background: #fff7ed;
+    color: #9a3412;
+    border: 1px solid #fed7aa;
+}
+
+.cancelled-box .status-box-icon {
+    background: #ffedd5;
+    color: #ea580c;
+}
+
+.failed-box {
+    background: #fef2f2;
+    color: #991b1b;
+    border: 1px solid #fecaca;
+}
+
+.failed-box .status-box-icon {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+/* Checking indicator */
+
+.checking {
+    margin-top: 22px;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    color: #2563eb;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.checking-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #2563eb;
+    box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5);
+    animation: pulse 1.5s infinite;
+}
+
+/* Buttons */
+
+.actions {
+    margin-top: 30px;
+    display: flex;
+    justify-content: center;
+    gap: 11px;
+    flex-wrap: wrap;
+}
+
+.btn {
+    min-width: 155px;
+    padding: 13px 21px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    text-decoration: none;
+    font-size: 13px;
+    font-weight: 750;
+    transition:
+        transform 0.2s ease,
+        box-shadow 0.2s ease,
+        background 0.2s ease;
+}
+
+.btn:hover {
+    transform: translateY(-2px);
+}
+
+.btn-primary {
+    color: white;
+    background: linear-gradient(
+        135deg,
+        #2563eb,
+        #4f46e5
+    );
+    box-shadow:
+        0 10px 24px rgba(37, 99, 235, 0.23);
+}
+
+.btn-primary:hover {
+    box-shadow:
+        0 14px 30px rgba(37, 99, 235, 0.30);
+}
+
+.btn-secondary {
+    color: #334155;
+    background: #f1f5f9;
+    border: 1px solid #e2e8f0;
+}
+
+.btn-secondary:hover {
+    background: #e2e8f0;
+}
+
+/* Footer */
+
+.payment-footer {
+    margin-top: 32px;
+    padding-top: 22px;
+    border-top: 1px solid #e2e8f0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+.lock-icon {
+    width: 17px;
+    height: 17px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 5px;
+    background: #f1f5f9;
+    font-size: 10px;
+}
+
+/* Animations */
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0.5);
+    }
+
+    70% {
+        box-shadow: 0 0 0 8px rgba(37, 99, 235, 0);
+    }
+
+    100% {
+        box-shadow: 0 0 0 0 rgba(37, 99, 235, 0);
+    }
+}
+
+@keyframes cardEnter {
+    from {
+        opacity: 0;
+        transform: translateY(25px) scale(0.98);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes successPop {
+    0% {
+        opacity: 0;
+        transform: scale(0.5);
+    }
+
+    70% {
+        transform: scale(1.08);
+    }
+
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+}
+
+@keyframes drawCheck {
+    from {
+        opacity: 0;
+        transform:
+            rotate(-45deg)
+            translate(3px, -3px)
+            scale(0.5);
+    }
+
+    to {
+        opacity: 1;
+        transform:
+            rotate(-45deg)
+            translate(3px, -3px)
+            scale(1);
+    }
+}
+
+/* Mobile */
+
+@media (max-width: 600px) {
+
+    .payment-wrapper {
+        min-height: calc(100vh - 60px);
+        padding: 25px 14px;
+    }
+
+    .payment-card {
+        padding: 32px 20px 25px;
+        border-radius: 22px;
+    }
+
+    .brand {
+        margin-bottom: 22px;
+    }
+
+    .status-icon {
+        width: 88px;
+        height: 88px;
+        margin-bottom: 23px;
+    }
+
+    .spinner {
+        width: 50px;
+        height: 50px;
+    }
+
+    .payment-title {
+        font-size: 25px;
+    }
+
+    .payment-description {
+        font-size: 14px;
+    }
+
+    .status-box {
+        font-size: 12px;
+    }
+
+    .actions {
+        flex-direction: column;
+    }
+
+    .btn {
+        width: 100%;
+    }
+}
+
+</style> <div class="payment-wrapper">
+<div class="bg-circle one"></div>
+<div class="bg-circle two"></div>
+
+<div class="payment-card">
+
+    <!-- BRAND -->
+
+    <div class="brand">
+
+        <span class="brand-icon">
+            ✓
+        </span>
+
+        Secure Checkout
+
+    </div>
+
+    <!-- ORDER -->
+
+    <p class="order-label">
+        Order Number
+    </p>
+
+    <p class="order-number">
+        #{{ order.id }}
+    </p>
 
     {% if order.payment_status == "paid" %}
 
-        <h2>Payment successful! 🎉</h2>
+        <!-- =====================================
+             SUCCESS
+        ====================================== -->
 
-        <p>
-            Your payment has been confirmed and your cart has been cleared.
+        <div class="status-icon success-icon">
+
+            <div class="success-check"></div>
+
+        </div>
+
+        <h1 class="payment-title">
+            Payment successful! 🎉
+        </h1>
+
+        <p class="payment-description">
+            Thank you for your purchase.
+            Your payment has been successfully confirmed
+            and your order is now being processed.
         </p>
+
+        <div class="status-box success-box">
+
+            <div class="status-box-icon">
+                ✓
+            </div>
+
+            <div>
+                <strong>Order confirmed</strong><br>
+                Your cart has been cleared and your order
+                has been confirmed successfully.
+            </div>
+
+        </div>
+
+        <div class="actions">
+
+            <a
+                href="{% url 'shopping:order_detail' order.id %}"
+                class="btn btn-primary"
+            >
+                View Order
+            </a>
+
+            <a
+                href="{% url 'shopping:order_history' %}"
+                class="btn btn-secondary"
+            >
+                My Orders
+            </a>
+
+        </div>
 
     {% elif order.payment_status == "pending" %}
 
-        <h2>Payment processing...</h2>
+        <!-- =====================================
+             PENDING
+        ====================================== -->
 
-        <p id="payment-message">
-            We are waiting for PayFast to confirm your payment.
+        <div class="status-icon pending-icon">
+
+            <div class="spinner"></div>
+
+        </div>
+
+        <h1 class="payment-title">
+            Confirming your payment
+        </h1>
+
+        <p
+            class="payment-description"
+            id="payment-message"
+        >
+            We are waiting for PayFast to confirm your
+            payment. This usually takes only a moment.
         </p>
 
-        <p>
-            Please wait a moment...
-        </p>
+        <div class="status-box pending-box">
+
+            <div class="status-box-icon">
+                i
+            </div>
+
+            <div>
+                <strong>Please wait</strong><br>
+                Don't close this page. We're automatically
+                checking your payment status.
+            </div>
+
+        </div>
+
+        <div class="checking">
+
+            <span class="checking-dot"></span>
+
+            Checking PayFast status...
+
+        </div>
 
     {% elif order.payment_status == "cancelled" %}
 
-        <h2>Payment cancelled</h2>
+        <!-- =====================================
+             CANCELLED
+        ====================================== -->
 
-        <p>
-            Your cart has been kept so you can try again.
+        <div class="status-icon cancelled-icon">
+
+            <span class="status-symbol">
+                ×
+            </span>
+
+        </div>
+
+        <h1 class="payment-title">
+            Payment cancelled
+        </h1>
+
+        <p class="payment-description">
+            Your PayFast payment was cancelled before
+            the transaction could be completed.
         </p>
+
+        <div class="status-box cancelled-box">
+
+            <div class="status-box-icon">
+                !
+            </div>
+
+            <div>
+                <strong>Your cart is safe</strong><br>
+                Your items have not been removed from your
+                cart. You can try the payment again.
+            </div>
+
+        </div>
+
+        <div class="actions">
+
+            <a
+                href="{% url 'shopping:cart' %}"
+                class="btn btn-primary"
+            >
+                Return to Cart
+            </a>
+
+            <a
+                href="{% url 'shopping:order_detail' order.id %}"
+                class="btn btn-secondary"
+            >
+                View Order
+            </a>
+
+        </div>
 
     {% elif order.payment_status == "failed" %}
 
-        <h2>Payment failed</h2>
+        <!-- =====================================
+             FAILED
+        ====================================== -->
 
-        <p>
-            Your payment could not be completed.
+        <div class="status-icon failed-icon">
+
+            <span class="status-symbol">
+                !
+            </span>
+
+        </div>
+
+        <h1 class="payment-title">
+            Payment failed
+        </h1>
+
+        <p class="payment-description">
+            Unfortunately, PayFast could not complete
+            your payment for this order.
         </p>
+
+        <div class="status-box failed-box">
+
+            <div class="status-box-icon">
+                !
+            </div>
+
+            <div>
+                <strong>Payment not completed</strong><br>
+                No successful payment was recorded.
+                Please try again.
+            </div>
+
+        </div>
+
+        <div class="actions">
+
+            <a
+                href="{% url 'shopping:cart' %}"
+                class="btn btn-primary"
+            >
+                Try Again
+            </a>
+
+            <a
+                href="{% url 'shopping:order_detail' order.id %}"
+                class="btn btn-secondary"
+            >
+                View Order
+            </a>
+
+        </div>
 
     {% endif %}
 
+    <!-- FOOTER -->
+
+    <div class="payment-footer">
+
+        <span class="lock-icon">
+            🔒
+        </span>
+
+        Secure payment processing
+
+    </div>
+
 </div>
 
-
+</div>
 {% if order.payment_status == "pending" %}
 
 <script>
-
 (function () {
 
-    const statusUrl =
-        "{% url 'shopping:payfast_payment_status' order.id %}";
+"use strict";
 
-    let attempts = 0;
+/*
+ * PayFast payment status endpoint.
+ */
 
-    const maxAttempts = 60;
+const statusUrl =
+    "{% url 'shopping:payfast_payment_status' order.id %}";
 
-    function checkPaymentStatus() {
+/*
+ * Maximum number of status checks.
+ *
+ * 60 attempts × 2 seconds
+ * = approximately 2 minutes.
+ */
 
-        attempts++;
+let attempts = 0;
 
-        fetch(
-            statusUrl,
-            {
-                method: "GET",
-                headers: {
-                    "X-Requested-With": "XMLHttpRequest"
-                },
-                credentials: "same-origin"
-            }
-        )
-        .then(function (response) {
+const maxAttempts = 60;
 
-            if (!response.ok) {
-                throw new Error(
-                    "Could not check payment status."
-                );
-            }
+/*
+ * DOM elements.
+ */
 
-            return response.json();
+const paymentMessage =
+    document.getElementById(
+        "payment-message"
+    );
 
-        })
-        .then(function (data) {
+/*
+ * Update the message displayed
+ * to the customer.
+ */
 
-            console.log(
-                "PayFast status:",
-                data.status
-            );
+function updateMessage(message) {
 
-            // ------------------------------------------
-            // PAYMENT CONFIRMED
-            // ------------------------------------------
+    if (paymentMessage) {
 
-            if (data.paid) {
-
-                window.location.reload();
-
-                return;
-            }
-
-            // ------------------------------------------
-            // PAYMENT FAILED
-            // ------------------------------------------
-
-            if (
-                data.status === "failed" ||
-                data.status === "cancelled"
-            ) {
-
-                window.location.reload();
-
-                return;
-            }
-
-            // ------------------------------------------
-            // KEEP CHECKING
-            // ------------------------------------------
-
-            if (attempts < maxAttempts) {
-
-                setTimeout(
-                    checkPaymentStatus,
-                    2000
-                );
-
-            }
-
-        })
-        .catch(function (error) {
-
-            console.error(
-                "Payment status error:",
-                error
-            );
-
-            if (attempts < maxAttempts) {
-
-                setTimeout(
-                    checkPaymentStatus,
-                    3000
-                );
-
-            }
-
-        });
+        paymentMessage.textContent = message;
 
     }
 
-    checkPaymentStatus();
+}
+
+/*
+ * Check payment status.
+ */
+
+function checkPaymentStatus() {
+
+    attempts++;
+
+    fetch(
+        statusUrl,
+        {
+            method: "GET",
+
+            headers: {
+                "X-Requested-With": "XMLHttpRequest"
+            },
+
+            credentials: "same-origin",
+
+            cache: "no-store"
+        }
+    )
+
+    .then(function (response) {
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Payment status request failed."
+            );
+
+        }
+
+        return response.json();
+
+    })
+
+    .then(function (data) {
+
+        console.log(
+            "PayFast payment status:",
+            data.status
+        );
+
+        /*
+         * PAYMENT SUCCESSFUL
+         */
+
+        if (
+            data.paid === true ||
+            data.status === "paid"
+        ) {
+
+            updateMessage(
+                "Payment confirmed! Redirecting..."
+            );
+
+            /*
+             * Give the customer a tiny moment
+             * to see the confirmation.
+             */
+
+            setTimeout(
+                function () {
+
+                    window.location.reload();
+
+                },
+                500
+            );
+
+            return;
+        }
+
+        /*
+         * PAYMENT FAILED
+         */
+
+        if (
+            data.status === "failed"
+        ) {
+
+            updateMessage(
+                "Your payment failed. Updating your order..."
+            );
+
+            setTimeout(
+                function () {
+
+                    window.location.reload();
+
+                },
+                500
+            );
+
+            return;
+        }
+
+        /*
+         * PAYMENT CANCELLED
+         */
+
+        if (
+            data.status === "cancelled"
+        ) {
+
+            updateMessage(
+                "Your payment was cancelled. Updating your order..."
+            );
+
+            setTimeout(
+                function () {
+
+                    window.location.reload();
+
+                },
+                500
+            );
+
+            return;
+        }
+
+        /*
+         * STILL PENDING
+         */
+
+        if (attempts < maxAttempts) {
+
+            setTimeout(
+                checkPaymentStatus,
+                2000
+            );
+
+            return;
+        }
+
+        /*
+         * TIMEOUT
+         */
+
+        updateMessage(
+            "Your payment is taking longer than expected. " +
+            "Please check your order again shortly."
+        );
+
+    })
+
+    .catch(function (error) {
+
+        console.error(
+            "Payment status error:",
+            error
+        );
+
+        /*
+         * Temporary network error.
+         *
+         * Keep trying instead of immediately
+         * showing an error to the customer.
+         */
+
+        if (attempts < maxAttempts) {
+
+            setTimeout(
+                checkPaymentStatus,
+                3000
+            );
+
+        } else {
+
+            updateMessage(
+                "We could not confirm the payment yet. " +
+                "Please check your order again shortly."
+            );
+
+        }
+
+    });
+
+}
+
+/*
+ * Start checking immediately.
+ */
+
+checkPaymentStatus();
 
 })();
 
 </script>
-
 {% endif %}
 
 {% endblock %}
+
+
+
