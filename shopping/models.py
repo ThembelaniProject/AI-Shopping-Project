@@ -23,19 +23,39 @@ class Order(models.Model):
         ("cancelled", "Cancelled"),
     ]
 
+    # ------------------------------------------------------
+    # CUSTOMER
+    # ------------------------------------------------------
+
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
         related_name="orders",
     )
 
-    full_name = models.CharField(max_length=150)
+    full_name = models.CharField(
+        max_length=150,
+    )
+
     email = models.EmailField()
-    phone = models.CharField(max_length=30)
+
+    phone = models.CharField(
+        max_length=30,
+    )
 
     address = models.TextField()
-    city = models.CharField(max_length=100)
-    postal_code = models.CharField(max_length=20)
+
+    city = models.CharField(
+        max_length=100,
+    )
+
+    postal_code = models.CharField(
+        max_length=20,
+    )
+
+    # ------------------------------------------------------
+    # PAYMENT
+    # ------------------------------------------------------
 
     payment_method = models.CharField(
         max_length=30,
@@ -58,6 +78,10 @@ class Order(models.Model):
         null=True,
     )
 
+    # ------------------------------------------------------
+    # MONEY
+    # ------------------------------------------------------
+
     subtotal = models.DecimalField(
         max_digits=12,
         decimal_places=2,
@@ -66,6 +90,7 @@ class Order(models.Model):
     shipping_total = models.DecimalField(
         max_digits=12,
         decimal_places=2,
+        default=0,
     )
 
     total = models.DecimalField(
@@ -73,18 +98,31 @@ class Order(models.Model):
         decimal_places=2,
     )
 
+    # ------------------------------------------------------
+    # ORDER STATUS
+    # ------------------------------------------------------
+
     status = models.CharField(
         max_length=20,
         choices=STATUS_CHOICES,
         default="pending",
     )
 
+    # ------------------------------------------------------
+    # DATES
+    # ------------------------------------------------------
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )
 
+    updated_at = models.DateTimeField(
+        auto_now=True,
+    )
+
     def __str__(self):
         return f"Order #{self.id} - {self.user}"
+
 
 # ==========================================================
 # ORDER ITEM
@@ -98,8 +136,6 @@ class OrderItem(models.Model):
         related_name="items",
     )
 
-    # IMPORTANT:
-    # Checkers product IDs can be strings.
     product_id = models.CharField(
         max_length=255,
     )
@@ -121,5 +157,7 @@ class OrderItem(models.Model):
     )
 
     def __str__(self):
-
-        return self.product_name
+        return (
+            f"{self.product_name} "
+            f"x {self.quantity}"
+        )

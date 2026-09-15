@@ -1,117 +1,162 @@
 {% extends "base.html" %}
 
-{% block title %}
-Order Confirmed - AI Shopping
-{% endblock %}
-
 {% block content %}
 
-<main class="container py-5">
+<div class="order-success">
 
-    <div class="card bg-dark text-white border-secondary shadow-sm">
+    <h1>Order #{{ order.id }}</h1>
 
-        <div class="card-body text-center py-5">
+    {% if order.payment_status == "paid" %}
 
-            <div class="display-1 mb-3">
-                ✅
-            </div>
+        <h2>Payment successful! 🎉</h2>
 
-            <h1 class="mb-3">
-                Order Confirmed!
-            </h1>
+        <p>
+            Your payment has been confirmed and your cart has been cleared.
+        </p>
 
-            <p class="text-secondary mb-4">
-                Thank you for your order, {{ order.full_name }}.
-            </p>
+    {% elif order.payment_status == "pending" %}
 
-            <div class="border border-secondary rounded p-4 mb-4">
+        <h2>Payment processing...</h2>
 
-                <h2 class="h5 mb-3">
-                    Order #{{ order.id }}
-                </h2>
+        <p id="payment-message">
+            We are waiting for PayFast to confirm your payment.
+        </p>
 
-                <div class="d-flex justify-content-between mb-2">
-                    <span>Subtotal</span>
-                    <span>
-                        R{{ order.subtotal|floatformat:2 }}
-                    </span>
-                </div>
+        <p>
+            Please wait a moment...
+        </p>
 
-                <div class="d-flex justify-content-between mb-2">
-                    <span>Shipping</span>
-                    <span>
-                        {% if order.shipping_total %}
-                            R{{ order.shipping_total|floatformat:2 }}
-                        {% else %}
-                            Free
-                        {% endif %}
-                    </span>
-                </div>
+    {% elif order.payment_status == "cancelled" %}
 
-                <hr class="border-secondary">
+        <h2>Payment cancelled</h2>
 
-                <div class="d-flex justify-content-between fs-4 fw-bold">
-                    <span>Total</span>
+        <p>
+            Your cart has been kept so you can try again.
+        </p>
 
-                    <span class="text-success">
-                        R{{ order.total|floatformat:2 }}
-                    </span>
-                </div>
+    {% elif order.payment_status == "failed" %}
 
-            </div>
+        <h2>Payment failed</h2>
 
-            <p class="mb-4">
-                Payment method:
-                <strong>
-                    {% if order.payment_method == "cash" %}
-                        Cash on Delivery
-                    {% else %}
-                        Credit / Debit Card
-                    {% endif %}
-                </strong>
-            </p>
+        <p>
+            Your payment could not be completed.
+        </p>
 
-            {% if order.payment_method == "cash" %}
+    {% endif %}
 
-                <div class="alert alert-success">
-                    Your order will be delivered to the address
-                    you provided. Payment will be collected on delivery.
-                </div>
-
-            {% else %}
-
-                <div class="alert alert-warning">
-                    Your order has been created, but card payment
-                    still needs to be completed.
-                </div>
-
-            {% endif %}
-
-            <div class="mt-4">
-
-                <a
-                    href="{% url 'shopping:dashboard' %}"
-                    class="btn btn-success me-2"
-                >
-                    Go to Dashboard
-                </a>
-
-               <a
-    href="{% url 'products:search' %}"
-    class="btn btn-outline-light"
->
-    Continue Shopping
-</a>
+</div>
 
 
-            
+{% if order.payment_status == "pending" %}
 
-            </div>
+<script>
 
-        </div>
+(function () {
 
-    </div>
+    const statusUrl =
+        "{% url 'shopping:payfast_payment_status' order.id %}";
 
-</main>
+    let attempts = 0;
+
+    const maxAttempts = 60;
+
+    function checkPaymentStatus() {
+
+        attempts++;
+
+        fetch(
+            statusUrl,
+            {
+                method: "GET",
+                headers: {
+                    "X-Requested-With": "XMLHttpRequest"
+                },
+                credentials: "same-origin"
+            }
+        )
+        .then(function (response) {
+
+            if (!response.ok) {
+                throw new Error(
+                    "Could not check payment status."
+                );
+            }
+
+            return response.json();
+
+        })
+        .then(function (data) {
+
+            console.log(
+                "PayFast status:",
+                data.status
+            );
+
+            // ------------------------------------------
+            // PAYMENT CONFIRMED
+            // ------------------------------------------
+
+            if (data.paid) {
+
+                window.location.reload();
+
+                return;
+            }
+
+            // ------------------------------------------
+            // PAYMENT FAILED
+            // ------------------------------------------
+
+            if (
+                data.status === "failed" ||
+                data.status === "cancelled"
+            ) {
+
+                window.location.reload();
+
+                return;
+            }
+
+            // ------------------------------------------
+            // KEEP CHECKING
+            // ------------------------------------------
+
+            if (attempts < maxAttempts) {
+
+                setTimeout(
+                    checkPaymentStatus,
+                    2000
+                );
+
+            }
+
+        })
+        .catch(function (error) {
+
+            console.error(
+                "Payment status error:",
+                error
+            );
+
+            if (attempts < maxAttempts) {
+
+                setTimeout(
+                    checkPaymentStatus,
+                    3000
+                );
+
+            }
+
+        });
+
+    }
+
+    checkPaymentStatus();
+
+})();
+
+</script>
+
+{% endif %}
 
 {% endblock %}

@@ -12,14 +12,20 @@ class UserProfile(models.Model):
         related_name="profile",
     )
 
-    # User's available shopping amount
+    # ======================================================
+    # REMAINING SHOPPING BALANCE
+    # ======================================================
+
     available_amount = models.DecimalField(
         max_digits=12,
         decimal_places=2,
         default=Decimal("1650.00"),
     )
 
-    # Automatically detected location
+    # ======================================================
+    # LOCATION
+    # ======================================================
+
     latitude = models.DecimalField(
         max_digits=10,
         decimal_places=7,

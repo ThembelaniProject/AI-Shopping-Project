@@ -51,6 +51,13 @@ urlpatterns = [
     # ======================================================
 
     path(
+        "payment/payfast/status/<int:order_id>/",
+        views.payfast_payment_status,
+        name="payfast_payment_status",
+    ),
+
+
+    path(
         "payment/payfast/<int:order_id>/",
         views.payfast_payment,
         name="payfast_payment",

@@ -6,15 +6,8 @@ from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
-from django.http import (
-    HttpResponse,
-    JsonResponse,
-)
-from django.shortcuts import (
-    get_object_or_404,
-    redirect,
-    render,
-)
+from django.http import HttpResponse, JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
 
@@ -105,6 +98,21 @@ def _save_cart(request, cart):
     request.session.modified = True
 
 
+def _clear_cart(request):
+
+    """
+    Completely removes the cart from the user's
+    Django session.
+    """
+
+    request.session.pop(
+        CART_SESSION_KEY,
+        None,
+    )
+
+    request.session.modified = True
+
+
 def _get_product_stock(product):
 
     return DEFAULT_PRODUCT_STOCK
@@ -126,12 +134,14 @@ def _build_cart(request):
     for product_id, quantity in cart.items():
 
         try:
+
             quantity = int(quantity)
 
         except (
             ValueError,
             TypeError,
         ):
+
             continue
 
         if quantity <= 0:
@@ -229,6 +239,7 @@ def _build_cart(request):
             {
                 "product": product,
                 "product_id": actual_product_id,
+                "cart_product_id": str(product_id),
                 "product_name": product_name,
                 "quantity": quantity,
                 "item_total": item_total,
@@ -925,10 +936,7 @@ def clear_cart(request):
             status=405,
         )
 
-    _save_cart(
-        request,
-        {},
-    )
+    _clear_cart(request)
 
     return JsonResponse(
         {
@@ -1150,6 +1158,24 @@ def checkout(request):
         )
 
     # ------------------------------------------------------
+    # SAVE EXACT ORDER TOTAL
+    # ------------------------------------------------------
+
+    order_total = cart_data["total"].quantize(
+        Decimal("0.01")
+    )
+
+    order_subtotal = cart_data["subtotal"].quantize(
+        Decimal("0.01")
+    )
+
+    order_shipping = cart_data[
+        "shipping_total"
+    ].quantize(
+        Decimal("0.01")
+    )
+
+    # ------------------------------------------------------
     # CREATE ORDER
     # ------------------------------------------------------
 
@@ -1175,15 +1201,19 @@ def checkout(request):
 
                 payment_method=payment_method,
 
-                subtotal=cart_data["subtotal"],
+                subtotal=order_subtotal,
 
-                shipping_total=cart_data[
-                    "shipping_total"
-                ],
+                shipping_total=order_shipping,
 
-                total=cart_data["total"],
+                total=order_total,
 
                 status="pending",
+
+                payment_status=(
+                    "pending"
+                    if payment_method == "payfast"
+                    else "paid"
+                ),
             )
 
             # --------------------------------------------------
@@ -1210,6 +1240,8 @@ def checkout(request):
                             )
                             or 0
                         )
+                    ).quantize(
+                        Decimal("0.01")
                     )
 
                 except (
@@ -1272,10 +1304,7 @@ def checkout(request):
 
     if payment_method == "cash":
 
-        _save_cart(
-            request,
-            {},
-        )
+        _clear_cart(request)
 
         messages.success(
             request,
@@ -1289,13 +1318,6 @@ def checkout(request):
 
     # ======================================================
     # PAYFAST
-    # ======================================================
-
-    # Keep the order in the database.
-    #
-    # The cart is intentionally NOT cleared yet.
-    # It is cleared only after the PayFast payment flow
-    # has been successfully completed/confirmed.
     # ======================================================
 
     request.session[
@@ -1394,17 +1416,16 @@ def _absolute_url(request, route_name, **kwargs):
     )
 
 
+# ==========================================================
+# PAYFAST SIGNATURE
+# ==========================================================
+
 def _payfast_signature(data):
 
     """
-    Generates the PayFast MD5 signature.
-
-    PayFast requires the values to be URL encoded in the
-    payment parameter order, trimmed, with the optional
-    passphrase appended before hashing.
+    Generate the PayFast MD5 signature.
     """
 
-    # Never include the signature itself.
     signature_data = {
         key: value
         for key, value in data.items()
@@ -1422,27 +1443,26 @@ def _payfast_signature(data):
     if passphrase:
 
         parameter_string += (
-            f"&passphrase={passphrase}"
+            "&passphrase="
+            + passphrase
         )
 
     return md5(
-        parameter_string.encode("utf-8")
-    ).hexdigest()
+        parameter_string.encode(
+            "utf-8"
+        )
+    ).hexdigest().lower()
 
+
+# ==========================================================
+# PAYFAST REDIRECT HTML
+# ==========================================================
 
 def _render_payfast_redirect(
     request,
     payment_url,
     payment_data,
 ):
-
-    """
-    Creates a small HTML form that automatically submits
-    the customer to PayFast.
-
-    This avoids requiring a separate payfast_redirect.html
-    template.
-    """
 
     hidden_fields = []
 
@@ -1488,7 +1508,9 @@ def _render_payfast_redirect(
 <!DOCTYPE html>
 <html lang="en">
 <head>
+
     <meta charset="utf-8">
+
     <title>Redirecting to PayFast...</title>
 
     <meta
@@ -1497,6 +1519,7 @@ def _render_payfast_redirect(
     >
 
     <style>
+
         body {{
             background: #111;
             color: #fff;
@@ -1538,7 +1561,9 @@ def _render_payfast_redirect(
             cursor: pointer;
             font-weight: bold;
         }}
+
     </style>
+
 </head>
 
 <body>
@@ -1573,9 +1598,11 @@ def _render_payfast_redirect(
     </div>
 
     <script>
-        document.getElementById(
-            "payfast_form"
-        ).submit();
+
+        document
+            .getElementById("payfast_form")
+            .submit();
+
     </script>
 
 </body>
@@ -1584,6 +1611,73 @@ def _render_payfast_redirect(
 
     return HttpResponse(html)
 
+# ==========================================================
+# PAYFAST PAYMENT STATUS
+# ==========================================================
+
+@login_required
+def payfast_payment_status(request, order_id):
+
+    order = get_object_or_404(
+        Order,
+        id=order_id,
+        user=request.user,
+    )
+
+    # ------------------------------------------------------
+    # PAYMENT SUCCESSFUL
+    # ------------------------------------------------------
+
+    if order.payment_status == "paid":
+
+        # The request comes from the customer's browser,
+        # so we have access to their Django session.
+        _clear_cart(request)
+
+        # Remove temporary PayFast order session
+        request.session.pop(
+            PAYFAST_ORDER_SESSION_KEY,
+            None,
+        )
+
+        request.session.modified = True
+
+        return JsonResponse(
+            {
+                "success": True,
+                "paid": True,
+                "status": order.payment_status,
+            }
+        )
+
+    # ------------------------------------------------------
+    # PAYMENT FAILED / CANCELLED
+    # ------------------------------------------------------
+
+    if order.payment_status in [
+        "failed",
+        "cancelled",
+    ]:
+
+        return JsonResponse(
+            {
+                "success": True,
+                "paid": False,
+                "status": order.payment_status,
+            }
+        )
+
+    # ------------------------------------------------------
+    # STILL PROCESSING
+    # ------------------------------------------------------
+
+    return JsonResponse(
+        {
+            "success": True,
+            "paid": False,
+            "status": order.payment_status,
+        }
+    )
 
 # ==========================================================
 # PAYFAST PAYMENT
@@ -1594,24 +1688,6 @@ def payfast_payment(
     request,
     order_id=None,
 ):
-
-    """
-    Starts the PayFast payment.
-
-    order_id is normally supplied by the URL.
-
-    The optional fallback is intentional because your
-    current URL is apparently:
-
-        /shopping/payment/payfast/
-
-    instead of:
-
-        /shopping/payment/payfast/<order_id>/
-
-    If no order_id is supplied, we try the order saved in
-    the session.
-    """
 
     # ------------------------------------------------------
     # FALLBACK FOR OLD URL
@@ -1627,7 +1703,10 @@ def payfast_payment(
 
         messages.error(
             request,
-            "No PayFast order was found. Please start checkout again.",
+            (
+                "No PayFast order was found. "
+                "Please start checkout again."
+            ),
         )
 
         return redirect(
@@ -1661,14 +1740,10 @@ def payfast_payment(
         )
 
     # ------------------------------------------------------
-    # ALREADY PAID / CONFIRMED
+    # ALREADY PAID
     # ------------------------------------------------------
 
-    if order.status in [
-        "confirmed",
-        "shipped",
-        "delivered",
-    ]:
+    if order.payment_status == "paid":
 
         messages.info(
             request,
@@ -1742,25 +1817,38 @@ def payfast_payment(
     )
 
     # ------------------------------------------------------
+    # FIXED ORDER AMOUNT
+    # ------------------------------------------------------
+
+    order_amount = order.total.quantize(
+        Decimal("0.01")
+    )
+
+    # ------------------------------------------------------
     # PAYMENT DATA
     # ------------------------------------------------------
 
     payment_data = {
+
         "merchant_id": merchant_id,
+
         "merchant_key": merchant_key,
 
         "return_url": return_url,
+
         "cancel_url": cancel_url,
+
         "notify_url": notify_url,
 
         "name_first": name_first,
+
         "name_last": name_last,
 
         "email_address": order.email,
 
         "m_payment_id": str(order.id),
 
-        "amount": f"{order.total:.2f}",
+        "amount": f"{order_amount:.2f}",
 
         "item_name": (
             f"AI Shopping Order #{order.id}"
@@ -1805,6 +1893,9 @@ def payfast_payment(
 # ==========================================================
 # PAYFAST RETURN
 # ==========================================================
+# ==========================================================
+# PAYFAST RETURN
+# ==========================================================
 
 @login_required
 def payfast_return(
@@ -1812,31 +1903,19 @@ def payfast_return(
     order_id,
 ):
 
-    """
-    Customer is redirected here after PayFast.
-
-    IMPORTANT:
-    The return URL is not the authoritative payment
-    confirmation. The ITN is responsible for confirming
-    the transaction.
-    """
-
     order = get_object_or_404(
         Order,
         id=order_id,
         user=request.user,
     )
 
-    if order.status in [
-        "confirmed",
-        "shipped",
-        "delivered",
-    ]:
+    # ------------------------------------------------------
+    # ALREADY PAID
+    # ------------------------------------------------------
 
-        _save_cart(
-            request,
-            {},
-        )
+    if order.payment_status == "paid":
+
+        _clear_cart(request)
 
         request.session.pop(
             PAYFAST_ORDER_SESSION_KEY,
@@ -1848,25 +1927,66 @@ def payfast_return(
         messages.success(
             request,
             (
-                f"Payment received for "
-                f"Order #{order.id}."
+                f"Payment received successfully "
+                f"for Order #{order.id}."
             ),
         )
 
-    else:
+        return redirect(
+            "shopping:order_success",
+            order_id=order.id,
+        )
 
-        messages.info(
+    # ------------------------------------------------------
+    # FAILED
+    # ------------------------------------------------------
+
+    if order.payment_status == "failed":
+
+        messages.error(
             request,
             (
-                f"Order #{order.id} was returned "
-                "from PayFast. Payment confirmation "
-                "is still being processed."
+                f"Payment for Order #{order.id} "
+                "failed."
             ),
         )
 
-    return redirect(
-        "shopping:order_success",
-        order_id=order.id,
+        return redirect(
+            "shopping:order_detail",
+            order_id=order.id,
+        )
+
+    # ------------------------------------------------------
+    # CANCELLED
+    # ------------------------------------------------------
+
+    if order.payment_status == "cancelled":
+
+        messages.warning(
+            request,
+            (
+                f"Payment for Order #{order.id} "
+                "was cancelled."
+            ),
+        )
+
+        return redirect(
+            "shopping:cart"
+        )
+
+    # ------------------------------------------------------
+    # STILL PENDING
+    #
+    # The customer has returned from PayFast, but the ITN
+    # may still be processing.
+    # ------------------------------------------------------
+
+    return render(
+        request,
+        "shopping/payment_processing.html",
+        {
+            "order": order,
+        },
     )
 
 
@@ -1886,26 +2006,53 @@ def payfast_cancel(
         user=request.user,
     )
 
-    if order.status == "pending":
+    # ------------------------------------------------------
+    # ONLY MARK PENDING PAYMENTS AS CANCELLED
+    # ------------------------------------------------------
 
-        messages.warning(
-            request,
-            (
-                f"PayFast payment for "
-                f"Order #{order.id} was cancelled."
-            ),
+    if order.payment_status == "pending":
+
+        order.payment_status = "cancelled"
+
+        order.status = "cancelled"
+
+        order.save(
+            update_fields=[
+                "payment_status",
+                "status",
+            ]
         )
 
-    else:
+    # ------------------------------------------------------
+    # REMOVE TEMPORARY PAYFAST SESSION
+    # ------------------------------------------------------
 
-        messages.info(
-            request,
-            f"Order #{order.id} status: {order.status}.",
-        )
+    request.session.pop(
+        PAYFAST_ORDER_SESSION_KEY,
+        None,
+    )
+
+    request.session.modified = True
+
+    # ------------------------------------------------------
+    # IMPORTANT:
+    #
+    # DO NOT CLEAR THE CART.
+    #
+    # The customer did not complete payment.
+    # They should be able to return to checkout.
+    # ------------------------------------------------------
+
+    messages.warning(
+        request,
+        (
+            f"Payment for Order #{order.id} "
+            "was cancelled. Your cart has been kept."
+        ),
+    )
 
     return redirect(
-        "shopping:order_detail",
-        order_id=order.id,
+        "shopping:cart"
     )
 
 
@@ -1922,7 +2069,8 @@ def payfast_itn(request):
     PayFast calls this server-to-server.
 
     Do NOT require login here.
-    Do NOT require the user's browser session.
+
+    Do NOT rely on the customer's browser session here.
     """
 
     if request.method != "POST":
@@ -2049,7 +2197,7 @@ def payfast_itn(request):
         )
 
     # ------------------------------------------------------
-    # VERIFY PAYMENT STATUS
+    # PAYMENT STATUS
     # ------------------------------------------------------
 
     payment_status = (
@@ -2060,9 +2208,40 @@ def payfast_itn(request):
         or ""
     ).strip().upper()
 
+    # ------------------------------------------------------
+    # NON-COMPLETE PAYMENTS
+    # ------------------------------------------------------
+
     if payment_status != "COMPLETE":
 
-        # Do not mark the order as paid.
+        if payment_status in [
+            "CANCELLED",
+            "CANCELED",
+        ]:
+
+            order.payment_status = "cancelled"
+
+            order.status = "cancelled"
+
+            order.save(
+                update_fields=[
+                    "payment_status",
+                    "status",
+                ]
+            )
+
+        elif payment_status in [
+            "FAILED",
+        ]:
+
+            order.payment_status = "failed"
+
+            order.save(
+                update_fields=[
+                    "payment_status",
+                ]
+            )
+
         return HttpResponse(
             "Payment not complete",
             status=200,
@@ -2097,17 +2276,17 @@ def payfast_itn(request):
             status=400,
         )
 
-    expected_amount = (
-        order.total.quantize(
-            Decimal("0.01")
-        )
+    expected_amount = order.total.quantize(
+        Decimal("0.01")
     )
 
-    received_amount = (
-        received_amount.quantize(
-            Decimal("0.01")
-        )
+    received_amount = received_amount.quantize(
+        Decimal("0.01")
     )
+
+    # ------------------------------------------------------
+    # AMOUNT MUST MATCH ORDER
+    # ------------------------------------------------------
 
     if received_amount != expected_amount:
 
@@ -2117,14 +2296,18 @@ def payfast_itn(request):
         )
 
     # ------------------------------------------------------
-    # UPDATE ORDER
+    # FINALIZE PAYMENT
     # ------------------------------------------------------
 
     with transaction.atomic():
 
+        # Lock the order so two ITNs cannot process
+        # simultaneously.
+
         order = (
             Order.objects
             .select_for_update()
+            .select_related("user")
             .get(
                 id=order.id,
             )
@@ -2133,20 +2316,111 @@ def payfast_itn(request):
         # --------------------------------------------------
         # IDEMPOTENCY
         # --------------------------------------------------
-        #
-        # PayFast can send notifications more than once.
-        # Do not process an already-confirmed order again.
+
+        if order.payment_status == "paid":
+
+            return HttpResponse(
+                "OK",
+                status=200,
+            )
+
+        if order.status in [
+            "confirmed",
+            "shipped",
+            "delivered",
+        ]:
+
+            return HttpResponse(
+                "OK",
+                status=200,
+            )
+
+        # --------------------------------------------------
+        # USER PROFILE
         # --------------------------------------------------
 
-        if order.status == "pending":
+        try:
 
-            order.status = "confirmed"
+            profile = (
+                UserProfile.objects
+                .select_for_update()
+                .get(
+                    user=order.user,
+                )
+            )
+
+        except UserProfile.DoesNotExist:
+
+            profile = UserProfile.objects.create(
+                user=order.user,
+                available_amount=DEFAULT_SHOPPING_BUDGET,
+            )
+
+        # --------------------------------------------------
+        # FIXED PAYMENT AMOUNT
+        # --------------------------------------------------
+
+        amount_paid = order.total.quantize(
+            Decimal("0.01")
+        )
+
+        current_balance = (
+            profile.available_amount.quantize(
+                Decimal("0.01")
+            )
+        )
+
+        # --------------------------------------------------
+        # BALANCE CHECK
+        # --------------------------------------------------
+
+        if current_balance < amount_paid:
+
+            order.payment_status = "failed"
 
             order.save(
                 update_fields=[
-                    "status",
+                    "payment_status",
                 ]
             )
+
+            return HttpResponse(
+                "Insufficient user balance",
+                status=400,
+            )
+
+        # --------------------------------------------------
+        # DEDUCT EXACTLY ONCE
+        # --------------------------------------------------
+
+        profile.available_amount = (
+            current_balance - amount_paid
+        )
+
+        profile.save(
+            update_fields=[
+                "available_amount",
+            ]
+        )
+
+        # --------------------------------------------------
+        # CONFIRM PAYMENT
+        # --------------------------------------------------
+
+        order.payment_status = "paid"
+
+        order.status = "confirmed"
+
+        order.save(
+            update_fields=[
+                "payment_status",
+                "status",
+            ]
+        )
+
+    # ------------------------------------------------------
+    # SUCCESS
+    # ------------------------------------------------------
 
     return HttpResponse(
         "OK",
@@ -2345,6 +2619,7 @@ def _validate_checkout_cart(request):
                     or product.get("id")
                     or product_id
                 ),
+                "product_name": product_name,
                 "quantity": quantity,
                 "item_total": item_total,
                 "shipping_cost": shipping,
@@ -2411,23 +2686,26 @@ def order_success(
     order_id,
 ):
 
-    try:
+    order = get_object_or_404(
+        Order,
+        id=order_id,
+        user=request.user,
+    )
 
-        order = Order.objects.get(
-            id=order_id,
-            user=request.user,
+    # ------------------------------------------------------
+    # PAID ORDER
+    # ------------------------------------------------------
+
+    if order.payment_status == "paid":
+
+        _clear_cart(request)
+
+        request.session.pop(
+            PAYFAST_ORDER_SESSION_KEY,
+            None,
         )
 
-    except Order.DoesNotExist:
-
-        messages.error(
-            request,
-            "Order not found.",
-        )
-
-        return redirect(
-            "shopping:dashboard"
-        )
+        request.session.modified = True
 
     return render(
         request,
@@ -2436,6 +2714,7 @@ def order_success(
             "order": order,
         },
     )
+
 
 
 # ==========================================================
@@ -2517,11 +2796,24 @@ def cancel_order(
 
             order.status = "cancelled"
 
-            order.save(
-                update_fields=[
-                    "status",
-                ]
-            )
+            if order.payment_status == "pending":
+
+                order.payment_status = "cancelled"
+
+                order.save(
+                    update_fields=[
+                        "status",
+                        "payment_status",
+                    ]
+                )
+
+            else:
+
+                order.save(
+                    update_fields=[
+                        "status",
+                    ]
+                )
 
         return redirect(
             "shopping:order_detail",

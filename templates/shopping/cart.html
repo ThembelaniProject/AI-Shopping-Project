@@ -451,62 +451,55 @@ Shopping Cart - AI Shopping
 
                             <!-- QUANTITY -->
 
-                            <div class="quantity-control">
+                           <div class="quantity-control">
 
-                                <button
-                                    type="button"
-                                    aria-label="Decrease quantity"
-                                    
-                                    onclick="changeQuantity(
-                                      '{{ item.product_id }}',
-                                        -1
-                                    )"
+    <button
+        type="button"
+        aria-label="Decrease quantity"
+        onclick="changeQuantity(
+            '{{ item.cart_product_id }}',
+            -1
+        )"
+    >
+        −
+    </button>
 
-                                >
-                                    −
-                                </button>
+    <input
+        type="number"
+        value="{{ item.quantity }}"
+        min="1"
+        step="1"
+        id="quantity-{{ item.cart_product_id }}"
+        aria-label="Quantity"
+        onchange="setQuantity(
+            '{{ item.cart_product_id }}',
+            this.value
+        )"
+    >
 
+    <button
+        type="button"
+        aria-label="Increase quantity"
+        onclick="changeQuantity(
+            '{{ item.cart_product_id }}',
+            1
+        )"
+    >
+        +
+    </button>
 
-                                <input
-                                    type="number"
-                                    value="{{ item.quantity }}"
-                                    min="1"
-                                    step="1"
-                                    id="quantity-{{ item.product_id }}"
-                                    aria-label="Quantity"
-                                    onchange="setQuantity(
-                                        '{{ item.product_id }}',
-                                        this.value
-                                    )"
-                                >
+</div>
 
+<button
+    type="button"
+    class="remove-button"
+    onclick="removeItem(
+        '{{ item.cart_product_id }}'
+    )"
+>
+    Remove
+</button>
 
-                                <button
-                                    type="button"
-                                    aria-label="Increase quantity"
-                                    onclick="changeQuantity(
-                                        '{{ item.product_id }}',
-                                        1
-                                    )"
-                                >
-                                    +
-                                </button>
-
-                            </div>
-
-
-
-                            <!-- REMOVE -->
-
-                            <button
-                                type="button"
-                                class="remove-button"
-                                onclick="removeItem(
-                                    '{{ item.product_id }}'
-                                )"
-                            >
-                                Remove
-                            </button>
 
                         </div>
 
@@ -673,148 +666,26 @@ Shopping Cart - AI Shopping
 </main>
 
 <script>
-    function changeQuantity(productId, change) {
 
-        const input = document.getElementById(
-            `quantity-${productId}`
-        );
-
-        if (!input) {
-            console.error(
-                "Quantity input not found:",
-                productId
-            );
-            return;
-        }
-
-        let quantity = parseInt(input.value) || 1;
-
-        quantity += change;
-
-        if (quantity < 1) {
-            quantity = 1;
-        }
-
-        input.value = quantity;
-
-        updateCartQuantity(
-            productId,
-            quantity
-        );
-    }
-
-
-    function setQuantity(productId, quantity) {
-
-        quantity = parseInt(quantity) || 1;
-
-        if (quantity < 1) {
-            quantity = 1;
-        }
-
-        const input = document.getElementById(
-            `quantity-${productId}`
-        );
-
-        if (input) {
-            input.value = quantity;
-        }
-
-        updateCartQuantity(
-            productId,
-            quantity
-        );
-    }
-
-
-    function updateCartQuantity(
-        productId,
-        quantity
-    ) {
-
-        const formData = new URLSearchParams();
-
-        formData.append(
-            "quantity",
-            quantity
-        );
-
-        fetch(
-            `/shopping/cart/update/${productId}/`,
-            {
-                method: "POST",
-
-                headers: {
-                    "Content-Type":
-                        "application/x-www-form-urlencoded",
-                    "X-CSRFToken":
-                        getCookie("csrftoken"),
-                    "X-Requested-With":
-                        "XMLHttpRequest"
-                },
-
-                body: formData
-            }
-        )
-        .then(response => {
-
-            return response.json().then(data => {
-
-                if (!response.ok) {
-                    throw new Error(
-                        data.error ||
-                        "Could not update cart."
-                    );
-                }
-
-                return data;
-            });
-        })
-        .then(data => {
-
-            if (!data.success) {
-                throw new Error(
-                    data.error ||
-                    "Could not update cart."
-                );
-            }
-
-            /*
-             * For now reload the page.
-             *
-             * Django will rebuild the cart and
-             * calculate the new totals.
-             */
-            window.location.reload();
-        })
-        .catch(error => {
-
-            console.error(
-                "Cart update error:",
-                error
-            );
-
-            alert(error.message);
-
-            /*
-             * Restore the page if the update failed.
-             */
-            window.location.reload();
-        });
-    }
-
+    // ======================================================
+    // CSRF
+    // ======================================================
 
     function getCookie(name) {
 
         let cookieValue = null;
 
-        if (document.cookie &&
-            document.cookie !== "") {
+        if (
+            document.cookie &&
+            document.cookie !== ""
+        ) {
 
             const cookies =
                 document.cookie.split(";");
 
-            for (let cookie of cookies) {
+            for (
+                let cookie of cookies
+            ) {
 
                 cookie = cookie.trim();
 
@@ -839,7 +710,337 @@ Shopping Cart - AI Shopping
 
         return cookieValue;
     }
+
+
+    // ======================================================
+    // CHANGE QUANTITY
+    // ======================================================
+
+    function changeQuantity(
+        productId,
+        change
+    ) {
+
+        const input =
+            document.getElementById(
+                `quantity-${productId}`
+            );
+
+        if (!input) {
+
+            console.error(
+                "Quantity input not found:",
+                productId
+            );
+
+            return;
+        }
+
+        let quantity =
+            parseInt(
+                input.value,
+                10
+            ) || 1;
+
+        quantity += change;
+
+        if (quantity < 1) {
+
+            quantity = 1;
+        }
+
+        input.value = quantity;
+
+        updateCartQuantity(
+            productId,
+            quantity
+        );
+    }
+
+
+    // ======================================================
+    // SET QUANTITY
+    // ======================================================
+
+    function setQuantity(
+        productId,
+        quantity
+    ) {
+
+        quantity =
+            parseInt(
+                quantity,
+                10
+            ) || 1;
+
+        if (quantity < 1) {
+
+            quantity = 1;
+        }
+
+        const input =
+            document.getElementById(
+                `quantity-${productId}`
+            );
+
+        if (input) {
+
+            input.value = quantity;
+        }
+
+        updateCartQuantity(
+            productId,
+            quantity
+        );
+    }
+
+
+    // ======================================================
+    // UPDATE CART
+    // ======================================================
+
+    function updateCartQuantity(
+        productId,
+        quantity
+    ) {
+
+        const formData =
+            new URLSearchParams();
+
+        formData.append(
+            "quantity",
+            quantity
+        );
+
+        fetch(
+            `/shopping/cart/update/${productId}/`,
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type":
+                        "application/x-www-form-urlencoded",
+
+                    "X-CSRFToken":
+                        getCookie(
+                            "csrftoken"
+                        ),
+
+                    "X-Requested-With":
+                        "XMLHttpRequest"
+                },
+
+                body: formData
+            }
+        )
+        .then(
+            async response => {
+
+                const data =
+                    await response.json();
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        data.error ||
+                        "Could not update cart."
+                    );
+                }
+
+                return data;
+            }
+        )
+        .then(
+            data => {
+
+                if (!data.success) {
+
+                    throw new Error(
+                        data.error ||
+                        "Could not update cart."
+                    );
+                }
+
+                window.location.reload();
+            }
+        )
+        .catch(
+            error => {
+
+                console.error(
+                    "Cart update error:",
+                    error
+                );
+
+                alert(
+                    error.message
+                );
+
+                window.location.reload();
+            }
+        );
+    }
+
+
+    // ======================================================
+    // REMOVE ITEM
+    // ======================================================
+
+    function removeItem(
+        productId
+    ) {
+
+        if (
+            !confirm(
+                "Remove this item from your cart?"
+            )
+        ) {
+
+            return;
+        }
+
+        fetch(
+            `/shopping/cart/remove/${productId}/`,
+            {
+                method: "POST",
+
+                headers: {
+                    "X-CSRFToken":
+                        getCookie(
+                            "csrftoken"
+                        ),
+
+                    "X-Requested-With":
+                        "XMLHttpRequest"
+                }
+            }
+        )
+        .then(
+            async response => {
+
+                const data =
+                    await response.json();
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        data.error ||
+                        "Could not remove item."
+                    );
+                }
+
+                return data;
+            }
+        )
+        .then(
+            data => {
+
+                if (!data.success) {
+
+                    throw new Error(
+                        data.error ||
+                        "Could not remove item."
+                    );
+                }
+
+                window.location.reload();
+            }
+        )
+        .catch(
+            error => {
+
+                console.error(
+                    "Remove cart item error:",
+                    error
+                );
+
+                alert(
+                    error.message
+                );
+            }
+        );
+    }
+
+
+    // ======================================================
+    // CLEAR CART
+    // ======================================================
+
+    function clearCart() {
+
+        if (
+            !confirm(
+                "Are you sure you want to clear your cart?"
+            )
+        ) {
+
+            return;
+        }
+
+        fetch(
+            "{% url 'shopping:clear_cart' %}",
+            {
+                method: "POST",
+
+                headers: {
+                    "X-CSRFToken":
+                        getCookie(
+                            "csrftoken"
+                        ),
+
+                    "X-Requested-With":
+                        "XMLHttpRequest"
+                }
+            }
+        )
+        .then(
+            async response => {
+
+                const data =
+                    await response.json();
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        data.error ||
+                        "Could not clear cart."
+                    );
+                }
+
+                return data;
+            }
+        )
+        .then(
+            data => {
+
+                if (!data.success) {
+
+                    throw new Error(
+                        data.error ||
+                        "Could not clear cart."
+                    );
+                }
+
+                window.location.reload();
+            }
+        )
+        .catch(
+            error => {
+
+                console.error(
+                    "Clear cart error:",
+                    error
+                );
+
+                alert(
+                    error.message
+                );
+            }
+        );
+    }
+
 </script>
+
 
 
 

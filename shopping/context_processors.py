@@ -1,11 +1,11 @@
-from shopping.views import CART_SESSION_KEY
+from .views import CART_SESSION_KEY
 
 
 def cart_count(request):
 
     cart = request.session.get(
         CART_SESSION_KEY,
-        {}
+        {},
     )
 
     count = 0
@@ -15,12 +15,9 @@ def cart_count(request):
         try:
             count += int(quantity)
 
-        except (
-            ValueError,
-            TypeError,
-        ):
+        except (ValueError, TypeError):
             continue
 
     return {
-        "cart_count": count
+        "cart_count": count,
     }

@@ -200,7 +200,7 @@ def normalize_product(product):
         )
     )
 
-    stock = 1 if stock_available else 0
+    stock =500 if stock_available else 0
 
     # ------------------------------------------------------
     # IMAGE
