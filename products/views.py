@@ -178,7 +178,7 @@ def search(request):
 
             products = search_products(
                 keyword=keyword,
-                limit=30,
+                limit=100,
             )
 
         except StoreAPIError as exc:
@@ -483,18 +483,21 @@ def search(request):
     # ======================================================
 
     if budget:
-
         try:
-
-            max_budget = Decimal(
-                budget
-            )
+            max_budget = Decimal(budget)
 
             products = [
                 item
                 for item in products
-                if item["price"]
-                <= max_budget
+                if (
+                    item.get("sale_price") is not None
+                    and item.get("on_sale", False)
+                    and item["sale_price"] <= max_budget
+                )
+                or (
+                    not item.get("on_sale", False)
+                    and item["price"] <= max_budget
+                )
             ]
 
         except (
@@ -502,7 +505,6 @@ def search(request):
             TypeError,
             InvalidOperation,
         ):
-
             pass
 
     # ======================================================

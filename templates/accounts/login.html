@@ -1,542 +1,1088 @@
 {% load static %}
 
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-    <title>Login - AI Shopping</title>
-    <style>
-        :root {
-            --primary: #6366f1;
-            --primary-hover: #4f46e5;
-            --bg: #0f172a;
-            --card-bg: #1e293b;
-            --text: #f1f5f9;
-            --text-muted: #94a3b8;
-            --border: #334155;
-            --error: #ef4444;
-            --success: #22c55e;
-            --input-bg: #0f172a;
-            --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            --radius: 16px;
+
+<title>Login - AI Shopping</title>
+
+<style>
+    :root {
+        --primary: #6366f1;
+        --primary-hover: #4f46e5;
+        --bg: #0f172a;
+        --card-bg: #1e293b;
+        --text: #f1f5f9;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --error: #ef4444;
+        --success: #22c55e;
+        --input-bg: #0f172a;
+        --shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+        --radius: 16px;
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    html {
+        -webkit-text-size-adjust: 100%;
+        text-size-adjust: 100%;
+    }
+
+    body {
+        font-family: 'Segoe UI', system-ui, -apple-system,
+            BlinkMacSystemFont, sans-serif;
+
+        background:
+            linear-gradient(
+                rgba(15, 23, 42, 0.72),
+                rgba(15, 23, 42, 0.82)
+            ),
+            url("{% static 'images/Header-DUT-Ritson-Campus-1200x675-1.jpg' %}");
+
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+
+        color: var(--text);
+
+        min-height: 100vh;
+        min-height: 100dvh;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        padding: clamp(1rem, 4vw, 1.5rem);
+
+        position: relative;
+        overflow-x: hidden;
+    }
+
+    .container {
+        position: relative;
+        z-index: 1;
+
+        width: 100%;
+        max-width: 420px;
+    }
+
+    .brand {
+        text-align: center;
+        margin-bottom: clamp(1.25rem, 4vw, 2rem);
+    }
+
+    .brand h1 {
+        font-size: clamp(1.4rem, 5vw, 1.75rem);
+        font-weight: 700;
+        letter-spacing: -0.5px;
+
+        background: linear-gradient(
+            135deg,
+            #818cf8,
+            #c084fc
+        );
+
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    .brand p {
+        color: var(--text-muted);
+        font-size: clamp(0.8rem, 2.5vw, 0.9rem);
+        margin-top: 0.35rem;
+    }
+
+    .card {
+        background: rgba(30, 41, 59, 0.88);
+
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+
+        padding: clamp(1.5rem, 5vw, 2.25rem);
+
+        box-shadow: var(--shadow);
+
+        backdrop-filter: blur(10px);
+
+        animation: slideUp 0.5s ease-out;
+    }
+
+    @keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(24px);
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .card h2 {
+        font-size: clamp(1.25rem, 4vw, 1.5rem);
+        font-weight: 600;
+        margin-bottom: 0.35rem;
+    }
+
+    .card > p {
+        color: var(--text-muted);
+        font-size: clamp(0.85rem, 2.5vw, 0.9rem);
+        margin-bottom: 1.5rem;
+        line-height: 1.45;
+    }
+
+    /* Messages */
+
+    .flash {
+        padding: 0.8rem 1rem;
+
+        border-radius: 10px;
+
+        font-size: 0.875rem;
+
+        margin-bottom: 1.15rem;
+
+        display: flex;
+        align-items: flex-start;
+
+        gap: 0.6rem;
+
+        animation: fadeIn 0.3s ease;
+
+        line-height: 1.4;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(-8px);
         }
 
-        html {
-            -webkit-text-size-adjust: 100%;
-            text-size-adjust: 100%;
+        to {
+            opacity: 1;
+            transform: translateY(0);
         }
+    }
 
-        body {
-            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    .flash.error {
+        background: rgba(239, 68, 68, 0.15);
+        border: 1px solid rgba(239, 68, 68, 0.4);
+        color: #fca5a5;
+    }
 
-            /* Background image */
-            background:
-                linear-gradient(
-                    rgba(15, 23, 42, 0.72),
-                    rgba(15, 23, 42, 0.82)
-                ),
-                url("{% static 'images/Header-DUT-Ritson-Campus-1200x675-1.jpg' %}");
+    .flash.success {
+        background: rgba(34, 197, 94, 0.15);
+        border: 1px solid rgba(34, 197, 94, 0.4);
+        color: #86efac;
+    }
 
-            background-size: cover;
-            background-position: center;
-            background-repeat: no-repeat;
-            background-attachment: fixed;
+    .flash.info {
+        background: rgba(99, 102, 241, 0.15);
+        border: 1px solid rgba(99, 102, 241, 0.4);
+        color: #a5b4fc;
+    }
 
-            color: var(--text);
-            min-height: 100vh;
-            min-height: 100dvh;
+    .flash svg {
+        flex-shrink: 0;
+        margin-top: 1px;
+    }
 
-            display: flex;
-            align-items: center;
-            justify-content: center;
+    /* Form */
 
-            padding: clamp(1rem, 4vw, 1.5rem);
+    .form-group {
+        margin-bottom: 1.25rem;
+    }
 
-            position: relative;
-            overflow-x: hidden;
+    label {
+        display: block;
+
+        font-size: 0.875rem;
+
+        font-weight: 500;
+
+        margin-bottom: 0.4rem;
+
+        color: var(--text);
+    }
+
+    .input-wrapper {
+        position: relative;
+    }
+
+    input[type="email"],
+    input[type="password"],
+    input[type="text"] {
+        width: 100%;
+
+        padding: 0.85rem 1rem;
+
+        padding-right: 2.9rem;
+
+        background: var(--input-bg);
+
+        border: 1px solid var(--border);
+
+        border-radius: 10px;
+
+        color: var(--text);
+
+        font-size: 16px;
+
+        transition:
+            border-color 0.2s,
+            box-shadow 0.2s;
+
+        outline: none;
+
+        -webkit-appearance: none;
+        appearance: none;
+    }
+
+    input:focus {
+        border-color: var(--primary);
+
+        box-shadow:
+            0 0 0 3px rgba(99, 102, 241, 0.25);
+    }
+
+    input::placeholder {
+        color: #64748b;
+    }
+
+    /* Password toggle */
+
+    .toggle-password {
+        position: absolute;
+
+        right: 0.65rem;
+
+        top: 50%;
+
+        transform: translateY(-50%);
+
+        background: none;
+
+        border: none;
+
+        color: var(--text-muted);
+
+        cursor: pointer;
+
+        padding: 0.4rem;
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        transition: color 0.2s;
+
+        min-width: 44px;
+        min-height: 44px;
+    }
+
+    .toggle-password:hover,
+    .toggle-password:focus-visible {
+        color: var(--text);
+
+        outline: none;
+    }
+
+    .toggle-password svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    /* Login button */
+
+    .btn {
+        width: 100%;
+
+        padding: 0.95rem;
+
+        background:
+            linear-gradient(
+                135deg,
+                var(--primary),
+                #7c3aed
+            );
+
+        color: white;
+
+        border: none;
+
+        border-radius: 10px;
+
+        font-size: 1rem;
+
+        font-weight: 600;
+
+        cursor: pointer;
+
+        transition:
+            transform 0.15s,
+            box-shadow 0.15s,
+            opacity 0.15s;
+
+        margin-top: 0.4rem;
+
+        position: relative;
+
+        overflow: hidden;
+
+        min-height: 48px;
+
+        -webkit-tap-highlight-color: transparent;
+    }
+
+    .btn:hover {
+        transform: translateY(-1px);
+
+        box-shadow:
+            0 8px 20px rgba(99, 102, 241, 0.35);
+    }
+
+    .btn:active {
+        transform: translateY(0);
+    }
+
+    .btn:disabled {
+        opacity: 0.7;
+
+        cursor: not-allowed;
+
+        transform: none;
+    }
+
+    .btn .spinner {
+        display: none;
+
+        width: 20px;
+        height: 20px;
+
+        border: 2px solid rgba(255,255,255,0.3);
+
+        border-top-color: white;
+
+        border-radius: 50%;
+
+        animation: spin 0.7s linear infinite;
+
+        margin: 0 auto;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
         }
+    }
 
-        /* Animated background orbs – scaled down on small screens */
-        
-        @keyframes float {
-            0%, 100% { transform: translate(0, 0); }
-            50% { transform: translate(20px, 30px); }
-        }
+    .btn.loading .btn-text {
+        visibility: hidden;
+    }
 
-        .container {
-            position: relative;
-            z-index: 1;
-            width: 100%;
-            max-width: 420px;
-        }
+    .btn.loading .spinner {
+        display: block;
 
-        .brand {
-            text-align: center;
-            margin-bottom: clamp(1.25rem, 4vw, 2rem);
+        position: absolute;
+
+        top: 50%;
+        left: 50%;
+
+        margin: -10px 0 0 -10px;
+    }
+
+    /* Microsoft divider */
+
+    .divider {
+        display: flex;
+
+        align-items: center;
+
+        gap: 12px;
+
+        margin: 1.35rem 0;
+    }
+
+    .divider::before,
+    .divider::after {
+        content: "";
+
+        flex: 1;
+
+        height: 1px;
+
+        background: var(--border);
+    }
+
+    .divider span {
+        color: var(--text-muted);
+
+        font-size: 0.8rem;
+
+        white-space: nowrap;
+    }
+
+    /* Microsoft button */
+
+    .microsoft-btn {
+        width: 100%;
+
+        min-height: 48px;
+
+        padding: 0.85rem 1rem;
+
+        display: flex;
+
+        align-items: center;
+
+        justify-content: center;
+
+        gap: 0.75rem;
+
+        background: #ffffff;
+
+        color: #1f1f1f;
+
+        border: 1px solid #d1d5db;
+
+        border-radius: 10px;
+
+        font-size: 0.95rem;
+
+        font-weight: 600;
+
+        text-decoration: none;
+
+        cursor: pointer;
+
+        transition:
+            background 0.2s,
+            transform 0.15s,
+            box-shadow 0.15s;
+    }
+
+    .microsoft-btn:hover {
+        background: #f3f4f6;
+
+        transform: translateY(-1px);
+
+        box-shadow:
+            0 6px 16px rgba(0, 0, 0, 0.18);
+    }
+
+    .microsoft-btn:active {
+        transform: translateY(0);
+    }
+
+    .microsoft-btn:focus-visible {
+        outline: 3px solid rgba(99, 102, 241, 0.4);
+
+        outline-offset: 2px;
+    }
+
+    .microsoft-icon {
+        width: 20px;
+
+        height: 20px;
+
+        display: grid;
+
+        grid-template-columns: 1fr 1fr;
+
+        grid-template-rows: 1fr 1fr;
+
+        gap: 1.5px;
+
+        flex-shrink: 0;
+    }
+
+    .microsoft-icon span:nth-child(1) {
+        background: #f35325;
+    }
+
+    .microsoft-icon span:nth-child(2) {
+        background: #81bc06;
+    }
+
+    .microsoft-icon span:nth-child(3) {
+        background: #05a6f0;
+    }
+
+    .microsoft-icon span:nth-child(4) {
+        background: #ffba08;
+    }
+
+    .dut-note {
+        text-align: center;
+
+        color: var(--text-muted);
+
+        font-size: 0.75rem;
+
+        line-height: 1.4;
+
+        margin-top: 0.7rem;
+    }
+
+    .dut-note strong {
+        color: #c7d2fe;
+    }
+
+    /* Footer */
+
+    .footer-link {
+        text-align: center;
+
+        margin-top: 1.5rem;
+
+        font-size: clamp(0.85rem, 2.5vw, 0.9rem);
+
+        color: var(--text-muted);
+
+        line-height: 1.5;
+    }
+
+    .footer-link a {
+        color: #a5b4fc;
+
+        text-decoration: none;
+
+        font-weight: 500;
+
+        transition: color 0.2s;
+
+        padding: 0.25rem 0;
+    }
+
+    .footer-link a:hover,
+    .footer-link a:focus-visible {
+        color: #c7d2fe;
+
+        text-decoration: underline;
+
+        outline: none;
+    }
+
+    /* Responsive */
+
+    @media (max-width: 360px) {
+
+        .card {
+            padding: 1.35rem 1.1rem;
         }
 
         .brand h1 {
-            font-size: clamp(1.4rem, 5vw, 1.75rem);
-            font-weight: 700;
-            letter-spacing: -0.5px;
-            background: linear-gradient(135deg, #818cf8, #c084fc);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-        }
-
-        .brand p {
-            color: var(--text-muted);
-            font-size: clamp(0.8rem, 2.5vw, 0.9rem);
-            margin-top: 0.35rem;
-        }
-
-        .card {
-            background: rgba(30, 41, 59, 0.88);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: clamp(1.5rem, 5vw, 2.25rem);
-            box-shadow: var(--shadow);
-            backdrop-filter: blur(10px);
-            animation: slideUp 0.5s ease-out;
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(24px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .card h2 {
-            font-size: clamp(1.25rem, 4vw, 1.5rem);
-            font-weight: 600;
-            margin-bottom: 0.35rem;
-        }
-
-        .card > p {
-            color: var(--text-muted);
-            font-size: clamp(0.85rem, 2.5vw, 0.9rem);
-            margin-bottom: 1.5rem;
-            line-height: 1.45;
-        }
-
-        /* Flash messages */
-        .flash {
-            padding: 0.8rem 1rem;
-            border-radius: 10px;
-            font-size: 0.875rem;
-            margin-bottom: 1.15rem;
-            display: flex;
-            align-items: flex-start;
-            gap: 0.6rem;
-            animation: fadeIn 0.3s ease;
-            line-height: 1.4;
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(-8px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-
-        .flash.error {
-            background: rgba(239, 68, 68, 0.15);
-            border: 1px solid rgba(239, 68, 68, 0.4);
-            color: #fca5a5;
-        }
-
-        .flash.success {
-            background: rgba(34, 197, 94, 0.15);
-            border: 1px solid rgba(34, 197, 94, 0.4);
-            color: #86efac;
-        }
-
-        .flash.info {
-            background: rgba(99, 102, 241, 0.15);
-            border: 1px solid rgba(99, 102, 241, 0.4);
-            color: #a5b4fc;
-        }
-
-        .flash svg {
-            flex-shrink: 0;
-            margin-top: 1px;
-        }
-
-        .form-group {
-            margin-bottom: 1.25rem;
-        }
-
-        label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 500;
-            margin-bottom: 0.4rem;
-            color: var(--text);
-        }
-
-        .input-wrapper {
-            position: relative;
+            font-size: 1.3rem;
         }
 
         input[type="email"],
         input[type="password"],
         input[type="text"] {
-            width: 100%;
-            padding: 0.85rem 1rem;
-            padding-right: 2.9rem;
-            background: var(--input-bg);
-            border: 1px solid var(--border);
-            border-radius: 10px;
-            color: var(--text);
-            font-size: 16px; /* prevents iOS zoom on focus */
-            transition: border-color 0.2s, box-shadow 0.2s;
-            outline: none;
-            -webkit-appearance: none;
-            appearance: none;
+            padding: 0.8rem 0.9rem;
+
+            padding-right: 2.7rem;
+        }
+    }
+
+    @media (max-width: 480px) {
+
+        body {
+            align-items: flex-start;
+
+            padding-top:
+                max(1.5rem, env(safe-area-inset-top));
+
+            padding-bottom:
+                max(1.5rem, env(safe-area-inset-bottom));
         }
 
-        input:focus {
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+        .container {
+            margin-top: 0.5rem;
         }
 
-        input::placeholder {
-            color: #64748b;
-        }
-
-        .toggle-password {
-            position: absolute;
-            right: 0.65rem;
-            top: 50%;
-            transform: translateY(-50%);
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            cursor: pointer;
-            padding: 0.4rem;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: color 0.2s;
-            min-width: 44px;   /* touch-friendly */
-            min-height: 44px;
-        }
-
-        .toggle-password:hover,
-        .toggle-password:focus-visible {
-            color: var(--text);
-            outline: none;
-        }
-
-        .toggle-password svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        .btn {
-            width: 100%;
-            padding: 0.95rem;
-            background: linear-gradient(135deg, var(--primary), #7c3aed);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 1rem;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
-            margin-top: 0.4rem;
-            position: relative;
-            overflow: hidden;
-            min-height: 48px; /* touch target */
-            -webkit-tap-highlight-color: transparent;
-        }
-
-        .btn:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
-        }
-
-        .btn:active {
-            transform: translateY(0);
-        }
-
-        .btn:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
+        .btn:hover,
+        .microsoft-btn:hover {
             transform: none;
         }
+    }
 
-        .btn .spinner {
-            display: none;
-            width: 20px;
-            height: 20px;
-            border: 2px solid rgba(255,255,255,0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.7s linear infinite;
-            margin: 0 auto;
+    @media (min-width: 768px) {
+
+        .card {
+            padding: 2.5rem;
+        }
+    }
+
+    @media (min-width: 1200px) {
+
+        .container {
+            max-width: 440px;
+        }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+
+        .card,
+        .flash {
+            animation: none;
         }
 
-        @keyframes spin {
-            to { transform: rotate(360deg); }
+        .btn,
+        .microsoft-btn {
+            transition: none;
         }
+    }
+</style>
 
-        .btn.loading .btn-text {
-            visibility: hidden;
-        }
 
-        .btn.loading .spinner {
-            display: block;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            margin: -10px 0 0 -10px;
-        }
-
-        .footer-link {
-            text-align: center;
-            margin-top: 1.5rem;
-            font-size: clamp(0.85rem, 2.5vw, 0.9rem);
-            color: var(--text-muted);
-            line-height: 1.5;
-        }
-
-        .footer-link a {
-            color: #a5b4fc;
-            text-decoration: none;
-            font-weight: 500;
-            transition: color 0.2s;
-            padding: 0.25rem 0; /* larger tap area */
-        }
-
-        .footer-link a:hover,
-        .footer-link a:focus-visible {
-            color: #c7d2fe;
-            text-decoration: underline;
-            outline: none;
-        }
-
-        /* ========== Responsive breakpoints ========== */
-
-        /* Small phones */
-        @media (max-width: 360px) {
-            .card {
-                padding: 1.35rem 1.1rem;
-            }
-
-            .brand h1 {
-                font-size: 1.3rem;
-            }
-
-            input[type="email"],
-            input[type="password"],
-            input[type="text"] {
-                padding: 0.8rem 0.9rem;
-                padding-right: 2.7rem;
-            }
-        }
-
-        /* Phones (general) */
-        @media (max-width: 480px) {
-            body {
-                align-items: flex-start;
-                padding-top: max(1.5rem, env(safe-area-inset-top));
-                padding-bottom: max(1.5rem, env(safe-area-inset-bottom));
-            }
-
-            .container {
-                margin-top: 0.5rem;
-            }
-
-            .btn:hover {
-                transform: none; /* avoid hover lift on touch */
-            }
-        }
-
-        /* Tablets & up – keep centered card */
-        @media (min-width: 768px) {
-            .card {
-                padding: 2.5rem;
-            }
-        }
-
-        /* Very large screens – slightly wider card */
-        @media (min-width: 1200px) {
-            .container {
-                max-width: 440px;
-            }
-        }
-
-        /* Reduce motion for accessibility */
-        @media (prefers-reduced-motion: reduce) {
-            body::before,
-            body::after,
-            .card,
-            .flash {
-                animation: none;
-            }
-
-            .btn {
-                transition: none;
-            }
-        }
-    </style>
 </head>
+
 <body>
-    <div class="container">
-        <div class="brand">
-            <h1>AI Shopping</h1>
-            <p>Smart recommendations, just for you</p>
+
+<div class="container">
+
+<div class="brand">
+
+    <h1>AI Shopping</h1>
+
+    <p>
+        Smart recommendations, just for you
+    </p>
+
+</div>
+
+
+<div class="card">
+
+    <h2>Welcome back</h2>
+
+    <p>
+        Login to access your personalised
+        shopping recommendations.
+    </p>
+
+
+    <!-- Django messages -->
+
+    {% if messages %}
+
+        {% for message in messages %}
+
+            <div class="flash {{ message.tags }}">
+
+                {% if 'error' in message.tags %}
+
+                    <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="8" x2="12" y2="12"/>
+                        <line x1="12" y1="16" x2="12.01" y2="16"/>
+                    </svg>
+
+                {% elif 'success' in message.tags %}
+
+                    <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+
+                {% else %}
+
+                    <svg
+                        width="18"
+                        height="18"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
+                        <circle cx="12" cy="12" r="10"/>
+                        <line x1="12" y1="16" x2="12" y2="12"/>
+                        <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+
+                {% endif %}
+
+                {{ message }}
+
+            </div>
+
+        {% endfor %}
+
+    {% endif %}
+
+
+    <!-- Normal Django login -->
+
+    <form
+        method="POST"
+        id="loginForm"
+        novalidate
+    >
+
+        {% csrf_token %}
+
+
+        <div class="form-group">
+
+            <label for="email">
+                Email Address
+            </label>
+
+            <div class="input-wrapper">
+
+                <input
+                    type="text"
+                    id="email"
+                    name="email"
+                    placeholder="studentnumber@dut4life.ac.za"
+                    required
+                    autocomplete="username"
+                    inputmode="email"
+                >
+
+            </div>
+
         </div>
 
-        <div class="card">
-            <h2>Welcome back</h2>
-            <p>Login to access your personalised shopping recommendations.</p>
 
-            {% if messages %}
-    {% for message in messages %}
-        <div class="flash {{ message.tags }}">
-            {% if 'error' in message.tags %}
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="8" x2="12" y2="12"/>
-                    <line x1="12" y1="16" x2="12.01" y2="16"/>
-                </svg>
-            {% elif 'success' in message.tags %}
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-                    <polyline points="22 4 12 14.01 9 11.01"/>
-                </svg>
-            {% else %}
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <circle cx="12" cy="12" r="10"/>
-                    <line x1="12" y1="16" x2="12" y2="12"/>
-                    <line x1="12" y1="8" x2="12.01" y2="8"/>
-                </svg>
-            {% endif %}
+        <div class="form-group">
 
-            {{ message }}
-        </div>
-    {% endfor %}
-{% endif %}
+            <label for="password">
+                Password
+            </label>
+
+            <div class="input-wrapper">
+
+                <input
+                    type="password"
+                    id="password"
+                    name="password"
+                    placeholder="••••••••"
+                    required
+                    autocomplete="current-password"
+                >
 
 
-            <form method="POST" id="loginForm" novalidate>
-                {% csrf_token %}
-                <div class="form-group">
-                    <label for="email">Email Address</label>
-                    <div class="input-wrapper">
-                        <input
-                            type="text"
-                            id="email"
-                            name="email"
-                            placeholder="studentnumber@dut4life.ac.za"
-                            required
-                            autocomplete="username"
-                            inputmode="email"
-                        >
+                <button
+                    type="button"
+                    class="toggle-password"
+                    id="togglePassword"
+                    aria-label="Show password"
+                >
 
-                    </div>
-                </div>
+                    <svg
+                        id="eyeIcon"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                    >
 
-                <div class="form-group">
-                    <label for="password">Password</label>
-                    <div class="input-wrapper">
-                        <input
-                            type="password"
-                            id="password"
-                            name="password"
-                            placeholder="••••••••"
-                            required
-                            autocomplete="current-password"
-                        >
-                        <button type="button" class="toggle-password" id="togglePassword" aria-label="Show password">
-                            <svg id="eyeIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                                <circle cx="12" cy="12" r="3"/>
-                            </svg>
-                        </button>
-                    </div>
-                </div>
+                        <path
+                            d="M1 12s4-8 11-8
+                            11 8 11 8-4 8-11 8
+                            -11-8-11-8z"
+                        />
 
-                <button type="submit" class="btn" id="submitBtn">
-                    <span class="btn-text">Login</span>
-                    <span class="spinner"></span>
+                        <circle
+                            cx="12"
+                            cy="12"
+                            r="3"
+                        />
+
+                    </svg>
+
                 </button>
-            </form>
 
-            <p class="footer-link">
-                Don't have an account?
-                <a href="{% url 'accounts:register' %}">Create an account</a>
-            </p>
+            </div>
+
         </div>
+
+
+        <button
+            type="submit"
+            class="btn"
+            id="submitBtn"
+        >
+
+            <span class="btn-text">
+                Login
+            </span>
+
+            <span class="spinner"></span>
+
+        </button>
+
+    </form>
+
+
+    <!-- Divider -->
+
+    <div class="divider">
+        <span>OR</span>
     </div>
 
-    <script>
-        // Password visibility toggle
-        const toggleBtn = document.getElementById('togglePassword');
-        const passwordInput = document.getElementById('password');
-        const eyeIcon = document.getElementById('eyeIcon');
 
-        toggleBtn.addEventListener('click', () => {
-            const isPassword = passwordInput.type === 'password';
-            passwordInput.type = isPassword ? 'text' : 'password';
-            toggleBtn.setAttribute('aria-label', isPassword ? 'Hide password' : 'Show password');
+    <!-- DUT Microsoft Login -->
 
-            if (isPassword) {
-                eyeIcon.innerHTML = `
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                `;
-            } else {
-                eyeIcon.innerHTML = `
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                `;
+    <a
+        href="{% url 'accounts:microsoft_login' %}"
+        class="microsoft-btn"
+        id="microsoftLoginBtn"
+    >
+
+        <span class="microsoft-icon" aria-hidden="true">
+
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+
+        </span>
+
+        <span>
+            Continue with DUT Microsoft
+        </span>
+
+    </a>
+
+
+    <p class="dut-note">
+        <strong>DUT students only.</strong>
+        Sign in using your official
+        <strong>@dut4life.ac.za</strong>
+        Microsoft account.
+    </p>
+
+
+    <!-- Registration -->
+
+    <p class="footer-link">
+
+        Don't have an account?
+
+        <a href="{% url 'accounts:register' %}">
+            Create an account
+        </a>
+
+    </p>
+
+</div>
+
+
+</div>
+
+<script>
+
+    /*
+     * Password visibility
+     */
+
+    const toggleBtn =
+        document.getElementById("togglePassword");
+
+    const passwordInput =
+        document.getElementById("password");
+
+    const eyeIcon =
+        document.getElementById("eyeIcon");
+
+
+    toggleBtn.addEventListener("click", () => {
+
+        const isPassword =
+            passwordInput.type === "password";
+
+
+        passwordInput.type =
+            isPassword ? "text" : "password";
+
+
+        toggleBtn.setAttribute(
+            "aria-label",
+            isPassword
+                ? "Hide password"
+                : "Show password"
+        );
+
+
+        if (isPassword) {
+
+            eyeIcon.innerHTML = `
+
+                <path
+                    d="M17.94 17.94
+                    A10.07 10.07 0 0 1 12 20
+                    c-7 0-11-8-11-8
+                    a18.45 18.45 0 0 1 5.06-5.94
+                    M9.9 4.24
+                    A9.12 9.12 0 0 1 12 4
+                    c7 0 11 8 11 8
+                    a18.5 18.5 0 0 1-2.16 3.19
+                    m-6.72-1.07
+                    a3 3 0 1 1-4.24-4.24"
+                />
+
+                <line
+                    x1="1"
+                    y1="1"
+                    x2="23"
+                    y2="23"
+                />
+
+            `;
+
+        } else {
+
+            eyeIcon.innerHTML = `
+
+                <path
+                    d="M1 12s4-8 11-8
+                    11 8 11 8-4 8-11 8
+                    -11-8-11-8z"
+                />
+
+                <circle
+                    cx="12"
+                    cy="12"
+                    r="3"
+                />
+
+            `;
+
+        }
+
+    });
+
+
+    /*
+     * Normal login validation
+     */
+
+    const form =
+        document.getElementById("loginForm");
+
+    const submitBtn =
+        document.getElementById("submitBtn");
+
+
+    form.addEventListener("submit", (e) => {
+
+        const email =
+            document.getElementById("email")
+            .value
+            .trim();
+
+        const password =
+            passwordInput.value;
+
+
+        if (!email || !password) {
+
+            e.preventDefault();
+
+            return;
+        }
+
+
+        const emailRegex =
+            /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+
+        if (!emailRegex.test(email)) {
+
+            e.preventDefault();
+
+            document
+                .getElementById("email")
+                .focus();
+
+            return;
+        }
+
+
+        submitBtn.classList.add("loading");
+
+        submitBtn.disabled = true;
+
+    });
+
+
+    /*
+     * Microsoft button loading state
+     */
+
+    const microsoftLoginBtn =
+        document.getElementById(
+            "microsoftLoginBtn"
+        );
+
+
+    microsoftLoginBtn.addEventListener(
+        "click",
+        () => {
+
+            microsoftLoginBtn.style.opacity =
+                "0.7";
+
+            microsoftLoginBtn.style.pointerEvents =
+                "none";
+
+        }
+    );
+
+
+    /*
+     * Auto-focus email on desktop
+     */
+
+    window.addEventListener(
+        "DOMContentLoaded",
+        () => {
+
+            if (
+                window.matchMedia(
+                    "(min-width: 768px)"
+                ).matches
+            ) {
+
+                document
+                    .getElementById("email")
+                    .focus();
+
             }
-        });
 
-        // Form submit loading state + basic validation
-        const form = document.getElementById('loginForm');
-        const submitBtn = document.getElementById('submitBtn');
+        }
+    );
 
-        form.addEventListener('submit', (e) => {
-            const email = document.getElementById('email').value.trim();
-            const password = passwordInput.value;
+</script>
 
-            if (!email || !password) {
-                e.preventDefault();
-                return;
-            }
-
-            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-            if (!emailRegex.test(email)) {
-                e.preventDefault();
-                document.getElementById('email').focus();
-                return;
-            }
-
-            submitBtn.classList.add('loading');
-            submitBtn.disabled = true;
-        });
-
-        // Auto-focus email on load (desktop mainly)
-        window.addEventListener('DOMContentLoaded', () => {
-            if (window.matchMedia('(min-width: 768px)').matches) {
-                document.getElementById('email').focus();
-            }
-        });
-    </script>
 </body>
 </html>

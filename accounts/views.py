@@ -1,5 +1,6 @@
 from decimal import Decimal, InvalidOperation
-
+import msal
+import uuid
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
@@ -7,6 +8,7 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
+
 
 from .models import UserProfile
 def login_view(request):
@@ -43,33 +45,77 @@ def login_view(request):
 
 
 def register_view(request):
+
     if request.user.is_authenticated:
         return redirect("home")
 
     if request.method == "POST":
-        email = request.POST.get("email", "").strip()
-        password = request.POST.get("password", "")
-        confirm_password = request.POST.get("confirm_password", "")
 
-        if not email or not password:
-            messages.error(request, "Please fill in all required fields.")
-            return render(request, "accounts/register.html")
+        first_name = request.POST.get(
+            "first_name",
+            ""
+        ).strip()
+
+        last_name = request.POST.get(
+            "last_name",
+            ""
+        ).strip()
+
+        email = request.POST.get(
+            "email",
+            ""
+        ).strip()
+
+        password = request.POST.get(
+            "password",
+            ""
+        )
+
+        confirm_password = request.POST.get(
+            "confirm_password",
+            ""
+        )
+
+        if not first_name or not last_name or not email or not password:
+            messages.error(
+                request,
+                "Please fill in all required fields."
+            )
+            return render(
+                request,
+                "accounts/register.html"
+            )
 
         if password != confirm_password:
-            messages.error(request, "Passwords do not match.")
-            return render(request, "accounts/register.html")
+            messages.error(
+                request,
+                "Passwords do not match."
+            )
+            return render(
+                request,
+                "accounts/register.html"
+            )
 
-        if User.objects.filter(username=email).exists():
+        if User.objects.filter(
+            username=email
+        ).exists():
+
             messages.error(
                 request,
                 "An account with this email already exists."
             )
-            return render(request, "accounts/register.html")
+
+            return render(
+                request,
+                "accounts/register.html"
+            )
 
         User.objects.create_user(
             username=email,
             email=email,
             password=password,
+            first_name=first_name,
+            last_name=last_name,
         )
 
         messages.success(
@@ -77,12 +123,257 @@ def register_view(request):
             "Account created successfully. Please log in."
         )
 
+        return redirect(
+            "accounts:login"
+        )
+
+    return render(
+        request,
+        "accounts/register.html"
+    )
+
+
+
+def microsoft_login(request):
+
+
+    if request.user.is_authenticated:
+        return redirect("shopping:dashboard")
+
+    if not settings.MICROSOFT_CLIENT_ID:
+        messages.error(
+            request,
+            "Microsoft login is not configured yet."
+        )
         return redirect("accounts:login")
 
-    return render(request, "accounts/register.html")
+    if not settings.MICROSOFT_CLIENT_SECRET:
+        messages.error(
+            request,
+            "Microsoft login is not configured yet."
+        )
+        return redirect("accounts:login")
+
+    msal_app = msal.ConfidentialClientApplication(
+        settings.MICROSOFT_CLIENT_ID,
+        authority=settings.MICROSOFT_AUTHORITY,
+        client_credential=settings.MICROSOFT_CLIENT_SECRET,
+    )
+
+    state = str(uuid.uuid4())
+
+    request.session["microsoft_auth_state"] = state
+
+    authorization_url = msal_app.get_authorization_request_url(
+        scopes=settings.MICROSOFT_SCOPE,
+        state=state,
+        redirect_uri=settings.MICROSOFT_REDIRECT_URI,
+    )
+
+    return redirect(authorization_url)
 
 
+def microsoft_callback(request):
 
+    if request.user.is_authenticated:
+        return redirect("shopping:dashboard")
+
+    error = request.GET.get("error")
+
+    if error:
+        error_description = request.GET.get(
+            "error_description",
+            "Microsoft login was cancelled or failed."
+        )
+
+        messages.error(
+            request,
+            error_description
+        )
+
+        return redirect("accounts:login")
+
+    state = request.GET.get("state")
+
+    saved_state = request.session.get(
+        "microsoft_auth_state"
+    )
+
+    if not state or state != saved_state:
+        messages.error(
+            request,
+            "Invalid Microsoft login session."
+        )
+
+        return redirect("accounts:login")
+
+    # State is no longer needed.
+    request.session.pop(
+        "microsoft_auth_state",
+        None
+    )
+
+    authorization_code = request.GET.get("code")
+
+    if not authorization_code:
+        messages.error(
+            request,
+            "Microsoft did not return an authorization code."
+        )
+
+        return redirect("accounts:login")
+
+    msal_app = msal.ConfidentialClientApplication(
+        settings.MICROSOFT_CLIENT_ID,
+        authority=settings.MICROSOFT_AUTHORITY,
+        client_credential=settings.MICROSOFT_CLIENT_SECRET,
+    )
+
+    result = msal_app.acquire_token_by_authorization_code(
+        authorization_code,
+        scopes=settings.MICROSOFT_SCOPE,
+        redirect_uri=settings.MICROSOFT_REDIRECT_URI,
+    )
+
+    if "error" in result:
+        messages.error(
+            request,
+            "Microsoft authentication failed."
+        )
+
+        return redirect("accounts:login")
+
+    claims = result.get("id_token_claims", {})
+
+    # ------------------------------------------------------
+    # Verify DUT tenant
+    # ------------------------------------------------------
+
+    tenant_id = claims.get("tid")
+
+    if tenant_id != settings.MICROSOFT_TENANT_ID:
+
+        messages.error(
+            request,
+            "Only DUT Microsoft accounts are allowed."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Get email
+    # ------------------------------------------------------
+
+    email = (
+        claims.get("preferred_username")
+        or claims.get("email")
+        or ""
+    ).strip().lower()
+
+    if not email:
+
+        messages.error(
+            request,
+            "Microsoft did not provide an email address."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Verify DUT email domain
+    # ------------------------------------------------------
+
+    if not email.endswith("@dut4life.ac.za"):
+
+        messages.error(
+            request,
+            "Only DUT student Microsoft accounts are allowed."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Get user's name
+    # ------------------------------------------------------
+
+    first_name = (
+        claims.get("given_name")
+        or ""
+    ).strip()
+
+    last_name = (
+        claims.get("family_name")
+        or ""
+    ).strip()
+
+    full_name = (
+        claims.get("name")
+        or ""
+    ).strip()
+
+    # ------------------------------------------------------
+    # Find or create Django user
+    # ------------------------------------------------------
+
+    user = User.objects.filter(
+        email__iexact=email
+    ).first()
+
+    if user is None:
+
+        username = email
+
+        user = User.objects.create_user(
+            username=username,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+        )
+
+        # Disable password login for this
+        # Microsoft-created account.
+        user.set_unusable_password()
+
+        user.save()
+
+    else:
+
+        changed = False
+
+        if first_name and user.first_name != first_name:
+            user.first_name = first_name
+            changed = True
+
+        if last_name and user.last_name != last_name:
+            user.last_name = last_name
+            changed = True
+
+        if changed:
+            user.save(
+                update_fields=[
+                    "first_name",
+                    "last_name",
+                ]
+            )
+
+    # ------------------------------------------------------
+    # Login Django user
+    # ------------------------------------------------------
+
+    login(
+        request,
+        user,
+        backend="django.contrib.auth.backends.ModelBackend",
+    )
+
+    messages.success(
+        request,
+        "Welcome to AI Shopping!"
+    )
+
+    return redirect(
+        "shopping:dashboard"
+    )
 
 
 # ==========================================================

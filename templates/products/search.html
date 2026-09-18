@@ -57,12 +57,14 @@
             3rem;
     }
 
-    /* ==========================================
-   SALE PRICE
+
+/* ==========================================
+   SALE / PROMO PRICE
 ========================================== */
 
 .sale-price-box {
-    margin-bottom: 1rem;
+    margin: 0 0 1rem;
+    padding: 0;
 }
 
 /* SAVE R8 */
@@ -72,16 +74,17 @@
     align-items: center;
     width: fit-content;
     padding: 0.35rem 0.65rem;
-    margin-bottom: 0.45rem;
+    margin-bottom: 0.5rem;
 
     background: #dc2626;
-    color: white;
+    color: #ffffff;
 
     border-radius: 6px;
 
     font-size: 0.8rem;
     font-weight: 800;
     letter-spacing: 0.02em;
+    line-height: 1;
 }
 
 /* R29.99 */
@@ -96,7 +99,7 @@
 /* R37.99 */
 
 .regular-price {
-    margin-top: 0.25rem;
+    margin-top: 0.3rem;
 
     color: #94a3b8;
 
@@ -107,7 +110,7 @@
     text-decoration-thickness: 2px;
 }
 
-/* Deal expires */
+/* Deal expires 20 Sep 2026 */
 
 .deal-expiry {
     margin-top: 0.5rem;
@@ -115,9 +118,12 @@
     color: #fbbf24;
 
     font-size: 0.8rem;
-    font-weight: 500;
+    font-weight: 600;
 }
 
+
+
+  
 
     .page-title {
         font-size: clamp(1.5rem, 4vw, 1.85rem);
@@ -1173,43 +1179,51 @@
 
                     <!-- PRICE -->
 
-                    <!-- ==========================================
-     PRICE / SALE
+               
+                
+<!-- ==========================================
+     PRICE / SALE / PROMO
 =========================================== -->
 
-{% if product.on_sale and product.regular_price > product.price %}
+{% if product.on_sale and product.regular_price and product.price and product.regular_price > product.price %}
 
     <div class="sale-price-box">
 
+        <!-- SAVE R8 -->
         <div class="save-badge">
             SAVE R{{ product.discount_amount|floatformat:0 }}
         </div>
 
+        <!-- R29.99 -->
         <div class="sale-price">
             R{{ product.price|floatformat:2 }}
         </div>
 
+        <!-- R37.99 -->
         <div class="regular-price">
             R{{ product.regular_price|floatformat:2 }}
         </div>
 
+        <!-- Deal expires 20 Sep 2026 -->
         {% if product.deal_expiry %}
-
             <div class="deal-expiry">
-                Deal expires {{ product.deal_expiry }}
+                Deal expires {{ product.deal_expiry|date:"d M Y" }}
             </div>
-
         {% endif %}
 
     </div>
 
 {% else %}
 
+    <!-- Normal price -->
     <div class="product-price">
         R{{ product.price|floatformat:2 }}
     </div>
 
 {% endif %}
+
+
+
 
 
 

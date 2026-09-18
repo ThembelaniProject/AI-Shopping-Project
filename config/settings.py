@@ -47,6 +47,51 @@ ALLOWED_HOSTS = [
 CSRF_TRUSTED_ORIGINS = [
     "https://*.vercel.app",
 ]
+# ============================================================
+
+# MICROSOFT / DUT LOGIN
+
+# ============================================================
+
+MICROSOFT_CLIENT_ID = os.environ.get(
+"MICROSOFT_CLIENT_ID",
+""
+)
+
+MICROSOFT_CLIENT_SECRET = os.environ.get(
+"MICROSOFT_CLIENT_SECRET",
+""
+)
+
+# DUT Microsoft Entra tenant
+
+MICROSOFT_TENANT_ID = os.environ.get(
+"MICROSOFT_TENANT_ID",
+"4b1930d1-12f4-40b5-b48c-bd86117429d8",
+)
+
+# Microsoft authority for the DUT tenant
+
+MICROSOFT_AUTHORITY = (
+f"https://login.microsoftonline.com/"
+f"{MICROSOFT_TENANT_ID}"
+)
+
+# Local development callback
+
+MICROSOFT_REDIRECT_URI = os.environ.get(
+"MICROSOFT_REDIRECT_URI",
+"http://127.0.0.1:8000/accounts/microsoft/callback/",
+)
+
+# Permissions requested from Microsoft
+
+MICROSOFT_SCOPE = [
+"openid",
+"profile",
+"email",
+"User.Read",
+]
 
 
 
