@@ -114,4 +114,10 @@ urlpatterns = [
         views.cancel_order,
         name="cancel_order",
     ),
+    
+     path(
+        "statements/",
+        views.monthly_statements,
+        name="monthly_statements",
+    ),
 ]

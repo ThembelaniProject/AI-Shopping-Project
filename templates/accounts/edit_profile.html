@@ -1,0 +1,639 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Edit Account Details - AI Shopping
+{% endblock %}
+
+
+{% block extra_css %}
+
+<style>
+
+    .edit-profile-page {
+
+        max-width: 700px;
+
+        margin: 0 auto;
+
+        padding:
+            2rem
+            1rem
+            4rem;
+
+    }
+
+
+    .edit-profile-header {
+
+        margin-bottom: 2rem;
+
+    }
+
+
+    .edit-profile-header h1 {
+
+        margin: 0 0 0.5rem;
+
+        font-size: 2rem;
+
+        color: #0a0a0a;
+
+    }
+
+
+    .edit-profile-header p {
+
+        margin: 0;
+
+        color: #64748b;
+
+    }
+
+
+    .edit-profile-card {
+
+        background: #1e293b;
+
+        border: 1px solid #334155;
+
+        border-radius: 14px;
+
+        padding: 2rem;
+
+        box-shadow:
+            0 20px 40px
+            rgba(0, 0, 0, 0.25);
+
+    }
+
+
+    .edit-profile-card h2 {
+
+        margin: 0 0 1.5rem;
+
+        color: #f1f5f9;
+
+        font-size: 1.2rem;
+
+    }
+
+
+    .form-group {
+
+        margin-bottom: 1.25rem;
+
+    }
+
+
+    .form-group label {
+
+        display: block;
+
+        margin-bottom: 0.45rem;
+
+        color: #cbd5e1;
+
+        font-size: 0.9rem;
+
+        font-weight: 600;
+
+    }
+
+
+    .form-group input {
+
+        width: 100%;
+
+        box-sizing: border-box;
+
+        padding: 0.85rem 1rem;
+
+        background: #0f172a;
+
+        border: 1px solid #475569;
+
+        border-radius: 10px;
+
+        color: white;
+
+        font-size: 1rem;
+
+        outline: none;
+
+        transition:
+            border-color 0.2s ease,
+            box-shadow 0.2s ease;
+
+    }
+
+
+    .form-group input:focus {
+
+        border-color: #6366f1;
+
+        box-shadow:
+            0 0 0 3px
+            rgba(
+                99,
+                102,
+                241,
+                0.2
+            );
+
+    }
+
+
+    .form-help {
+
+        display: block;
+
+        margin-top: 0.4rem;
+
+        color: #94a3b8;
+
+        font-size: 0.78rem;
+
+    }
+
+
+    .field-error {
+
+        margin-top: 0.4rem;
+
+        color: #fca5a5;
+
+        font-size: 0.82rem;
+
+    }
+
+
+    .messages {
+
+        margin-bottom: 1.25rem;
+
+    }
+
+
+    .message {
+
+        padding:
+            0.8rem
+            1rem;
+
+        border-radius: 10px;
+
+        margin-bottom: 0.5rem;
+
+        font-size: 0.9rem;
+
+    }
+
+
+    .message.success {
+
+        background:
+            rgba(
+                34,
+                197,
+                94,
+                0.12
+            );
+
+        border:
+            1px solid
+            rgba(
+                34,
+                197,
+                94,
+                0.3
+            );
+
+        color: #bbf7d0;
+
+    }
+
+
+    .message.error {
+
+        background:
+            rgba(
+                239,
+                68,
+                68,
+                0.12
+            );
+
+        border:
+            1px solid
+            rgba(
+                239,
+                68,
+                68,
+                0.3
+            );
+
+        color: #fca5a5;
+
+    }
+
+
+    .form-actions {
+
+        display: flex;
+
+        align-items: center;
+
+        gap: 0.75rem;
+
+        margin-top: 1.75rem;
+
+        flex-wrap: wrap;
+
+    }
+
+
+    .save-button {
+
+        padding:
+            0.8rem
+            1.25rem;
+
+        border: none;
+
+        border-radius: 10px;
+
+        background:
+            linear-gradient(
+                135deg,
+                #22c55e,
+                #16a34a
+            );
+
+        color: white;
+
+        font-weight: 700;
+
+        cursor: pointer;
+
+        font-size: 0.95rem;
+
+    }
+
+
+    .save-button:hover {
+
+        opacity: 0.9;
+
+    }
+
+
+    .cancel-button {
+
+        display: inline-block;
+
+        padding:
+            0.8rem
+            1.25rem;
+
+        border-radius: 10px;
+
+        background: #0f172a;
+
+        border: 1px solid #475569;
+
+        color: #cbd5e1;
+
+        text-decoration: none;
+
+        font-weight: 600;
+
+        font-size: 0.95rem;
+
+    }
+
+
+    .cancel-button:hover {
+
+        border-color: #6366f1;
+
+        color: white;
+
+    }
+
+
+    .security-note {
+
+        margin-top: 1.5rem;
+
+        padding: 1rem;
+
+        border-radius: 10px;
+
+        background:
+            rgba(
+                99,
+                102,
+                241,
+                0.08
+            );
+
+        border:
+            1px solid
+            rgba(
+                99,
+                102,
+                241,
+                0.2
+            );
+
+        color: #c7d2fe;
+
+        font-size: 0.82rem;
+
+        line-height: 1.5;
+
+    }
+
+
+    @media (max-width: 600px) {
+
+        .edit-profile-page {
+
+            padding:
+                1.25rem
+                1rem
+                3rem;
+
+        }
+
+
+        .edit-profile-card {
+
+            padding: 1.25rem;
+
+        }
+
+
+        .form-actions {
+
+            flex-direction: column;
+
+            align-items: stretch;
+
+        }
+
+
+        .save-button,
+        .cancel-button {
+
+            width: 100%;
+
+            text-align: center;
+
+            box-sizing: border-box;
+
+        }
+
+    }
+
+</style>
+
+{% endblock %}
+
+
+{% block content %}
+
+<main class="edit-profile-page">
+
+
+    <header class="edit-profile-header">
+
+        <h1>
+            Edit Account Details
+        </h1>
+
+        <p>
+            Update your personal account information.
+        </p>
+
+    </header>
+
+
+    {% if messages %}
+
+        <div class="messages">
+
+            {% for message in messages %}
+
+                <div
+                    class="message
+                    {% if message.tags %}
+                        {{ message.tags }}
+                    {% endif %}"
+                >
+                    {{ message }}
+                </div>
+
+            {% endfor %}
+
+        </div>
+
+    {% endif %}
+
+
+    <section class="edit-profile-card">
+
+        <h2>
+            Account Information
+        </h2>
+
+
+        <form
+            method="POST"
+            action="{% url 'accounts:edit_profile' %}"
+        >
+
+            {% csrf_token %}
+
+
+            <!-- =========================
+                 USERNAME
+            ========================== -->
+
+            <div class="form-group">
+
+                <label for="username">
+                    Username
+                </label>
+
+                <input
+                    type="text"
+                    id="username"
+                    name="username"
+                    value="{{ user.username }}"
+                    autocomplete="username"
+                    required
+                >
+
+                <span class="form-help">
+                    Your username is used to identify your shopping account.
+                </span>
+
+                {% if form.username.errors %}
+
+                    {% for error in form.username.errors %}
+
+                        <div class="field-error">
+                            {{ error }}
+                        </div>
+
+                    {% endfor %}
+
+                {% endif %}
+
+            </div>
+
+
+            <!-- =========================
+                 FIRST NAME
+            ========================== -->
+
+            <div class="form-group">
+
+                <label for="first_name">
+                    First Name
+                </label>
+
+                <input
+                    type="text"
+                    id="first_name"
+                    name="first_name"
+                    value="{{ user.first_name }}"
+                    autocomplete="given-name"
+                >
+
+                {% if form.first_name.errors %}
+
+                    {% for error in form.first_name.errors %}
+
+                        <div class="field-error">
+                            {{ error }}
+                        </div>
+
+                    {% endfor %}
+
+                {% endif %}
+
+            </div>
+
+
+            <!-- =========================
+                 LAST NAME
+            ========================== -->
+
+            <div class="form-group">
+
+                <label for="last_name">
+                    Last Name
+                </label>
+
+                <input
+                    type="text"
+                    id="last_name"
+                    name="last_name"
+                    value="{{ user.last_name }}"
+                    autocomplete="family-name"
+                >
+
+                {% if form.last_name.errors %}
+
+                    {% for error in form.last_name.errors %}
+
+                        <div class="field-error">
+                            {{ error }}
+                        </div>
+
+                    {% endfor %}
+
+                {% endif %}
+
+            </div>
+
+
+            <!-- =========================
+                 EMAIL
+            ========================== -->
+
+            <div class="form-group">
+
+                <label for="email">
+                    Email Address
+                </label>
+
+                <input
+                    type="email"
+                    id="email"
+                    name="email"
+                    value="{{ user.email }}"
+                    autocomplete="email"
+                    required
+                >
+
+                {% if form.email.errors %}
+
+                    {% for error in form.email.errors %}
+
+                        <div class="field-error">
+                            {{ error }}
+                        </div>
+
+                    {% endfor %}
+
+                {% endif %}
+
+            </div>
+
+
+            <!-- =========================
+                 ACTIONS
+            ========================== -->
+
+            <div class="form-actions">
+
+                <button
+                    type="submit"
+                    class="save-button"
+                >
+                    Save Changes
+                </button>
+
+
+                <a
+                    href="{% url 'accounts:profile' %}"
+                    class="cancel-button"
+                >
+                    Cancel
+                </a>
+
+            </div>
+
+
+            <div class="security-note">
+
+                <strong>Account information</strong>
+
+                <br>
+
+                Your username, name and email address are
+                associated with your AI Shopping account.
+
+            </div>
+
+        </form>
+
+    </section>
+
+
+</main>
+
+{% endblock %}

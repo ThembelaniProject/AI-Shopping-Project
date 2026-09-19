@@ -48,50 +48,46 @@ CSRF_TRUSTED_ORIGINS = [
     "https://*.vercel.app",
 ]
 # ============================================================
-
 # MICROSOFT / DUT LOGIN
-
 # ============================================================
 
+# Microsoft login is optional.
+# Leave these empty until you create an Entra application.
+
 MICROSOFT_CLIENT_ID = os.environ.get(
-"MICROSOFT_CLIENT_ID",
-""
+    "MICROSOFT_CLIENT_ID",
+    ""
 )
 
 MICROSOFT_CLIENT_SECRET = os.environ.get(
-"MICROSOFT_CLIENT_SECRET",
-""
+    "MICROSOFT_CLIENT_SECRET",
+    ""
 )
-
-# DUT Microsoft Entra tenant
 
 MICROSOFT_TENANT_ID = os.environ.get(
-"MICROSOFT_TENANT_ID",
-"4b1930d1-12f4-40b5-b48c-bd86117429d8",
+    "MICROSOFT_TENANT_ID",
+    ""
 )
-
-# Microsoft authority for the DUT tenant
-
-MICROSOFT_AUTHORITY = (
-f"https://login.microsoftonline.com/"
-f"{MICROSOFT_TENANT_ID}"
-)
-
-# Local development callback
 
 MICROSOFT_REDIRECT_URI = os.environ.get(
-"MICROSOFT_REDIRECT_URI",
-"http://127.0.0.1:8000/accounts/microsoft/callback/",
+    "MICROSOFT_REDIRECT_URI",
+    ""
 )
 
-# Permissions requested from Microsoft
-
 MICROSOFT_SCOPE = [
-"openid",
-"profile",
-"email",
-"User.Read",
+    "openid",
+    "profile",
+    "email",
+    "User.Read",
 ]
+
+# Only create the Microsoft authority when a tenant exists.
+MICROSOFT_AUTHORITY = (
+    f"https://login.microsoftonline.com/{MICROSOFT_TENANT_ID}"
+    if MICROSOFT_TENANT_ID
+    else ""
+)
+
 
 
 

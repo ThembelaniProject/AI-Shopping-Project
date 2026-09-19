@@ -8,6 +8,8 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
+import requests
+
 
 
 from .models import UserProfile
@@ -134,23 +136,26 @@ def register_view(request):
 
 
 
-def microsoft_login(request):
 
+# ==========================================================
+# MICROSOFT LOGIN
+# ==========================================================
+
+def microsoft_login(request):
 
     if request.user.is_authenticated:
         return redirect("shopping:dashboard")
 
-    if not settings.MICROSOFT_CLIENT_ID:
+    # Microsoft login is not configured.
+    if not (
+        settings.MICROSOFT_CLIENT_ID
+        and settings.MICROSOFT_CLIENT_SECRET
+        and settings.MICROSOFT_TENANT_ID
+        and settings.MICROSOFT_REDIRECT_URI
+    ):
         messages.error(
             request,
-            "Microsoft login is not configured yet."
-        )
-        return redirect("accounts:login")
-
-    if not settings.MICROSOFT_CLIENT_SECRET:
-        messages.error(
-            request,
-            "Microsoft login is not configured yet."
+            "Microsoft login is currently unavailable."
         )
         return redirect("accounts:login")
 
@@ -174,6 +179,241 @@ def microsoft_login(request):
 
 
 def microsoft_callback(request):
+
+    if request.user.is_authenticated:
+        return redirect("shopping:dashboard")
+
+    # ------------------------------------------------------
+    # Make sure Microsoft is configured
+    # ------------------------------------------------------
+
+    if not (
+        settings.MICROSOFT_CLIENT_ID
+        and settings.MICROSOFT_CLIENT_SECRET
+        and settings.MICROSOFT_TENANT_ID
+        and settings.MICROSOFT_REDIRECT_URI
+    ):
+        messages.error(
+            request,
+            "Microsoft login is currently unavailable."
+        )
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Microsoft returned an error
+    # ------------------------------------------------------
+
+    error = request.GET.get("error")
+
+    if error:
+
+        error_description = request.GET.get(
+            "error_description",
+            "Microsoft login was cancelled or failed."
+        )
+
+        messages.error(
+            request,
+            error_description
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Validate OAuth state
+    # ------------------------------------------------------
+
+    state = request.GET.get("state")
+
+    saved_state = request.session.get(
+        "microsoft_auth_state"
+    )
+
+    if not state or state != saved_state:
+
+        messages.error(
+            request,
+            "Invalid Microsoft login session."
+        )
+
+        return redirect("accounts:login")
+
+    request.session.pop(
+        "microsoft_auth_state",
+        None
+    )
+
+    # ------------------------------------------------------
+    # Authorization code
+    # ------------------------------------------------------
+
+    authorization_code = request.GET.get("code")
+
+    if not authorization_code:
+
+        messages.error(
+            request,
+            "Microsoft did not return an authorization code."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Exchange code for token
+    # ------------------------------------------------------
+
+    msal_app = msal.ConfidentialClientApplication(
+        settings.MICROSOFT_CLIENT_ID,
+        authority=settings.MICROSOFT_AUTHORITY,
+        client_credential=settings.MICROSOFT_CLIENT_SECRET,
+    )
+
+    result = msal_app.acquire_token_by_authorization_code(
+        authorization_code,
+        scopes=settings.MICROSOFT_SCOPE,
+        redirect_uri=settings.MICROSOFT_REDIRECT_URI,
+    )
+
+    if "error" in result:
+
+        messages.error(
+            request,
+            "Microsoft authentication failed."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Read Microsoft claims
+    # ------------------------------------------------------
+
+    claims = result.get(
+        "id_token_claims",
+        {}
+    )
+
+    # ------------------------------------------------------
+    # Verify DUT tenant
+    # ------------------------------------------------------
+
+    tenant_id = claims.get("tid")
+
+    if tenant_id != settings.MICROSOFT_TENANT_ID:
+
+        messages.error(
+            request,
+            "Only DUT Microsoft accounts are allowed."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Get email
+    # ------------------------------------------------------
+
+    email = (
+        claims.get("preferred_username")
+        or claims.get("email")
+        or ""
+    ).strip().lower()
+
+    if not email:
+
+        messages.error(
+            request,
+            "Microsoft did not provide an email address."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Verify DUT email domain
+    # ------------------------------------------------------
+
+    if not email.endswith("@dut4life.ac.za"):
+
+        messages.error(
+            request,
+            "Only DUT student Microsoft accounts are allowed."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Get name
+    # ------------------------------------------------------
+
+    first_name = (
+        claims.get("given_name")
+        or ""
+    ).strip()
+
+    last_name = (
+        claims.get("family_name")
+        or ""
+    ).strip()
+
+    # ------------------------------------------------------
+    # Find or create Django user
+    # ------------------------------------------------------
+
+    user = User.objects.filter(
+        email__iexact=email
+    ).first()
+
+    if user is None:
+
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+        )
+
+        user.set_unusable_password()
+
+        user.save()
+
+    else:
+
+        changed = False
+
+        if first_name and user.first_name != first_name:
+            user.first_name = first_name
+            changed = True
+
+        if last_name and user.last_name != last_name:
+            user.last_name = last_name
+            changed = True
+
+        if changed:
+
+            user.save(
+                update_fields=[
+                    "first_name",
+                    "last_name",
+                ]
+            )
+
+    # ------------------------------------------------------
+    # Login
+    # ------------------------------------------------------
+
+    login(
+        request,
+        user,
+        backend="django.contrib.auth.backends.ModelBackend",
+    )
+
+    messages.success(
+        request,
+        "Welcome to AI Shopping!"
+    )
+
+    return redirect(
+        "shopping:dashboard"
+    )
+
 
     if request.user.is_authenticated:
         return redirect("shopping:dashboard")
@@ -404,6 +644,9 @@ def profile(request):
     # Get saved location from the session.
     latitude = request.session.get("user_latitude")
     longitude = request.session.get("user_longitude")
+    address = request.session.get(
+    "user_address"
+)
 
     # Display the user's saved database budget.
     amount = user_profile.available_amount
@@ -417,6 +660,7 @@ def profile(request):
             "profile_user": user,
             "user_latitude": latitude,
             "user_longitude": longitude,
+            "user_address": address,
             "shopping_budget": amount,
         },
     )
@@ -425,7 +669,6 @@ def profile(request):
 # ==========================================================
 # UPDATE USER LOCATION
 # ==========================================================
-
 @login_required
 def update_location(request):
 
@@ -439,8 +682,15 @@ def update_location(request):
             status=405,
         )
 
-    latitude = request.POST.get("latitude", "").strip()
-    longitude = request.POST.get("longitude", "").strip()
+    latitude = request.POST.get(
+        "latitude",
+        ""
+    ).strip()
+
+    longitude = request.POST.get(
+        "longitude",
+        ""
+    ).strip()
 
     if not latitude or not longitude:
 
@@ -471,9 +721,7 @@ def update_location(request):
             status=400,
         )
 
-    # ------------------------------------------------------
-    # Validate coordinates
-    # ------------------------------------------------------
+    # Validate latitude
 
     if not (
         Decimal("-90")
@@ -488,6 +736,8 @@ def update_location(request):
             },
             status=400,
         )
+
+    # Validate longitude
 
     if not (
         Decimal("-180")
@@ -504,7 +754,7 @@ def update_location(request):
         )
 
     # ------------------------------------------------------
-    # Save to session
+    # Save coordinates to session
     # ------------------------------------------------------
 
     request.session["user_latitude"] = str(
@@ -515,6 +765,52 @@ def update_location(request):
         longitude_decimal
     )
 
+    # ------------------------------------------------------
+    # Reverse geocode coordinates
+    # ------------------------------------------------------
+
+    address = "Address could not be determined."
+
+    try:
+
+        response = requests.get(
+            "https://nominatim.openstreetmap.org/reverse",
+            params={
+                "lat": str(latitude_decimal),
+                "lon": str(longitude_decimal),
+                "format": "json",
+                "addressdetails": 1,
+            },
+            headers={
+                "User-Agent": "AI-Shopping-DUT/1.0"
+            },
+            timeout=10,
+        )
+
+        response.raise_for_status()
+
+        location_data = response.json()
+
+        address = location_data.get(
+            "display_name",
+            address
+        )
+
+    except (
+        requests.RequestException,
+        ValueError,
+    ):
+
+        # Keep the coordinates even if
+        # address lookup fails.
+        pass
+
+    # ------------------------------------------------------
+    # Save address to session
+    # ------------------------------------------------------
+
+    request.session["user_address"] = address
+
     request.session.modified = True
 
     return JsonResponse(
@@ -522,6 +818,7 @@ def update_location(request):
             "success": True,
             "latitude": str(latitude_decimal),
             "longitude": str(longitude_decimal),
+            "address": address,
         }
     )
 
@@ -590,5 +887,100 @@ def update_budget(request):
         {
             "success": True,
             "amount": str(amount_decimal),
+        }
+    )
+    
+# ==========================================================
+# EDIT PROFILE
+# ==========================================================
+
+@login_required
+def edit_profile(request):
+
+    user = request.user
+
+    if request.method == "POST":
+
+        first_name = request.POST.get(
+            "first_name",
+            ""
+        ).strip()
+
+        last_name = request.POST.get(
+            "last_name",
+            ""
+        ).strip()
+
+        email = request.POST.get(
+            "email",
+            ""
+        ).strip().lower()
+
+        if not first_name or not last_name or not email:
+
+            messages.error(
+                request,
+                "Please fill in all required fields."
+            )
+
+            return render(
+                request,
+                "accounts/edit_profile.html",
+                {
+                    "user": user,
+                }
+            )
+
+        # Check whether another account already
+        # uses this email address.
+        email_exists = User.objects.filter(
+            email__iexact=email
+        ).exclude(
+            pk=user.pk
+        ).exists()
+
+        if email_exists:
+
+            messages.error(
+                request,
+                "An account with this email already exists."
+            )
+
+            return render(
+                request,
+                "accounts/edit_profile.html",
+                {
+                    "user": user,
+                }
+            )
+
+        user.first_name = first_name
+        user.last_name = last_name
+        user.email = email
+
+        # Keep username in sync for accounts created
+        # through your normal registration system.
+        #
+        # This is especially useful because your normal
+        # registration currently uses the email as username.
+        if user.username == request.user.email:
+            user.username = email
+
+        user.save()
+
+        messages.success(
+            request,
+            "Your account details have been updated."
+        )
+
+        return redirect(
+            "accounts:profile"
+        )
+
+    return render(
+        request,
+        "accounts/edit_profile.html",
+        {
+            "user": user,
         }
     )

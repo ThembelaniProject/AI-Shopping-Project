@@ -100,11 +100,6 @@ def _save_cart(request, cart):
 
 def _clear_cart(request):
 
-    """
-    Completely removes the cart from the user's
-    Django session.
-    """
-
     request.session.pop(
         CART_SESSION_KEY,
         None,
@@ -134,25 +129,21 @@ def _build_cart(request):
     for product_id, quantity in cart.items():
 
         try:
-
             quantity = int(quantity)
 
         except (
             ValueError,
             TypeError,
         ):
-
             continue
 
         if quantity <= 0:
             continue
 
         try:
-
             product = get_product(product_id)
 
         except StoreAPIError:
-
             continue
 
         # --------------------------------------------------
@@ -342,10 +333,6 @@ def add_to_cart(request, product_id):
 
     budget = profile.available_amount
 
-    # ------------------------------------------------------
-    # PRODUCT
-    # ------------------------------------------------------
-
     try:
 
         product = get_product(product_id)
@@ -359,10 +346,6 @@ def add_to_cart(request, product_id):
             },
             status=404,
         )
-
-    # ------------------------------------------------------
-    # QUANTITY
-    # ------------------------------------------------------
 
     try:
 
@@ -383,10 +366,6 @@ def add_to_cart(request, product_id):
     if quantity < 1:
         quantity = 1
 
-    # ------------------------------------------------------
-    # STOCK
-    # ------------------------------------------------------
-
     stock = _get_product_stock(product)
 
     if stock <= 0:
@@ -398,10 +377,6 @@ def add_to_cart(request, product_id):
             },
             status=400,
         )
-
-    # ------------------------------------------------------
-    # CART
-    # ------------------------------------------------------
 
     cart = _get_cart(request)
 
@@ -438,10 +413,6 @@ def add_to_cart(request, product_id):
             status=400,
         )
 
-    # ------------------------------------------------------
-    # PRICE
-    # ------------------------------------------------------
-
     try:
 
         price = Decimal(
@@ -467,10 +438,6 @@ def add_to_cart(request, product_id):
             },
             status=400,
         )
-
-    # ------------------------------------------------------
-    # SHIPPING
-    # ------------------------------------------------------
 
     try:
 
@@ -505,10 +472,6 @@ def add_to_cart(request, product_id):
     if shipping < 0:
         shipping = Decimal("0.00")
 
-    # ------------------------------------------------------
-    # BUDGET CHECK
-    # ------------------------------------------------------
-
     current_cart_data = _build_cart(request)
 
     current_total = current_cart_data["total"]
@@ -542,10 +505,6 @@ def add_to_cart(request, product_id):
             },
             status=400,
         )
-
-    # ------------------------------------------------------
-    # SAVE
-    # ------------------------------------------------------
 
     cart[product_key] = new_quantity
 
@@ -631,10 +590,6 @@ def update_cart(request, product_id):
             status=404,
         )
 
-    # ------------------------------------------------------
-    # REMOVE ITEM
-    # ------------------------------------------------------
-
     if quantity <= 0:
 
         del cart[product_key]
@@ -666,10 +621,6 @@ def update_cart(request, product_id):
             }
         )
 
-    # ------------------------------------------------------
-    # PRODUCT
-    # ------------------------------------------------------
-
     try:
 
         product = get_product(product_key)
@@ -683,10 +634,6 @@ def update_cart(request, product_id):
             },
             status=404,
         )
-
-    # ------------------------------------------------------
-    # STOCK
-    # ------------------------------------------------------
 
     stock = _get_product_stock(product)
 
@@ -702,10 +649,6 @@ def update_cart(request, product_id):
             },
             status=400,
         )
-
-    # ------------------------------------------------------
-    # PRICE
-    # ------------------------------------------------------
 
     try:
 
@@ -743,10 +686,6 @@ def update_cart(request, product_id):
             status=400,
         )
 
-    # ------------------------------------------------------
-    # SHIPPING
-    # ------------------------------------------------------
-
     try:
 
         shipping = Decimal(
@@ -770,17 +709,9 @@ def update_cart(request, product_id):
     if shipping < 0:
         shipping = Decimal("0.00")
 
-    # ------------------------------------------------------
-    # BUDGET
-    # ------------------------------------------------------
-
     profile = _get_user_profile(request)
 
     budget = profile.available_amount
-
-    # ------------------------------------------------------
-    # OLD QUANTITY
-    # ------------------------------------------------------
 
     try:
 
@@ -798,10 +729,6 @@ def update_cart(request, product_id):
 
         old_quantity = 1
 
-    # ------------------------------------------------------
-    # TEMPORARY UPDATE
-    # ------------------------------------------------------
-
     cart[product_key] = quantity
 
     _save_cart(
@@ -812,10 +739,6 @@ def update_cart(request, product_id):
     cart_data = _build_cart(request)
 
     new_total = cart_data["total"]
-
-    # ------------------------------------------------------
-    # BUDGET EXCEEDED
-    # ------------------------------------------------------
 
     if new_total > budget:
 
@@ -839,10 +762,6 @@ def update_cart(request, product_id):
             },
             status=400,
         )
-
-    # ------------------------------------------------------
-    # SUCCESS
-    # ------------------------------------------------------
 
     return JsonResponse(
         {
@@ -947,6 +866,221 @@ def clear_cart(request):
 
 
 # ==========================================================
+# VALIDATE CHECKOUT CART
+# ==========================================================
+
+def _validate_checkout_cart(request):
+
+    cart = _get_cart(request)
+
+    if not cart:
+
+        return (
+            False,
+            None,
+            "Your cart is empty.",
+        )
+
+    validated_items = []
+
+    subtotal = Decimal("0.00")
+
+    shipping_total = Decimal("0.00")
+
+    for product_id, raw_quantity in cart.items():
+
+        try:
+
+            quantity = int(raw_quantity)
+
+        except (
+            ValueError,
+            TypeError,
+        ):
+
+            return (
+                False,
+                None,
+                "Your cart contains an invalid quantity.",
+            )
+
+        if quantity <= 0:
+
+            return (
+                False,
+                None,
+                "Your cart contains an invalid quantity.",
+            )
+
+        try:
+
+            product = get_product(product_id)
+
+        except StoreAPIError:
+
+            return (
+                False,
+                None,
+                (
+                    f"Product #{product_id} "
+                    "is no longer available."
+                ),
+            )
+
+        stock = _get_product_stock(product)
+
+        product_name = (
+            product.get("title")
+            or product.get("name")
+            or f"Product #{product_id}"
+        )
+
+        if stock <= 0:
+
+            return (
+                False,
+                None,
+                f'"{product_name}" is currently out of stock.',
+            )
+
+        if quantity > stock:
+
+            return (
+                False,
+                None,
+                (
+                    f'"{product_name}" only has '
+                    f"{stock} available, but your cart "
+                    f"contains {quantity}. "
+                    f"Please update your cart."
+                ),
+            )
+
+        try:
+
+            price = Decimal(
+                str(
+                    product.get(
+                        "price",
+                        0,
+                    )
+                    or 0
+                )
+            )
+
+        except (
+            ValueError,
+            TypeError,
+            InvalidOperation,
+        ):
+
+            return (
+                False,
+                None,
+                (
+                    "A product in your cart "
+                    "has an invalid price."
+                ),
+            )
+
+        try:
+
+            shipping = Decimal(
+                str(
+                    product.get(
+                        "shipping_cost",
+                        0,
+                    )
+                    or 0
+                )
+            )
+
+        except (
+            ValueError,
+            TypeError,
+            InvalidOperation,
+        ):
+
+            shipping = Decimal("0.00")
+
+        if price < 0:
+
+            return (
+                False,
+                None,
+                (
+                    "A product in your cart "
+                    "has an invalid price."
+                ),
+            )
+
+        if shipping < 0:
+            shipping = Decimal("0.00")
+
+        item_total = price * quantity
+
+        subtotal += item_total
+
+        shipping_total += shipping
+
+        validated_items.append(
+            {
+                "product": product,
+                "product_id": str(
+                    product.get("external_id")
+                    or product.get("id")
+                    or product_id
+                ),
+                "product_name": product_name,
+                "quantity": quantity,
+                "item_total": item_total,
+                "shipping_cost": shipping,
+                "stock": stock,
+            }
+        )
+
+    total = subtotal + shipping_total
+
+    profile = _get_user_profile(request)
+
+    budget = profile.available_amount
+
+    if total > budget:
+
+        return (
+            False,
+            None,
+            (
+                f"Your cart total of "
+                f"R{total:.2f} exceeds your "
+                f"shopping limit of "
+                f"R{budget:.2f}."
+            ),
+        )
+
+    cart_data = {
+        "items": validated_items,
+        "subtotal": subtotal,
+        "shipping_total": shipping_total,
+        "total": total,
+        "item_count": sum(
+            item["quantity"]
+            for item in validated_items
+        ),
+        "budget": budget,
+        "budget_remaining": budget - total,
+        "budget_exceeded": total > budget,
+        "budget_reached": total == budget,
+    }
+
+    return (
+        True,
+        cart_data,
+        None,
+    )
+
+
+# ==========================================================
 # CHECKOUT
 # ==========================================================
 
@@ -968,10 +1102,6 @@ def checkout(request):
 
     profile = _get_user_profile(request)
 
-    # ------------------------------------------------------
-    # INITIAL BUDGET CHECK
-    # ------------------------------------------------------
-
     if cart_data["total"] > profile.available_amount:
 
         messages.error(
@@ -988,10 +1118,6 @@ def checkout(request):
             "shopping:cart"
         )
 
-    # ------------------------------------------------------
-    # GET
-    # ------------------------------------------------------
-
     if request.method == "GET":
 
         return render(
@@ -1002,10 +1128,6 @@ def checkout(request):
                 "profile": profile,
             },
         )
-
-    # ------------------------------------------------------
-    # CUSTOMER INFORMATION
-    # ------------------------------------------------------
 
     full_name = request.POST.get(
         "full_name",
@@ -1041,10 +1163,6 @@ def checkout(request):
         "payment_method",
         "",
     ).strip().lower()
-
-    # ------------------------------------------------------
-    # VALIDATION
-    # ------------------------------------------------------
 
     required_fields = [
         (
@@ -1091,10 +1209,6 @@ def checkout(request):
                 },
             )
 
-    # ------------------------------------------------------
-    # PAYMENT METHOD
-    # ------------------------------------------------------
-
     if payment_method not in [
         "payfast",
         "cash",
@@ -1114,10 +1228,6 @@ def checkout(request):
             },
         )
 
-    # ------------------------------------------------------
-    # FINAL CART VALIDATION
-    # ------------------------------------------------------
-
     (
         cart_is_valid,
         cart_data,
@@ -1134,10 +1244,6 @@ def checkout(request):
         return redirect(
             "shopping:cart"
         )
-
-    # ------------------------------------------------------
-    # FINAL BUDGET CHECK
-    # ------------------------------------------------------
 
     profile = _get_user_profile(request)
 
@@ -1157,10 +1263,6 @@ def checkout(request):
             "shopping:cart"
         )
 
-    # ------------------------------------------------------
-    # SAVE EXACT ORDER TOTAL
-    # ------------------------------------------------------
-
     order_total = cart_data["total"].quantize(
         Decimal("0.01")
     )
@@ -1174,10 +1276,6 @@ def checkout(request):
     ].quantize(
         Decimal("0.01")
     )
-
-    # ------------------------------------------------------
-    # CREATE ORDER
-    # ------------------------------------------------------
 
     try:
 
@@ -1215,10 +1313,6 @@ def checkout(request):
                     else "paid"
                 ),
             )
-
-            # --------------------------------------------------
-            # ORDER ITEMS
-            # --------------------------------------------------
 
             for item in cart_data["items"]:
 
@@ -1298,9 +1392,9 @@ def checkout(request):
             },
         )
 
-    # ======================================================
-    # CASH ON DELIVERY
-    # ======================================================
+    # ------------------------------------------------------
+    # CASH
+    # ------------------------------------------------------
 
     if payment_method == "cash":
 
@@ -1316,9 +1410,9 @@ def checkout(request):
             order_id=order.id,
         )
 
-    # ======================================================
+    # ------------------------------------------------------
     # PAYFAST
-    # ======================================================
+    # ------------------------------------------------------
 
     request.session[
         PAYFAST_ORDER_SESSION_KEY
@@ -1356,7 +1450,6 @@ def _get_payfast_url():
     )
 
     if configured_url:
-
         return configured_url
 
     if _payfast_is_sandbox():
@@ -1422,10 +1515,6 @@ def _absolute_url(request, route_name, **kwargs):
 
 def _payfast_signature(data):
 
-    """
-    Generate the PayFast MD5 signature.
-    """
-
     signature_data = {
         key: value
         for key, value in data.items()
@@ -1455,7 +1544,7 @@ def _payfast_signature(data):
 
 
 # ==========================================================
-# PAYFAST REDIRECT HTML
+# PAYFAST REDIRECT
 # ==========================================================
 
 def _render_payfast_redirect(
@@ -1611,6 +1700,7 @@ def _render_payfast_redirect(
 
     return HttpResponse(html)
 
+
 # ==========================================================
 # PAYFAST PAYMENT STATUS
 # ==========================================================
@@ -1624,17 +1714,10 @@ def payfast_payment_status(request, order_id):
         user=request.user,
     )
 
-    # ------------------------------------------------------
-    # PAYMENT SUCCESSFUL
-    # ------------------------------------------------------
-
     if order.payment_status == "paid":
 
-        # The request comes from the customer's browser,
-        # so we have access to their Django session.
         _clear_cart(request)
 
-        # Remove temporary PayFast order session
         request.session.pop(
             PAYFAST_ORDER_SESSION_KEY,
             None,
@@ -1650,10 +1733,6 @@ def payfast_payment_status(request, order_id):
             }
         )
 
-    # ------------------------------------------------------
-    # PAYMENT FAILED / CANCELLED
-    # ------------------------------------------------------
-
     if order.payment_status in [
         "failed",
         "cancelled",
@@ -1667,10 +1746,6 @@ def payfast_payment_status(request, order_id):
             }
         )
 
-    # ------------------------------------------------------
-    # STILL PROCESSING
-    # ------------------------------------------------------
-
     return JsonResponse(
         {
             "success": True,
@@ -1678,6 +1753,7 @@ def payfast_payment_status(request, order_id):
             "status": order.payment_status,
         }
     )
+
 
 # ==========================================================
 # PAYFAST PAYMENT
@@ -1688,10 +1764,6 @@ def payfast_payment(
     request,
     order_id=None,
 ):
-
-    # ------------------------------------------------------
-    # FALLBACK FOR OLD URL
-    # ------------------------------------------------------
 
     if order_id is None:
 
@@ -1713,19 +1785,11 @@ def payfast_payment(
             "shopping:checkout"
         )
 
-    # ------------------------------------------------------
-    # ORDER
-    # ------------------------------------------------------
-
     order = get_object_or_404(
         Order,
         id=order_id,
         user=request.user,
     )
-
-    # ------------------------------------------------------
-    # PAYMENT METHOD
-    # ------------------------------------------------------
 
     if order.payment_method != "payfast":
 
@@ -1739,10 +1803,6 @@ def payfast_payment(
             order_id=order.id,
         )
 
-    # ------------------------------------------------------
-    # ALREADY PAID
-    # ------------------------------------------------------
-
     if order.payment_status == "paid":
 
         messages.info(
@@ -1754,10 +1814,6 @@ def payfast_payment(
             "shopping:order_success",
             order_id=order.id,
         )
-
-    # ------------------------------------------------------
-    # MERCHANT CREDENTIALS
-    # ------------------------------------------------------
 
     merchant_id = _get_payfast_merchant_id()
 
@@ -1778,10 +1834,6 @@ def payfast_payment(
             "shopping:checkout"
         )
 
-    # ------------------------------------------------------
-    # CUSTOMER NAME
-    # ------------------------------------------------------
-
     name_parts = order.full_name.split(
         " ",
         1,
@@ -1794,10 +1846,6 @@ def payfast_payment(
         if len(name_parts) > 1
         else ""
     )
-
-    # ------------------------------------------------------
-    # PAYFAST URLS
-    # ------------------------------------------------------
 
     return_url = _absolute_url(
         request,
@@ -1816,17 +1864,9 @@ def payfast_payment(
         "shopping:payfast_itn",
     )
 
-    # ------------------------------------------------------
-    # FIXED ORDER AMOUNT
-    # ------------------------------------------------------
-
     order_amount = order.total.quantize(
         Decimal("0.01")
     )
-
-    # ------------------------------------------------------
-    # PAYMENT DATA
-    # ------------------------------------------------------
 
     payment_data = {
 
@@ -1859,29 +1899,17 @@ def payfast_payment(
         ),
     }
 
-    # ------------------------------------------------------
-    # SIGNATURE
-    # ------------------------------------------------------
-
     payment_data["signature"] = (
         _payfast_signature(
             payment_data
         )
     )
 
-    # ------------------------------------------------------
-    # SAVE ORDER SESSION
-    # ------------------------------------------------------
-
     request.session[
         PAYFAST_ORDER_SESSION_KEY
     ] = order.id
 
     request.session.modified = True
-
-    # ------------------------------------------------------
-    # REDIRECT
-    # ------------------------------------------------------
 
     return _render_payfast_redirect(
         request,
@@ -1890,9 +1918,6 @@ def payfast_payment(
     )
 
 
-# ==========================================================
-# PAYFAST RETURN
-# ==========================================================
 # ==========================================================
 # PAYFAST RETURN
 # ==========================================================
@@ -1908,10 +1933,6 @@ def payfast_return(
         id=order_id,
         user=request.user,
     )
-
-    # ------------------------------------------------------
-    # ALREADY PAID
-    # ------------------------------------------------------
 
     if order.payment_status == "paid":
 
@@ -1937,10 +1958,6 @@ def payfast_return(
             order_id=order.id,
         )
 
-    # ------------------------------------------------------
-    # FAILED
-    # ------------------------------------------------------
-
     if order.payment_status == "failed":
 
         messages.error(
@@ -1956,10 +1973,6 @@ def payfast_return(
             order_id=order.id,
         )
 
-    # ------------------------------------------------------
-    # CANCELLED
-    # ------------------------------------------------------
-
     if order.payment_status == "cancelled":
 
         messages.warning(
@@ -1973,13 +1986,6 @@ def payfast_return(
         return redirect(
             "shopping:cart"
         )
-
-    # ------------------------------------------------------
-    # STILL PENDING
-    #
-    # The customer has returned from PayFast, but the ITN
-    # may still be processing.
-    # ------------------------------------------------------
 
     return render(
         request,
@@ -2006,10 +2012,6 @@ def payfast_cancel(
         user=request.user,
     )
 
-    # ------------------------------------------------------
-    # ONLY MARK PENDING PAYMENTS AS CANCELLED
-    # ------------------------------------------------------
-
     if order.payment_status == "pending":
 
         order.payment_status = "cancelled"
@@ -2023,25 +2025,12 @@ def payfast_cancel(
             ]
         )
 
-    # ------------------------------------------------------
-    # REMOVE TEMPORARY PAYFAST SESSION
-    # ------------------------------------------------------
-
     request.session.pop(
         PAYFAST_ORDER_SESSION_KEY,
         None,
     )
 
     request.session.modified = True
-
-    # ------------------------------------------------------
-    # IMPORTANT:
-    #
-    # DO NOT CLEAR THE CART.
-    #
-    # The customer did not complete payment.
-    # They should be able to return to checkout.
-    # ------------------------------------------------------
 
     messages.warning(
         request,
@@ -2063,26 +2052,12 @@ def payfast_cancel(
 @csrf_exempt
 def payfast_itn(request):
 
-    """
-    PayFast Instant Transaction Notification endpoint.
-
-    PayFast calls this server-to-server.
-
-    Do NOT require login here.
-
-    Do NOT rely on the customer's browser session here.
-    """
-
     if request.method != "POST":
 
         return HttpResponse(
             "Method Not Allowed",
             status=405,
         )
-
-    # ------------------------------------------------------
-    # READ POST DATA
-    # ------------------------------------------------------
 
     post_data = request.POST.copy()
 
@@ -2100,10 +2075,6 @@ def payfast_itn(request):
             "Missing signature",
             status=400,
         )
-
-    # ------------------------------------------------------
-    # VERIFY SIGNATURE
-    # ------------------------------------------------------
 
     signature_data = {
         key: value
@@ -2125,10 +2096,6 @@ def payfast_itn(request):
             "Invalid signature",
             status=400,
         )
-
-    # ------------------------------------------------------
-    # GET ORDER
-    # ------------------------------------------------------
 
     order_id = (
         post_data.get(
@@ -2173,10 +2140,6 @@ def payfast_itn(request):
             status=404,
         )
 
-    # ------------------------------------------------------
-    # VERIFY MERCHANT
-    # ------------------------------------------------------
-
     merchant_id = (
         post_data.get(
             "merchant_id",
@@ -2196,10 +2159,6 @@ def payfast_itn(request):
             status=400,
         )
 
-    # ------------------------------------------------------
-    # PAYMENT STATUS
-    # ------------------------------------------------------
-
     payment_status = (
         post_data.get(
             "payment_status",
@@ -2207,10 +2166,6 @@ def payfast_itn(request):
         )
         or ""
     ).strip().upper()
-
-    # ------------------------------------------------------
-    # NON-COMPLETE PAYMENTS
-    # ------------------------------------------------------
 
     if payment_status != "COMPLETE":
 
@@ -2230,9 +2185,7 @@ def payfast_itn(request):
                 ]
             )
 
-        elif payment_status in [
-            "FAILED",
-        ]:
+        elif payment_status == "FAILED":
 
             order.payment_status = "failed"
 
@@ -2246,10 +2199,6 @@ def payfast_itn(request):
             "Payment not complete",
             status=200,
         )
-
-    # ------------------------------------------------------
-    # VERIFY AMOUNT
-    # ------------------------------------------------------
 
     try:
 
@@ -2284,10 +2233,6 @@ def payfast_itn(request):
         Decimal("0.01")
     )
 
-    # ------------------------------------------------------
-    # AMOUNT MUST MATCH ORDER
-    # ------------------------------------------------------
-
     if received_amount != expected_amount:
 
         return HttpResponse(
@@ -2295,14 +2240,7 @@ def payfast_itn(request):
             status=400,
         )
 
-    # ------------------------------------------------------
-    # FINALIZE PAYMENT
-    # ------------------------------------------------------
-
     with transaction.atomic():
-
-        # Lock the order so two ITNs cannot process
-        # simultaneously.
 
         order = (
             Order.objects
@@ -2312,10 +2250,6 @@ def payfast_itn(request):
                 id=order.id,
             )
         )
-
-        # --------------------------------------------------
-        # IDEMPOTENCY
-        # --------------------------------------------------
 
         if order.payment_status == "paid":
 
@@ -2335,10 +2269,6 @@ def payfast_itn(request):
                 status=200,
             )
 
-        # --------------------------------------------------
-        # USER PROFILE
-        # --------------------------------------------------
-
         try:
 
             profile = (
@@ -2356,10 +2286,6 @@ def payfast_itn(request):
                 available_amount=DEFAULT_SHOPPING_BUDGET,
             )
 
-        # --------------------------------------------------
-        # FIXED PAYMENT AMOUNT
-        # --------------------------------------------------
-
         amount_paid = order.total.quantize(
             Decimal("0.01")
         )
@@ -2369,10 +2295,6 @@ def payfast_itn(request):
                 Decimal("0.01")
             )
         )
-
-        # --------------------------------------------------
-        # BALANCE CHECK
-        # --------------------------------------------------
 
         if current_balance < amount_paid:
 
@@ -2389,10 +2311,6 @@ def payfast_itn(request):
                 status=400,
             )
 
-        # --------------------------------------------------
-        # DEDUCT EXACTLY ONCE
-        # --------------------------------------------------
-
         profile.available_amount = (
             current_balance - amount_paid
         )
@@ -2402,10 +2320,6 @@ def payfast_itn(request):
                 "available_amount",
             ]
         )
-
-        # --------------------------------------------------
-        # CONFIRM PAYMENT
-        # --------------------------------------------------
 
         order.payment_status = "paid"
 
@@ -2418,261 +2332,9 @@ def payfast_itn(request):
             ]
         )
 
-    # ------------------------------------------------------
-    # SUCCESS
-    # ------------------------------------------------------
-
     return HttpResponse(
         "OK",
         status=200,
-    )
-
-
-# ==========================================================
-# VALIDATE CHECKOUT CART
-# ==========================================================
-
-def _validate_checkout_cart(request):
-
-    cart = _get_cart(request)
-
-    if not cart:
-
-        return (
-            False,
-            None,
-            "Your cart is empty.",
-        )
-
-    validated_items = []
-
-    subtotal = Decimal("0.00")
-
-    shipping_total = Decimal("0.00")
-
-    for product_id, raw_quantity in cart.items():
-
-        # --------------------------------------------------
-        # QUANTITY
-        # --------------------------------------------------
-
-        try:
-
-            quantity = int(raw_quantity)
-
-        except (
-            ValueError,
-            TypeError,
-        ):
-
-            return (
-                False,
-                None,
-                "Your cart contains an invalid quantity.",
-            )
-
-        if quantity <= 0:
-
-            return (
-                False,
-                None,
-                "Your cart contains an invalid quantity.",
-            )
-
-        # --------------------------------------------------
-        # PRODUCT
-        # --------------------------------------------------
-
-        try:
-
-            product = get_product(product_id)
-
-        except StoreAPIError:
-
-            return (
-                False,
-                None,
-                (
-                    f"Product #{product_id} "
-                    "is no longer available."
-                ),
-            )
-
-        # --------------------------------------------------
-        # STOCK
-        # --------------------------------------------------
-
-        stock = _get_product_stock(product)
-
-        product_name = (
-            product.get("title")
-            or product.get("name")
-            or f"Product #{product_id}"
-        )
-
-        if stock <= 0:
-
-            return (
-                False,
-                None,
-                f'"{product_name}" is currently out of stock.',
-            )
-
-        if quantity > stock:
-
-            return (
-                False,
-                None,
-                (
-                    f'"{product_name}" only has '
-                    f"{stock} available, but your cart "
-                    f"contains {quantity}. "
-                    f"Please update your cart."
-                ),
-            )
-
-        # --------------------------------------------------
-        # PRICE
-        # --------------------------------------------------
-
-        try:
-
-            price = Decimal(
-                str(
-                    product.get(
-                        "price",
-                        0,
-                    )
-                    or 0
-                )
-            )
-
-        except (
-            ValueError,
-            TypeError,
-            InvalidOperation,
-        ):
-
-            return (
-                False,
-                None,
-                (
-                    "A product in your cart "
-                    "has an invalid price."
-                ),
-            )
-
-        # --------------------------------------------------
-        # SHIPPING
-        # --------------------------------------------------
-
-        try:
-
-            shipping = Decimal(
-                str(
-                    product.get(
-                        "shipping_cost",
-                        0,
-                    )
-                    or 0
-                )
-            )
-
-        except (
-            ValueError,
-            TypeError,
-            InvalidOperation,
-        ):
-
-            shipping = Decimal("0.00")
-
-        if price < 0:
-
-            return (
-                False,
-                None,
-                (
-                    "A product in your cart "
-                    "has an invalid price."
-                ),
-            )
-
-        if shipping < 0:
-
-            shipping = Decimal("0.00")
-
-        # --------------------------------------------------
-        # ITEM TOTAL
-        # --------------------------------------------------
-
-        item_total = price * quantity
-
-        subtotal += item_total
-
-        shipping_total += shipping
-
-        validated_items.append(
-            {
-                "product": product,
-                "product_id": str(
-                    product.get("external_id")
-                    or product.get("id")
-                    or product_id
-                ),
-                "product_name": product_name,
-                "quantity": quantity,
-                "item_total": item_total,
-                "shipping_cost": shipping,
-                "stock": stock,
-            }
-        )
-
-    # ------------------------------------------------------
-    # TOTAL
-    # ------------------------------------------------------
-
-    total = subtotal + shipping_total
-
-    # ------------------------------------------------------
-    # BUDGET
-    # ------------------------------------------------------
-
-    profile = _get_user_profile(request)
-
-    budget = profile.available_amount
-
-    if total > budget:
-
-        return (
-            False,
-            None,
-            (
-                f"Your cart total of "
-                f"R{total:.2f} exceeds your "
-                f"shopping limit of "
-                f"R{budget:.2f}."
-            ),
-        )
-
-    cart_data = {
-        "items": validated_items,
-        "subtotal": subtotal,
-        "shipping_total": shipping_total,
-        "total": total,
-        "item_count": sum(
-            item["quantity"]
-            for item in validated_items
-        ),
-        "budget": budget,
-        "budget_remaining": budget - total,
-        "budget_exceeded": total > budget,
-        "budget_reached": total == budget,
-    }
-
-    return (
-        True,
-        cart_data,
-        None,
     )
 
 
@@ -2692,10 +2354,6 @@ def order_success(
         user=request.user,
     )
 
-    # ------------------------------------------------------
-    # PAID ORDER
-    # ------------------------------------------------------
-
     if order.payment_status == "paid":
 
         _clear_cart(request)
@@ -2714,7 +2372,6 @@ def order_success(
             "order": order,
         },
     )
-
 
 
 # ==========================================================
@@ -2826,4 +2483,360 @@ def cancel_order(
         {
             "order": order,
         },
+    )
+
+
+# ==========================================================
+# MONTHLY STATEMENTS
+# ==========================================================
+
+@login_required
+def monthly_statements(request):
+
+    # ------------------------------------------------------
+    # USER PROFILE
+    # ------------------------------------------------------
+
+    profile = _get_user_profile(request)
+
+    # ------------------------------------------------------
+    # GET USER ORDERS
+    # ------------------------------------------------------
+
+    orders = list(
+        Order.objects
+        .filter(
+            user=request.user
+        )
+        .order_by(
+            "created_at",
+            "id",
+        )
+    )
+
+    # ------------------------------------------------------
+    # BUILD MONTHLY STATEMENTS
+    # ------------------------------------------------------
+
+    statements = {}
+
+    for order in orders:
+
+        month_key = order.created_at.strftime(
+            "%Y-%m"
+        )
+
+        if month_key not in statements:
+
+            statements[month_key] = {
+                "month": month_key,
+
+                "label": order.created_at.strftime(
+                    "%B %Y"
+                ),
+
+                "orders": [],
+
+                "paid_orders": [],
+
+                "pending_orders": [],
+
+                "cancelled_orders": [],
+
+                "failed_orders": [],
+
+                "subtotal": Decimal("0.00"),
+
+                "shipping": Decimal("0.00"),
+
+                "total": Decimal("0.00"),
+            }
+
+        statement = statements[month_key]
+
+        # --------------------------------------------------
+        # ALL ORDERS
+        # --------------------------------------------------
+
+        statement["orders"].append(order)
+
+        # --------------------------------------------------
+        # PAID
+        # --------------------------------------------------
+
+        if order.payment_status == "paid":
+
+            statement["paid_orders"].append(
+                order
+            )
+
+            statement["subtotal"] += (
+                order.subtotal
+                or Decimal("0.00")
+            )
+
+            statement["shipping"] += (
+                order.shipping_total
+                or Decimal("0.00")
+            )
+
+            statement["total"] += (
+                order.total
+                or Decimal("0.00")
+            )
+
+        # --------------------------------------------------
+        # PENDING
+        # --------------------------------------------------
+
+        elif order.payment_status == "pending":
+
+            statement["pending_orders"].append(
+                order
+            )
+
+        # --------------------------------------------------
+        # CANCELLED
+        # --------------------------------------------------
+
+        elif order.payment_status == "cancelled":
+
+            statement["cancelled_orders"].append(
+                order
+            )
+
+        # --------------------------------------------------
+        # FAILED
+        # --------------------------------------------------
+
+        elif order.payment_status == "failed":
+
+            statement["failed_orders"].append(
+                order
+            )
+
+    # ------------------------------------------------------
+    # CONVERT TO LIST
+    # ------------------------------------------------------
+
+    statements = list(
+        statements.values()
+    )
+
+    # ------------------------------------------------------
+    # SORT MONTHS
+    # ------------------------------------------------------
+
+    statements.sort(
+        key=lambda statement: statement["month"],
+        reverse=True,
+    )
+
+    # ------------------------------------------------------
+    # SELECT MONTH
+    # ------------------------------------------------------
+
+    selected_month = request.GET.get(
+        "month"
+    )
+
+    selected_statement = None
+
+    if selected_month:
+
+        for statement in statements:
+
+            if statement["month"] == selected_month:
+
+                selected_statement = statement
+
+                break
+
+    # ------------------------------------------------------
+    # DEFAULT TO MOST RECENT MONTH
+    # ------------------------------------------------------
+
+    elif statements:
+
+        selected_statement = statements[0]
+
+        selected_month = (
+            selected_statement["month"]
+        )
+
+    # ------------------------------------------------------
+    # CALCULATE ACCOUNT BALANCES
+    #
+    # IMPORTANT:
+    #
+    # Only PAID orders affect the balance.
+    #
+    # Pending/cancelled/failed orders are displayed
+    # but do not reduce the account balance.
+    # ------------------------------------------------------
+
+    # The current profile balance represents the balance
+    # AFTER all successfully paid orders.
+    #
+    # Therefore we calculate historical balances backwards
+    # from the current available amount.
+
+    current_balance = (
+        profile.available_amount
+    )
+
+    # ------------------------------------------------------
+    # PROCESS ALL PAID ORDERS FROM NEWEST TO OLDEST
+    # ------------------------------------------------------
+
+    paid_orders = [
+        order
+        for order in orders
+        if order.payment_status == "paid"
+    ]
+
+    paid_orders.sort(
+        key=lambda order: (
+            order.created_at,
+            order.id,
+        ),
+        reverse=True,
+    )
+
+    # Attach running balances.
+    #
+    # For a paid order:
+    #
+    # balance after transaction =
+    # current balance
+    #
+    # balance before transaction =
+    # balance after + order total
+    # ------------------------------------------------------
+
+    running_balance = current_balance
+
+    for order in paid_orders:
+
+        order.running_balance = (
+            running_balance
+        )
+
+        order.balance_before = (
+            running_balance
+            + (
+                order.total
+                or Decimal("0.00")
+            )
+        )
+
+        running_balance = (
+            order.balance_before
+        )
+
+    # ------------------------------------------------------
+    # CALCULATE MONTH OPENING/CLOSING BALANCES
+    # ------------------------------------------------------
+
+    for statement in statements:
+
+        month_key = statement["month"]
+
+        month_paid_orders = [
+            order
+            for order in paid_orders
+            if order.created_at.strftime(
+                "%Y-%m"
+            ) == month_key
+        ]
+
+        # --------------------------------------------------
+        # CLOSING BALANCE
+        #
+        # Start from the current available amount and
+        # reverse all paid transactions AFTER this month.
+        # --------------------------------------------------
+
+        closing_balance = (
+            profile.available_amount
+        )
+
+        for order in paid_orders:
+
+            order_month = order.created_at.strftime(
+                "%Y-%m"
+            )
+
+            if order_month > month_key:
+
+                closing_balance += (
+                    order.total
+                    or Decimal("0.00")
+                )
+
+        # --------------------------------------------------
+        # OPENING BALANCE
+        #
+        # Closing balance + paid spending in this month
+        # --------------------------------------------------
+
+        opening_balance = (
+            closing_balance
+            + statement["total"]
+        )
+
+        statement["opening_balance"] = (
+            opening_balance.quantize(
+                Decimal("0.01")
+            )
+        )
+
+        statement["closing_balance"] = (
+            closing_balance.quantize(
+                Decimal("0.01")
+            )
+        )
+
+        statement["month_paid_orders"] = (
+            month_paid_orders
+        )
+
+    # ------------------------------------------------------
+    # TOTAL SPENDING
+    # ------------------------------------------------------
+
+    total_spending = sum(
+        statement["total"]
+        for statement in statements
+    )
+
+    total_spending = total_spending.quantize(
+        Decimal("0.01")
+    )
+
+    # ------------------------------------------------------
+    # CONTEXT
+    # ------------------------------------------------------
+
+    context = {
+
+        "profile": profile,
+
+        "statements": statements,
+
+        "selected_month": selected_month,
+
+        "selected_statement": selected_statement,
+
+        "total_spending": total_spending,
+    }
+
+    # ------------------------------------------------------
+    # RENDER
+    # ------------------------------------------------------
+
+    return render(
+        request,
+        "shopping/monthly_statements.html",
+        context,
     )

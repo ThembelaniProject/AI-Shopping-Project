@@ -36,7 +36,7 @@
 
         font-size: 2rem;
 
-        color: #f1f5f9;
+        color: #0a0a0a;
 
     }
 
@@ -427,13 +427,14 @@
 
     .profile-actions {
 
-        margin-top: 1.5rem;
+        margin-bottom: 1.25rem;
 
         display: flex;
 
         gap: 0.75rem;
 
         flex-wrap: wrap;
+      
 
     }
 
@@ -448,7 +449,7 @@
 
         text-decoration: none;
 
-        color: #c7d2fe;
+        color: #0e0f0e;
 
         background:
             rgba(
@@ -513,7 +514,26 @@
         </div>
 
     {% endif %}
+<div class="profile-actions">
 
+        <a href="{% url 'accounts:edit_profile' %}">
+            Edit Account Details
+        </a>
+
+        <a href="{% url 'shopping:cart' %}">
+            View Cart
+        </a>
+        <a href="{% url 'shopping:monthly_statements' %}">
+            View Monthly Statements
+        </a>
+
+        <a
+                href="{% url 'preferences:preferences' %}"
+                class="nav-link"
+            >
+                My Preferences
+            </a>
+    </div>
 
     <div class="profile-grid">
 
@@ -645,6 +665,7 @@
         <!-- ==========================================
              LOCATION
         =========================================== -->
+     
 
         <section class="profile-card">
 
@@ -652,34 +673,40 @@
                 My Location
             </h2>
 
-
             <div
                 id="location-status"
                 class="location-status"
             >
 
-                {% if profile.latitude and profile.longitude %}
+                {% if user_address %}
 
-                    Location is saved.
+                    <strong>📍 Detected Location</strong>
 
-                    <br>
+                    <br><br>
 
-                    Latitude:
-                    {{ profile.latitude }}
+                    <span id="profile-address">
+                        {{ user_address }}
+                    </span>
 
-                    <br>
+                {% elif user_latitude and user_longitude %}
 
-                    Longitude:
-                    {{ profile.longitude }}
+                    <strong>📍 Location detected</strong>
+
+                    <br><br>
+
+                    <span id="profile-address">
+                        Finding your address...
+                    </span>
 
                 {% else %}
 
-                    Your location has not been detected yet.
+                    <span id="profile-address">
+                        Your location has not been detected yet.
+                    </span>
 
                 {% endif %}
 
             </div>
-
 
             <button
                 type="button"
@@ -688,7 +715,6 @@
             >
                 📍 Detect My Location
             </button>
-
 
             <p
                 style="
@@ -704,6 +730,7 @@
             </p>
 
         </section>
+
 
 
         <!-- ==========================================
@@ -761,25 +788,13 @@
     </div>
 
 
-    <div class="profile-actions">
-
-        <a href="{% url 'products:search' %}">
-            Find Products
-        </a>
-
-        <a href="{% url 'shopping:cart' %}">
-            View Cart
-        </a>
-
-    </div>
+    
 
 </main>
 
 {% endblock %}
 
-
 {% block extra_js %}
-
 
 <script>
 
@@ -792,33 +807,61 @@ document.addEventListener(
                 "location-status"
             );
 
-        const latitudeElement =
+        const addressElement =
             document.getElementById(
-                "profile-latitude"
+                "profile-address"
             );
 
-        const longitudeElement =
+        const detectButton =
             document.getElementById(
-                "profile-longitude"
+                "detect-location"
             );
 
 
         function setStatus(
             message,
-            success = false
+            success = false,
+            error = false
         ) {
 
             if (!locationStatus) {
                 return;
             }
 
-            locationStatus.textContent =
-                message;
-
             locationStatus.classList.toggle(
                 "success",
                 success
             );
+
+            locationStatus.classList.toggle(
+                "error",
+                error
+            );
+
+            if (addressElement) {
+
+                addressElement.textContent =
+                    message;
+
+            } else {
+
+                locationStatus.textContent =
+                    message;
+
+            }
+
+        }
+
+
+        function showAddress(address) {
+
+            if (!addressElement) {
+                return;
+            }
+
+            addressElement.textContent =
+                address ||
+                "Address could not be determined.";
 
         }
 
@@ -827,8 +870,10 @@ document.addEventListener(
 
             let cookieValue = null;
 
-            if (document.cookie &&
-                document.cookie !== "") {
+            if (
+                document.cookie &&
+                document.cookie !== ""
+            ) {
 
                 const cookies =
                     document.cookie.split(";");
@@ -887,6 +932,11 @@ document.addEventListener(
             );
 
 
+            setStatus(
+                "Saving your location..."
+            );
+
+
             fetch(
                 "{% url 'accounts:update_location' %}",
                 {
@@ -899,46 +949,97 @@ document.addEventListener(
                             csrfToken,
 
                         "X-Requested-With":
-                            "XMLHttpRequest"
+                            "XMLHttpRequest",
+
+                        "Accept":
+                            "application/json"
                     }
                 }
             )
             .then(function (response) {
+
+                if (!response.ok) {
+
+                    throw new Error(
+                        "Server returned HTTP " +
+                        response.status
+                    );
+
+                }
 
                 return response.json();
 
             })
             .then(function (data) {
 
+                console.log(
+                    "Location response:",
+                    data
+                );
+
+
                 if (!data.success) {
 
                     setStatus(
                         data.error ||
-                        "Could not save location."
+                        "Could not save location.",
+                        false,
+                        true
                     );
 
                     return;
                 }
 
 
-                if (latitudeElement) {
+                /*
+                 * Display the address returned
+                 * by the Django view.
+                 */
 
-                    latitudeElement.textContent =
-                        data.latitude;
-                }
-
-
-                if (longitudeElement) {
-
-                    longitudeElement.textContent =
-                        data.longitude;
-                }
-
-
-                setStatus(
-                    "Your location has been detected and saved.",
-                    true
+                showAddress(
+                    data.address
                 );
+
+
+                /*
+                 * Keep the success styling.
+                 */
+
+                locationStatus.classList.add(
+                    "success"
+                );
+
+                locationStatus.classList.remove(
+                    "error"
+                );
+
+
+                /*
+                 * Change the heading/message.
+                 */
+
+                const heading =
+                    locationStatus.querySelector(
+                        "strong"
+                    );
+
+                if (heading) {
+
+                    heading.textContent =
+                        "📍 Detected Location";
+
+                }
+
+
+                if (detectButton) {
+
+                    detectButton.disabled =
+                        false;
+
+                    detectButton.textContent =
+                        "📍 Update My Location";
+
+                }
 
             })
             .catch(function (error) {
@@ -948,11 +1049,23 @@ document.addEventListener(
                     error
                 );
 
+
                 setStatus(
-                    "Your location was detected, but could not be saved."
+                    "Your location was detected, but could not be saved.",
+                    false,
+                    true
                 );
 
+
+                if (detectButton) {
+
+                    detectButton.disabled =
+                        false;
+
+                }
+
             });
+
         }
 
 
@@ -961,10 +1074,22 @@ document.addEventListener(
             if (!navigator.geolocation) {
 
                 setStatus(
-                    "Your browser does not support automatic location detection."
+                    "Your browser does not support automatic location detection.",
+                    false,
+                    true
                 );
 
                 return;
+            }
+
+
+            if (detectButton) {
+
+                detectButton.disabled =
+                    true;
+
+                detectButton.textContent =
+                    "📍 Detecting...";
             }
 
 
@@ -982,6 +1107,17 @@ document.addEventListener(
 
                     const longitude =
                         position.coords.longitude;
+
+
+                    console.log(
+                        "Latitude:",
+                        latitude
+                    );
+
+                    console.log(
+                        "Longitude:",
+                        longitude
+                    );
 
 
                     saveLocation(
@@ -1011,7 +1147,9 @@ document.addEventListener(
                         message =
                             "Location permission was denied. Please allow location access in your browser.";
 
-                    } else if (
+                    }
+
+                    else if (
                         error.code ===
                         error.POSITION_UNAVAILABLE
                     ) {
@@ -1019,7 +1157,9 @@ document.addEventListener(
                         message =
                             "Your location is currently unavailable.";
 
-                    } else if (
+                    }
+
+                    else if (
                         error.code ===
                         error.TIMEOUT
                     ) {
@@ -1029,7 +1169,23 @@ document.addEventListener(
                     }
 
 
-                    setStatus(message);
+                    setStatus(
+                        message,
+                        false,
+                        true
+                    );
+
+
+                    if (detectButton) {
+
+                        detectButton.disabled =
+                            false;
+
+                        detectButton.textContent =
+                            "📍 Detect My Location";
+
+                    }
+
                 },
 
                 {
@@ -1043,13 +1199,29 @@ document.addEventListener(
         }
 
 
-        // Automatically detect location
-        detectLocation();
+        /*
+         * Detect only when the user clicks.
+         *
+         * This prevents the browser location
+         * permission popup from appearing every
+         * time the profile page opens.
+         */
+
+        if (detectButton) {
+
+            detectButton.addEventListener(
+                "click",
+                detectLocation
+            );
+
+        }
 
     }
 );
 
 </script>
+
+
 
 
 {% endblock %}

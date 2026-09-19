@@ -1,0 +1,1345 @@
+
+
+{% extends "base.html" %}
+{% load static %}
+{% block content %}
+
+<style>
+/* ======================================================
+GLOBAL
+====================================================== */
+
+{
+box-sizing: border-box;
+}
+
+.statement-page {
+max-width: 1100px;
+margin: 40px auto;
+padding: 55px 65px;
+background: #ffffff;
+color: #111111;
+font-family: Arial, Helvetica, sans-serif;
+box-shadow: 0 0 15px rgba(0, 0, 0, 0.12);
+}
+
+/* ======================================================
+HEADER
+====================================================== */
+
+.statement-header {
+    position: relative;
+    min-height: 300px;
+}
+
+.statement-brand {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-top: 10px;
+}
+
+.statement-logo {
+    width: 90px;
+    height: 90px;
+    object-fit: contain;
+}
+
+.statement-title {
+    display: inline-block;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+
+.statement-info {
+float: right;
+width: 310px;
+margin-top: 20px;
+font-size: 13px;
+line-height: 1.55;
+}
+
+.customer-info {
+position: absolute;
+left: 0;
+bottom: 20px;
+font-size: 14px;
+line-height: 1.55;
+}
+
+/* ======================================================
+STATUS BADGES
+====================================================== */
+
+.paid,
+.pending,
+.cancelled,
+.failed,
+.unknown-status {
+display: inline-block;
+margin-top: 4px;
+padding: 3px 8px;
+border-radius: 10px;
+font-size: 10px;
+font-weight: bold;
+}
+
+.paid {
+background: #198754;
+color: white;
+}
+
+.pending {
+background: #ffc107;
+color: #111;
+}
+
+.cancelled {
+background: #6c757d;
+color: white;
+}
+
+.failed {
+background: #dc3545;
+color: white;
+}
+
+.unknown-status {
+background: #343a40;
+color: white;
+}
+
+/* ======================================================
+STATUS SUMMARY
+====================================================== */
+
+.status-summary {
+display: grid;
+grid-template-columns: repeat(4, 1fr);
+gap: 12px;
+margin-top: 25px;
+}
+
+.status-box {
+padding: 15px;
+border-radius: 8px;
+text-align: center;
+border: 1px solid #ddd;
+}
+
+.status-box-number {
+display: block;
+font-size: 24px;
+font-weight: bold;
+margin-bottom: 4px;
+}
+
+.status-box-label {
+font-size: 11px;
+color: #555;
+text-transform: uppercase;
+}
+
+.status-paid {
+background: #eaf7ef;
+border-color: #b7dfc5;
+}
+
+.status-pending {
+background: #fff8df;
+border-color: #ffe69c;
+}
+
+.status-cancelled {
+background: #f1f3f5;
+border-color: #ced4da;
+}
+
+.status-failed {
+background: #fff0f0;
+border-color: #f5c2c7;
+}
+
+/* ======================================================
+ANALYSIS SECTION
+====================================================== */
+
+.analysis-section {
+margin-top: 35px;
+padding-top: 25px;
+border-top: 2px solid #111;
+}
+
+.analysis-title {
+margin: 0 0 5px 0;
+font-size: 21px;
+font-weight: bold;
+}
+
+.analysis-description {
+margin: 0 0 25px 0;
+color: #666;
+font-size: 12px;
+}
+
+/* ======================================================
+CHART GRID
+====================================================== */
+
+.chart-grid {
+display: grid;
+grid-template-columns: repeat(2, minmax(0, 1fr));
+gap: 25px;
+}
+
+.chart-card {
+min-width: 0;
+padding: 20px;
+border: 1px solid #ddd;
+border-radius: 10px;
+background: #ffffff;
+}
+
+.chart-card h3 {
+margin: 0 0 5px 0;
+font-size: 15px;
+}
+
+.chart-card p {
+margin: 0 0 15px 0;
+color: #666;
+font-size: 11px;
+}
+
+.chart-container {
+position: relative;
+height: 280px;
+width: 100%;
+}
+
+.chart-container canvas {
+max-width: 100%;
+}
+
+/* ======================================================
+ANALYSIS NUMBERS
+====================================================== */
+
+.analysis-summary {
+display: grid;
+grid-template-columns: repeat(3, 1fr);
+gap: 12px;
+margin-top: 20px;
+}
+
+.analysis-box {
+padding: 14px;
+border-radius: 8px;
+background: #f8f9fa;
+border: 1px solid #ddd;
+}
+
+.analysis-box-label {
+display: block;
+color: #666;
+font-size: 11px;
+margin-bottom: 5px;
+}
+
+.analysis-box-value {
+font-size: 18px;
+font-weight: bold;
+}
+
+/* ======================================================
+TABLE
+====================================================== */
+
+.statement-table-wrapper {
+width: 100%;
+overflow-x: auto;
+margin-top: 30px;
+}
+
+.statement-table {
+width: 100%;
+border-collapse: collapse;
+font-size: 13px;
+}
+
+.statement-table thead {
+border-top: 2px solid #111;
+border-bottom: 2px solid #111;
+}
+
+.statement-table th {
+padding: 10px 7px;
+text-align: left;
+font-weight: bold;
+}
+
+.statement-table td {
+padding: 9px 7px;
+border-bottom: 1px solid #ddd;
+vertical-align: top;
+}
+
+.statement-table th:nth-child(1),
+.statement-table td:nth-child(1) {
+width: 105px;
+}
+
+.statement-table th:nth-child(2),
+.statement-table td:nth-child(2) {
+width: 105px;
+}
+
+.statement-table th:nth-child(4),
+.statement-table td:nth-child(4),
+.statement-table th:nth-child(5),
+.statement-table td:nth-child(5),
+.statement-table th:nth-child(6),
+.statement-table td:nth-child(6) {
+width: 120px;
+text-align: right;
+white-space: nowrap;
+}
+
+.money-out {
+color: #b42318;
+font-weight: 500;
+}
+
+.balance {
+font-weight: bold;
+}
+
+/* ======================================================
+SUMMARY
+====================================================== */
+
+.summary {
+margin-top: 30px;
+border-top: 2px solid #111;
+padding-top: 15px;
+}
+
+.summary-row {
+display: flex;
+justify-content: space-between;
+padding: 7px 0;
+font-size: 14px;
+}
+
+.summary-row.total {
+margin-top: 8px;
+padding-top: 12px;
+border-top: 1px solid #999;
+font-size: 18px;
+font-weight: bold;
+}
+
+/* ======================================================
+FOOTER
+====================================================== */
+
+.statement-footer {
+margin-top: 45px;
+padding-top: 15px;
+border-top: 1px solid #999;
+text-align: right;
+}
+
+.footer-one {
+font-size: 12px;
+font-weight: bold;
+}
+
+.footer-two,
+.footer-three {
+margin: 5px 0;
+color: #444;
+font-size: 10px;
+}
+
+/* ======================================================
+PRINT BUTTON
+====================================================== */
+
+.print-area {
+max-width: 1100px;
+margin: 20px auto;
+text-align: right;
+}
+
+.print-button {
+padding: 10px 20px;
+border: 0;
+border-radius: 5px;
+background: #198754;
+color: white;
+cursor: pointer;
+font-weight: bold;
+}
+
+.print-button:hover {
+background: #146c43;
+}
+
+/* ======================================================
+MOBILE
+====================================================== */
+
+@media (max-width: 768px) {
+
+.statement-page {
+    margin: 10px;
+    padding: 25px;
+}
+
+.statement-header {
+    min-height: 420px;
+}
+
+.statement-info {
+    float: none;
+    width: 100%;
+    margin-top: 35px;
+}
+
+.customer-info {
+    position: static;
+    margin-top: 40px;
+}
+
+.statement-table {
+    font-size: 11px;
+}
+
+.statement-table th,
+.statement-table td {
+    padding: 6px 4px;
+}
+
+.status-summary {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.chart-grid {
+    grid-template-columns: 1fr;
+}
+
+.analysis-summary {
+    grid-template-columns: 1fr;
+}
+
+.chart-container {
+    height: 250px;
+}
+
+}
+
+/* ======================================================
+PRINT
+====================================================== */
+
+@media print {
+
+body {
+    background: white !important;
+}
+
+nav,
+header,
+footer,
+.navbar,
+.print-area,
+.btn {
+    display: none !important;
+}
+
+.statement-page {
+    width: 100%;
+    max-width: none;
+    margin: 0;
+    padding: 25px;
+    box-shadow: none;
+}
+
+.analysis-section {
+    page-break-inside: avoid;
+}
+
+.chart-grid {
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.chart-card {
+    border: 1px solid #ccc;
+}
+
+.statement-table thead {
+    display: table-header-group;
+}
+
+.statement-table tr {
+    page-break-inside: avoid;
+}
+
+@page {
+    size: A4;
+    margin: 12mm;
+}
+
+}
+
+</style> <!-- ====================================================== CHART.JS ====================================================== --> <script src="https://cdn.jsdelivr.net/npm/chart.js"></script> <!-- ====================================================== PRINT BUTTON ====================================================== --> <div class="print-area">
+<button
+    type="button"
+    class="print-button"
+    onclick="window.print()"
+>
+    Print Statement
+</button>
+
+</div> <!-- ====================================================== STATEMENT ====================================================== --> <div class="statement-page">
+{% if selected_statement %}
+
+<!-- ==================================================
+     HEADER
+================================================== -->
+
+<div class="statement-header">
+
+    <div class="statement-brand">
+    <img
+    src="{% static 'images/logo-SMARTSPEND-72dpi.png' %}"
+    alt="Shopping System Logo"
+    class="statement-logo"
+>
+
+
+    <strong class="statement-title">
+        Monthly Shopping Statement
+    </strong>
+</div>
+
+
+    <div class="statement-info">
+
+        <strong>
+            Shopping Account Statement
+        </strong>
+
+        <br>
+
+        Account Holder:
+        {{ request.user.get_full_name|default:request.user.username }}
+
+        <br>
+
+        Statement Month:
+        {{ selected_statement.label }}
+
+        <br>
+
+        Print Date:
+        {% now "d/m/Y" %}
+
+        <br><br>
+
+        <strong>
+            Available Amount:
+        </strong>
+
+        R{{ profile.available_amount|floatformat:2 }}
+
+        <br>
+
+        <strong>
+            Opening Balance:
+        </strong>
+
+        R{{ selected_statement.opening_balance|floatformat:2 }}
+
+        <br>
+
+        <strong>
+            Closing Balance:
+        </strong>
+
+        R{{ selected_statement.closing_balance|floatformat:2 }}
+
+    </div>
+
+    <div class="customer-info">
+
+        <strong>
+            {{ request.user.get_full_name|default:request.user.username }}
+        </strong>
+
+        <br>
+
+        {{ request.user.email }}
+
+        <br>
+
+        Monthly Shopping Account
+
+        <br>
+
+        All Order Statuses
+
+    </div>
+
+</div>
+
+<!-- ==================================================
+     STATUS SUMMARY
+================================================== -->
+
+<div class="status-summary">
+
+    <div class="status-box status-paid">
+
+        <span class="status-box-number">
+            {{ selected_statement.paid_orders|length }}
+        </span>
+
+        <span class="status-box-label">
+            Paid Orders
+        </span>
+
+    </div>
+
+    <div class="status-box status-pending">
+
+        <span class="status-box-number">
+            {{ selected_statement.pending_orders|length }}
+        </span>
+
+        <span class="status-box-label">
+            Pending Orders
+        </span>
+
+    </div>
+
+    <div class="status-box status-cancelled">
+
+        <span class="status-box-number">
+            {{ selected_statement.cancelled_orders|length }}
+        </span>
+
+        <span class="status-box-label">
+            Cancelled Orders
+        </span>
+
+    </div>
+
+    <div class="status-box status-failed">
+
+        <span class="status-box-number">
+            {{ selected_statement.failed_orders|length }}
+        </span>
+
+        <span class="status-box-label">
+            Failed Orders
+        </span>
+
+    </div>
+
+</div>
+
+<!-- ==================================================
+     ANALYSIS
+================================================== -->
+
+<div class="analysis-section">
+
+    <h2 class="analysis-title">
+        Order Analysis
+    </h2>
+
+    <p class="analysis-description">
+        Visual analysis of orders and paid-order amounts for
+        {{ selected_statement.label }}.
+    </p>
+
+    <!-- ==============================================
+         CHARTS
+    ============================================== -->
+
+    <div class="chart-grid">
+
+        <!-- ==========================================
+             ORDER STATUS PIE CHART
+        ========================================== -->
+
+        <div class="chart-card">
+
+            <h3>
+                Order Status Distribution
+            </h3>
+
+            <p>
+                Distribution of all orders by status.
+            </p>
+
+            <div class="chart-container">
+
+                <canvas id="orderStatusChart"></canvas>
+
+            </div>
+
+        </div>
+
+        <!-- ==========================================
+             PAID AMOUNT DOUGHNUT
+        ========================================== -->
+
+        <div class="chart-card">
+
+            <h3>
+                Paid Amount Breakdown
+            </h3>
+
+            <p>
+                Breakdown of the amount charged to paid orders.
+            </p>
+
+            <div class="chart-container">
+
+                <canvas id="paidAmountChart"></canvas>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    <!-- ==============================================
+         ANALYSIS NUMBERS
+    ============================================== -->
+
+    <div class="analysis-summary">
+
+        <div class="analysis-box">
+
+            <span class="analysis-box-label">
+                Total Orders
+            </span>
+
+            <span class="analysis-box-value">
+                {{ selected_statement.orders|length }}
+            </span>
+
+        </div>
+
+        <div class="analysis-box">
+
+            <span class="analysis-box-label">
+                Pending Orders
+            </span>
+
+            <span class="analysis-box-value">
+                {{ selected_statement.pending_orders|length }}
+            </span>
+
+        </div>
+
+        <div class="analysis-box">
+
+            <span class="analysis-box-label">
+                Total Paid
+            </span>
+
+            <span class="analysis-box-value">
+                R{{ selected_statement.total|floatformat:2 }}
+            </span>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ==================================================
+     TRANSACTIONS
+================================================== -->
+
+<div class="statement-table-wrapper">
+
+    <table class="statement-table">
+
+        <thead>
+
+            <tr>
+
+                <th>
+                    Posting Date
+                </th>
+
+                <th>
+                    Transaction<br>
+                    Date
+                </th>
+
+                <th>
+                    Description
+                </th>
+
+                <th>
+                    Money In (R)
+                </th>
+
+                <th>
+                    Money Out (R)
+                </th>
+
+                <th>
+                    Balance (R)
+                </th>
+
+            </tr>
+
+        </thead>
+
+        <tbody>
+
+            {% for order in selected_statement.orders %}
+
+                <tr>
+
+                    <td>
+                        {{ order.created_at|date:"d/m/Y" }}
+                    </td>
+
+                    <td>
+                        {{ order.created_at|date:"d/m/Y" }}
+                    </td>
+
+                    <td>
+
+                        <strong>
+                            Order #{{ order.id }}
+                        </strong>
+
+                        <br>
+
+                        Shopping Purchase
+
+                        <br>
+
+                        {% if order.payment_method %}
+
+                            Payment:
+                            {{ order.payment_method|title }}
+
+                            <br>
+
+                        {% endif %}
+
+                        {% if order.payment_status == "paid" %}
+
+                            <span class="paid">
+                                PAID
+                            </span>
+
+                        {% elif order.payment_status == "pending" %}
+
+                            <span class="pending">
+                                PENDING
+                            </span>
+
+                        {% elif order.payment_status == "cancelled" %}
+
+                            <span class="cancelled">
+                                CANCELLED
+                            </span>
+
+                        {% elif order.payment_status == "failed" %}
+
+                            <span class="failed">
+                                FAILED
+                            </span>
+
+                        {% else %}
+
+                            <span class="unknown-status">
+                                {{ order.payment_status|upper }}
+                            </span>
+
+                        {% endif %}
+
+                    </td>
+
+                    <td>
+                        &nbsp;
+                    </td>
+
+                    <td class="money-out">
+
+                        {% if order.payment_status == "paid" %}
+
+                            -{{ order.total|floatformat:2 }}
+
+                        {% else %}
+
+                            —
+
+                        {% endif %}
+
+                    </td>
+
+                    <td class="balance">
+
+                        {% if order.payment_status == "paid" %}
+
+                            R{{ order.running_balance|floatformat:2 }}
+
+                        {% else %}
+
+                            —
+
+                        {% endif %}
+
+                    </td>
+
+                </tr>
+
+            {% empty %}
+
+                <tr>
+
+                    <td
+                        colspan="6"
+                        style="
+                            text-align:center;
+                            padding:30px;
+                        "
+                    >
+
+                        No orders were found
+                        for this month.
+
+                    </td>
+
+                </tr>
+
+            {% endfor %}
+
+        </tbody>
+
+    </table>
+
+</div>
+
+<!-- ==================================================
+     SUMMARY
+================================================== -->
+
+<div class="summary">
+
+    <div class="summary-row">
+
+        <span>
+            Opening Balance
+        </span>
+
+        <strong>
+            R{{ selected_statement.opening_balance|floatformat:2 }}
+        </strong>
+
+    </div>
+
+    <div class="summary-row">
+
+        <span>
+            Total Orders
+        </span>
+
+        <strong>
+            {{ selected_statement.orders|length }}
+        </strong>
+
+    </div>
+
+    <div class="summary-row">
+
+        <span>
+            Paid Orders
+        </span>
+
+        <strong>
+            {{ selected_statement.paid_orders|length }}
+        </strong>
+
+    </div>
+
+    <div class="summary-row">
+
+        <span>
+            Pending Orders
+        </span>
+
+        <strong>
+            {{ selected_statement.pending_orders|length }}
+        </strong>
+
+    </div>
+
+    <div class="summary-row">
+
+        <span>
+            Cancelled Orders
+        </span>
+
+        <strong>
+            {{ selected_statement.cancelled_orders|length }}
+        </strong>
+
+    </div>
+
+    <div class="summary-row">
+
+        <span>
+            Failed Orders
+        </span>
+
+        <strong>
+            {{ selected_statement.failed_orders|length }}
+        </strong>
+
+    </div>
+
+    <div class="summary-row">
+
+        <span>
+            Subtotal — Paid Orders
+        </span>
+
+        <strong>
+            R{{ selected_statement.subtotal|floatformat:2 }}
+        </strong>
+
+    </div>
+
+    <div class="summary-row">
+
+        <span>
+            Shipping — Paid Orders
+        </span>
+
+        <strong>
+            R{{ selected_statement.shipping|floatformat:2 }}
+        </strong>
+
+    </div>
+
+    <div class="summary-row">
+
+        <span>
+            Total Paid
+        </span>
+
+        <strong>
+            R{{ selected_statement.total|floatformat:2 }}
+        </strong>
+
+    </div>
+
+    <div class="summary-row total">
+
+        <span>
+            Closing Balance
+        </span>
+
+        <strong>
+            R{{ selected_statement.closing_balance|floatformat:2 }}
+        </strong>
+
+    </div>
+
+</div>
+
+<!-- ==================================================
+     FOOTER
+================================================== -->
+
+<div class="statement-footer">
+
+    <p class="footer-one">
+        Monthly Shopping Account Statement
+    </p>
+
+    <p class="footer-two">
+
+        This statement contains all orders for
+        {{ selected_statement.label }}.
+
+    </p>
+
+    <p class="footer-two">
+
+        Paid orders affect the account balance.
+
+        Pending, cancelled and failed orders
+        are displayed for reference only.
+
+    </p>
+
+    <p class="footer-two">
+
+        All amounts are displayed in
+        South African Rand (R).
+
+    </p>
+
+    <p class="footer-three">
+
+        Generated electronically by the shopping system.
+
+    </p>
+
+</div>
+
+{% else %}
+
+<div
+    style="
+        text-align:center;
+        padding:80px 20px;
+    "
+>
+
+    <h2>
+        No Statement Available
+    </h2>
+
+    <p>
+        There are no orders available for this month.
+    </p>
+
+</div>
+
+{% endif %}
+
+</div> <!-- ====================================================== CHART JAVASCRIPT ====================================================== -->
+{% if selected_statement %}
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+/* ==================================================
+   ORDER STATUS CHART
+================================================== */
+
+const statusCanvas =
+    document.getElementById("orderStatusChart");
+
+if (statusCanvas) {
+
+    const paidOrders =
+        {{ selected_statement.paid_orders|length|default:0 }};
+
+    const pendingOrders =
+        {{ selected_statement.pending_orders|length|default:0 }};
+
+    const cancelledOrders =
+        {{ selected_statement.cancelled_orders|length|default:0 }};
+
+    const failedOrders =
+        {{ selected_statement.failed_orders|length|default:0 }};
+
+    new Chart(statusCanvas, {
+
+        type: "doughnut",
+
+        data: {
+
+            labels: [
+                "Paid",
+                "Pending",
+                "Cancelled",
+                "Failed"
+            ],
+
+            datasets: [{
+
+                data: [
+                    paidOrders,
+                    pendingOrders,
+                    cancelledOrders,
+                    failedOrders
+                ],
+
+                backgroundColor: [
+                    "#198754",
+                    "#ffc107",
+                    "#6c757d",
+                    "#dc3545"
+                ],
+
+                borderColor: "#ffffff",
+
+                borderWidth: 3
+
+            }]
+
+        },
+
+        options: {
+
+            responsive: true,
+
+            maintainAspectRatio: false,
+
+            cutout: "55%",
+
+            plugins: {
+
+                legend: {
+
+                    position: "bottom",
+
+                    labels: {
+                        padding: 15
+                    }
+
+                },
+
+                tooltip: {
+
+                    callbacks: {
+
+                        label: function (context) {
+
+                            const value =
+                                context.raw || 0;
+
+                            return " " +
+                                context.label +
+                                ": " +
+                                value +
+                                " order(s)";
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        }
+
+    });
+
+}
+
+/* ==================================================
+   PAID AMOUNT CHART
+================================================== */
+
+const amountCanvas =
+    document.getElementById("paidAmountChart");
+
+if (amountCanvas) {
+
+    const subtotal =
+        parseFloat(
+            "{{ selected_statement.subtotal|default:0 }}"
+        ) || 0;
+
+    const shipping =
+        parseFloat(
+            "{{ selected_statement.shipping|default:0 }}"
+        ) || 0;
+
+    new Chart(amountCanvas, {
+
+        type: "doughnut",
+
+        data: {
+
+            labels: [
+                "Products",
+                "Shipping"
+            ],
+
+            datasets: [{
+
+                data: [
+                    subtotal,
+                    shipping
+                ],
+
+                backgroundColor: [
+                    "#0d6efd",
+                    "#6f42c1"
+                ],
+
+                borderColor: "#ffffff",
+
+                borderWidth: 3
+
+            }]
+
+        },
+
+        options: {
+
+            responsive: true,
+
+            maintainAspectRatio: false,
+
+            cutout: "55%",
+
+            plugins: {
+
+                legend: {
+
+                    position: "bottom",
+
+                    labels: {
+                        padding: 15
+                    }
+
+                },
+
+                tooltip: {
+
+                    callbacks: {
+
+                        label: function (context) {
+
+                            const value =
+                                Number(context.raw || 0)
+                                .toFixed(2);
+
+                            return " " +
+                                context.label +
+                                ": R" +
+                                value;
+
+                        }
+
+                    }
+
+                }
+
+            }
+
+        }
+
+    });
+
+}
+
+});
+
+</script>
+{% endif %}
+
+{% endblock %}

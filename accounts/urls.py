@@ -84,6 +84,11 @@ path(
     views.update_budget,
     name="update_budget",
 ),
+path(
+    "profile/edit/",
+    views.edit_profile,
+    name="edit_profile"
+),
 
 
 ]
