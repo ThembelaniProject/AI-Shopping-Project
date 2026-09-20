@@ -39,6 +39,17 @@ path(
     name="register",
 ),
 
+path(
+        "privacy-policy/",
+        views.privacy_policy,
+        name="privacy_policy"
+    ),
+
+path(
+        "terms-conditions/",
+        views.terms_conditions,
+        name="terms_conditions"
+    ),
 # ------------------------------------------------------
 # MICROSOFT LOGIN
 # ------------------------------------------------------

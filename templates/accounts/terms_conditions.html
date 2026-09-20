@@ -1,0 +1,538 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Terms & Conditions - SmartSpend</title>
+
+    <style>
+        :root {
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --bg: #0f172a;
+            --card-bg: #1e293b;
+            --text: #f1f5f9;
+            --text-muted: #94a3b8;
+            --border: #334155;
+            --radius: 16px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            -webkit-text-size-adjust: 100%;
+            text-size-adjust: 100%;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system,
+                BlinkMacSystemFont, sans-serif;
+
+            background:
+                linear-gradient(
+                    rgba(15, 23, 42, 0.88),
+                    rgba(15, 23, 42, 0.94)
+                ),
+                url("{% static 'images/DUT-headline-Image.png' %}");
+
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+
+            color: var(--text);
+            min-height: 100vh;
+
+            padding: 2rem 1rem;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+
+        .logo {
+            width: 90px;
+            max-width: 25vw;
+            height: auto;
+            margin-bottom: 1rem;
+
+            filter: drop-shadow(
+                0 8px 18px rgba(0, 0, 0, 0.35)
+            );
+        }
+
+        .header h1 {
+            font-size: clamp(1.6rem, 5vw, 2.2rem);
+            margin-bottom: 0.5rem;
+
+            background: linear-gradient(
+                135deg,
+                #818cf8,
+                #c084fc
+            );
+
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .header p {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        .card {
+            background: rgba(30, 41, 59, 0.94);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+
+            padding: clamp(1.5rem, 5vw, 2.5rem);
+
+            box-shadow:
+                0 25px 50px -12px rgba(0, 0, 0, 0.5);
+
+            backdrop-filter: blur(10px);
+        }
+
+        .section {
+            margin-bottom: 2rem;
+        }
+
+        .section:last-child {
+            margin-bottom: 0;
+        }
+
+        .section h2 {
+            color: #a5b4fc;
+            font-size: 1.2rem;
+            margin-bottom: 0.75rem;
+        }
+
+        .section p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.7;
+            margin-bottom: 0.75rem;
+        }
+
+        .section ul {
+            margin: 0.5rem 0 0 1.25rem;
+            color: var(--text-muted);
+        }
+
+        .section li {
+            margin-bottom: 0.55rem;
+            line-height: 1.6;
+        }
+
+        .highlight {
+            background: rgba(99, 102, 241, 0.12);
+            border: 1px solid rgba(99, 102, 241, 0.3);
+            border-radius: 10px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .highlight p {
+            margin: 0;
+            color: #c7d2fe;
+        }
+
+        .back-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+
+            margin-top: 1.5rem;
+
+            padding: 0.8rem 1.2rem;
+
+            background: linear-gradient(
+                135deg,
+                var(--primary),
+                #7c3aed
+            );
+
+            color: white;
+            text-decoration: none;
+
+            border-radius: 10px;
+
+            font-weight: 600;
+            font-size: 0.9rem;
+
+            transition:
+                transform 0.15s,
+                box-shadow 0.15s;
+        }
+
+        .back-link:hover {
+            transform: translateY(-1px);
+            box-shadow:
+                0 8px 20px rgba(99, 102, 241, 0.35);
+        }
+
+        .footer {
+            text-align: center;
+            color: #64748b;
+            font-size: 0.8rem;
+            margin-top: 1.5rem;
+        }
+
+        @media (max-width: 480px) {
+            body {
+                padding: 1rem 0.75rem;
+            }
+
+            .card {
+                padding: 1.25rem;
+            }
+
+            .section h2 {
+                font-size: 1.1rem;
+            }
+
+            .section p,
+            .section li {
+                font-size: 0.9rem;
+            }
+
+            .back-link {
+                width: 100%;
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            html {
+                scroll-behavior: auto;
+            }
+
+            .back-link {
+                transition: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <div class="header">
+
+        <img
+            src="{% static 'images/logo-SMARTSPEND-72dpi.png' %}"
+            alt="SmartSpend Logo"
+            class="logo"
+        >
+
+        <h1>Terms &amp; Conditions</h1>
+
+        <p>
+            SmartSpend - AI Shopping Assistant
+        </p>
+
+    </div>
+
+
+    <div class="card">
+
+        <div class="highlight">
+            <p>
+                By creating and using a SmartSpend account, you agree
+                to comply with these Terms &amp; Conditions.
+                Please read them carefully before using the service.
+            </p>
+        </div>
+
+
+        <div class="section">
+
+            <h2>1. Acceptance of Terms</h2>
+
+            <p>
+                By registering for or using SmartSpend, you confirm
+                that you have read, understood, and agreed to these
+                Terms &amp; Conditions.
+            </p>
+
+            <p>
+                If you do not agree with these terms, please do not
+                create an account or use the SmartSpend service.
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>2. About SmartSpend</h2>
+
+            <p>
+                SmartSpend is an AI-assisted shopping application
+                designed to provide personalised product
+                recommendations based on information supplied by
+                the user.
+            </p>
+
+            <p>
+                Recommendations are intended to assist users with
+                their shopping decisions and should not be considered
+                a guarantee that a particular product is suitable,
+                available, or offered at a particular price.
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>3. User Accounts</h2>
+
+            <p>
+                Users are responsible for providing accurate
+                information when creating an account.
+            </p>
+
+            <ul>
+                <li>
+                    You must provide accurate and current account
+                    information.
+                </li>
+
+                <li>
+                    You are responsible for keeping your password
+                    confidential.
+                </li>
+
+                <li>
+                    You should notify the system administrator if
+                    you believe your account has been accessed
+                    without permission.
+                </li>
+
+                <li>
+                    You are responsible for activity performed
+                    through your account.
+                </li>
+            </ul>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>4. Shopping Recommendations</h2>
+
+            <p>
+                SmartSpend may use information such as your stated
+                preferences, shopping budget, and product information
+                to generate recommendations.
+            </p>
+
+            <p>
+                AI-generated recommendations may contain errors or
+                inaccuracies. Users should independently verify
+                product specifications, prices, availability, delivery
+                information, and other important details before making
+                a purchase.
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>5. Product Prices and Availability</h2>
+
+            <p>
+                Product prices, stock levels, descriptions, delivery
+                charges, promotions, and availability may change
+                without notice.
+            </p>
+
+            <p>
+                SmartSpend does not guarantee that information
+                displayed by the application will remain accurate
+                after it has been retrieved.
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>6. User Responsibilities</h2>
+
+            <p>
+                You agree to use SmartSpend lawfully and responsibly.
+            </p>
+
+            <ul>
+                <li>
+                    Do not attempt to gain unauthorised access to
+                    another user's account.
+                </li>
+
+                <li>
+                    Do not interfere with the operation or security
+                    of the application.
+                </li>
+
+                <li>
+                    Do not use the service for unlawful activities.
+                </li>
+
+                <li>
+                    Do not submit information that you do not have
+                    permission to provide.
+                </li>
+            </ul>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>7. Privacy</h2>
+
+            <p>
+                Information collected through SmartSpend is handled
+                in accordance with our Privacy Policy.
+            </p>
+
+            <p>
+                By using the service, you acknowledge that certain
+                information may be required to provide account,
+                personalisation, and shopping functionality.
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>8. Intellectual Property</h2>
+
+            <p>
+                The SmartSpend application, including its design,
+                branding, interface, and original content, may be
+                protected by applicable intellectual property laws.
+            </p>
+
+            <p>
+                Users may not reproduce, modify, distribute, or
+                commercially exploit application content without
+                appropriate authorisation.
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>9. Service Availability</h2>
+
+            <p>
+                SmartSpend may occasionally be unavailable because
+                of maintenance, technical problems, updates, or
+                circumstances outside the application's control.
+            </p>
+
+            <p>
+                We do not guarantee uninterrupted or error-free
+                availability of the service.
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>10. Changes to These Terms</h2>
+
+            <p>
+                These Terms &amp; Conditions may be updated from time
+                to time. Updated terms may be published on this page.
+            </p>
+
+            <p>
+                Continued use of SmartSpend after an update indicates
+                that you have reviewed the updated terms.
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>11. Account Termination</h2>
+
+            <p>
+                Access to a SmartSpend account may be suspended or
+                terminated where necessary because of misuse,
+                security concerns, violation of these terms, or other
+                legitimate reasons.
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>12. Contact</h2>
+
+            <p>
+                If you have questions about these Terms &amp;
+                Conditions, please contact the SmartSpend project
+                administrator.
+            </p>
+
+        </div>
+
+
+        <div class="section">
+
+            <h2>13. Agreement</h2>
+
+            <p>
+                By selecting the acceptance checkbox during account
+                registration, you confirm that you have read and
+                agree to these Terms &amp; Conditions and the
+                SmartSpend Privacy Policy.
+            </p>
+
+        </div>
+
+
+        <a
+            href="{% url 'accounts:register' %}"
+            class="back-link"
+        >
+            Back to Registration
+        </a>
+
+    </div>
+
+
+    <div class="footer">
+        &copy; {% now "Y" %} SmartSpend. All rights reserved.
+    </div>
+
+</div>
+
+</body>
+</html>

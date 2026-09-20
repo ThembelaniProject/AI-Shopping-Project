@@ -1,0 +1,530 @@
+{% load static %}
+
+<!DOCTYPE html> <html lang="en"> <head> <meta charset="UTF-8"> <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Privacy Policy - SmartSpend</title>
+
+<style>
+    :root {
+        --primary: #6366f1;
+        --primary-hover: #4f46e5;
+        --bg: #0f172a;
+        --card-bg: #1e293b;
+        --text: #f1f5f9;
+        --text-muted: #94a3b8;
+        --border: #334155;
+        --radius: 16px;
+    }
+
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    body {
+        font-family: 'Segoe UI', system-ui, -apple-system,
+                     BlinkMacSystemFont, sans-serif;
+
+        background:
+            linear-gradient(
+                rgba(15, 23, 42, 0.88),
+                rgba(15, 23, 42, 0.94)
+            ),
+            url("{% static 'images/DUT-headline-Image.png' %}");
+
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+
+        color: var(--text);
+
+        min-height: 100vh;
+
+        padding: 2rem 1rem;
+    }
+
+    .container {
+        width: 100%;
+        max-width: 850px;
+        margin: 0 auto;
+    }
+
+    .header {
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+
+    .logo {
+        width: 90px;
+        height: auto;
+        margin-bottom: 1rem;
+
+        filter: drop-shadow(
+            0 8px 18px rgba(0, 0, 0, 0.35)
+        );
+    }
+
+    .header h1 {
+        font-size: clamp(1.8rem, 5vw, 2.5rem);
+
+        background:
+            linear-gradient(
+                135deg,
+                #818cf8,
+                #c084fc
+            );
+
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+    }
+
+    .header p {
+        color: var(--text-muted);
+        margin-top: 0.5rem;
+    }
+
+    .card {
+        background: rgba(30, 41, 59, 0.92);
+
+        border: 1px solid var(--border);
+
+        border-radius: var(--radius);
+
+        padding: clamp(1.5rem, 5vw, 2.5rem);
+
+        box-shadow:
+            0 25px 50px -12px
+            rgba(0, 0, 0, 0.5);
+
+        backdrop-filter: blur(10px);
+    }
+
+    .last-updated {
+        color: var(--text-muted);
+
+        font-size: 0.85rem;
+
+        margin-bottom: 2rem;
+
+        padding-bottom: 1rem;
+
+        border-bottom: 1px solid var(--border);
+    }
+
+    section {
+        margin-bottom: 2rem;
+    }
+
+    section:last-child {
+        margin-bottom: 0;
+    }
+
+    h2 {
+        font-size: 1.25rem;
+        margin-bottom: 0.75rem;
+        color: #c7d2fe;
+    }
+
+    p {
+        color: #cbd5e1;
+
+        font-size: 0.95rem;
+
+        line-height: 1.75;
+
+        margin-bottom: 0.75rem;
+    }
+
+    ul {
+        margin: 0.75rem 0 0.75rem 1.25rem;
+    }
+
+    li {
+        color: #cbd5e1;
+
+        font-size: 0.95rem;
+
+        line-height: 1.7;
+
+        margin-bottom: 0.4rem;
+    }
+
+    strong {
+        color: var(--text);
+    }
+
+    a {
+        color: #a5b4fc;
+        text-decoration: none;
+    }
+
+    a:hover {
+        color: #c7d2fe;
+        text-decoration: underline;
+    }
+
+    .back-button {
+        display: inline-block;
+
+        margin-top: 2rem;
+
+        padding: 0.75rem 1.25rem;
+
+        background:
+            linear-gradient(
+                135deg,
+                var(--primary),
+                #7c3aed
+            );
+
+        color: white;
+
+        border-radius: 10px;
+
+        font-weight: 600;
+
+        text-decoration: none;
+
+        transition: transform 0.15s,
+                    box-shadow 0.15s;
+    }
+
+    .back-button:hover {
+        color: white;
+        text-decoration: none;
+
+        transform: translateY(-1px);
+
+        box-shadow:
+            0 8px 20px
+            rgba(99, 102, 241, 0.35);
+    }
+
+    .footer {
+        text-align: center;
+
+        color: var(--text-muted);
+
+        font-size: 0.8rem;
+
+        margin-top: 2rem;
+    }
+
+    @media (max-width: 480px) {
+        body {
+            padding: 1rem 0.75rem;
+        }
+
+        .card {
+            padding: 1.25rem;
+        }
+
+        p,
+        li {
+            font-size: 0.9rem;
+        }
+    }
+</style>
+
+</head> <body> <div class="container">
+<header class="header">
+
+    <img
+        src="{% static 'images/logo-SMARTSPEND-72dpi.png' %}"
+        alt="SmartSpend Logo"
+        class="logo"
+    >
+
+    <h1>Privacy Policy</h1>
+
+    <p>
+        How SmartSpend handles your information
+    </p>
+
+</header>
+
+
+<main class="card">
+
+    <div class="last-updated">
+        <strong>Last Updated:</strong>
+        {{ last_updated|default:"20 September 2026" }}
+    </div>
+
+
+    <section>
+
+        <h2>1. Introduction</h2>
+
+        <p>
+            Welcome to SmartSpend. SmartSpend is a shopping
+            recommendation application designed to help users
+            discover products and make informed shopping
+            decisions based on information provided by the user.
+        </p>
+
+        <p>
+            This Privacy Policy explains what information we
+            collect, how we use it, how we protect it, and the
+            choices available to you when using the application.
+        </p>
+
+    </section>
+
+
+    <section>
+
+        <h2>2. Information We Collect</h2>
+
+        <p>
+            When you create and use a SmartSpend account, we may
+            collect information such as:
+        </p>
+
+        <ul>
+            <li>Your first name and last name.</li>
+            <li>Your DUT student email address.</li>
+            <li>Your account login information.</li>
+            <li>Your shopping budget or available spending amount.</li>
+            <li>Shopping preferences and recommendation information.</li>
+            <li>Location information when you choose to provide it.</li>
+            <li>Information you provide while interacting with the application.</li>
+        </ul>
+
+    </section>
+
+
+    <section>
+
+        <h2>3. How We Use Your Information</h2>
+
+        <p>
+            Information collected through SmartSpend may be used
+            to:
+        </p>
+
+        <ul>
+            <li>Create and manage your account.</li>
+            <li>Authenticate you when you log in.</li>
+            <li>Provide personalised shopping recommendations.</li>
+            <li>Use your selected budget when generating recommendations.</li>
+            <li>Provide location-related shopping functionality when enabled.</li>
+            <li>Improve the functionality and user experience of SmartSpend.</li>
+            <li>Maintain the security and integrity of the application.</li>
+        </ul>
+
+    </section>
+
+
+    <section>
+
+        <h2>4. Location Information</h2>
+
+        <p>
+            SmartSpend may request access to your location to
+            provide location-based shopping functionality.
+        </p>
+
+        <p>
+            Location access is optional. You can choose whether
+            to allow your browser or device to provide your
+            location.
+        </p>
+
+        <p>
+            When location information is provided, SmartSpend
+            may use latitude and longitude coordinates to
+            determine an approximate address or location relevant
+            to the application's features.
+        </p>
+
+    </section>
+
+
+    <section>
+
+        <h2>5. Account Security</h2>
+
+        <p>
+            We take reasonable measures to protect information
+            associated with your SmartSpend account.
+        </p>
+
+        <p>
+            You are responsible for keeping your password
+            confidential and should not share your login
+            credentials with other people.
+        </p>
+
+    </section>
+
+
+    <section>
+
+        <h2>6. Passwords</h2>
+
+        <p>
+            Your password is used to authenticate your account.
+            Passwords should never be shared with other users.
+        </p>
+
+        <p>
+            SmartSpend does not intentionally display your
+            password as readable text while it is stored or
+            processed by the application's authentication system.
+        </p>
+
+    </section>
+
+
+    <section>
+
+        <h2>7. Sharing of Information</h2>
+
+        <p>
+            We do not intend to sell your personal information.
+        </p>
+
+        <p>
+            Information may be processed or shared with service
+            providers where this is necessary to operate,
+            maintain, secure, or improve SmartSpend, or where
+            required by applicable law.
+        </p>
+
+    </section>
+
+
+    <section>
+
+        <h2>8. Third-Party Services</h2>
+
+        <p>
+            SmartSpend may use third-party services to provide
+            certain functionality, such as maps, location
+            processing, authentication, product information, or
+            other application services.
+        </p>
+
+        <p>
+            These services may process information according to
+            their own privacy policies and terms.
+        </p>
+
+    </section>
+
+
+    <section>
+
+        <h2>9. Cookies and Sessions</h2>
+
+        <p>
+            SmartSpend may use cookies and server-side sessions
+            to maintain authentication, remember application
+            settings, and provide functionality requested by the
+            user.
+        </p>
+
+    </section>
+
+
+    <section>
+
+        <h2>10. Data Retention</h2>
+
+        <p>
+            Account information may be retained for as long as
+            your account remains active or as necessary to provide
+            the application's services.
+        </p>
+
+        <p>
+            Where appropriate, information may be deleted when
+            it is no longer required for the purposes for which
+            it was collected.
+        </p>
+
+    </section>
+
+
+    <section>
+
+        <h2>11. Your Choices</h2>
+
+        <p>
+            Depending on the functionality available in the
+            application, you may be able to:
+        </p>
+
+        <ul>
+            <li>Update your name and email address.</li>
+            <li>Change your shopping budget.</li>
+            <li>Choose whether to provide location information.</li>
+            <li>Stop using the SmartSpend application.</li>
+        </ul>
+
+    </section>
+
+
+    <section>
+
+        <h2>12. Children's Privacy</h2>
+
+        <p>
+            SmartSpend is intended for users who are legally
+            permitted to use the service. We do not knowingly
+            collect personal information from children where
+            such collection is prohibited by applicable law.
+        </p>
+
+    </section>
+
+
+    <section>
+
+        <h2>13. Changes to This Policy</h2>
+
+        <p>
+            This Privacy Policy may be updated from time to time
+            to reflect changes to SmartSpend, applicable
+            requirements, or the way information is handled.
+        </p>
+
+        <p>
+            The updated version will be made available through
+            the application.
+        </p>
+
+    </section>
+
+
+    <section>
+
+        <h2>14. Contact</h2>
+
+        <p>
+            If you have questions or concerns about this Privacy
+            Policy or the handling of your information, please
+            contact the SmartSpend project administrators through
+            the appropriate support channel provided by the
+            application.
+        </p>
+
+    </section>
+
+
+    <a
+        href="{% url 'accounts:register' %}"
+        class="back-button"
+    >
+        Back to Registration
+    </a>
+
+</main>
+
+
+<div class="footer">
+    © {% now "Y" %} SmartSpend. All rights reserved.
+</div>
+
+</div> </body> </html>

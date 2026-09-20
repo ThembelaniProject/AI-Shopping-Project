@@ -66,6 +66,33 @@
         position: relative;
         overflow-x: hidden;
     }
+    /* ============================================
+    VALIDATION ERRORS
+    ============================================ */
+
+    input.error {
+        border-color: var(--error) !important;
+    }
+
+    input.error:focus {
+        border-color: var(--error) !important;
+
+        box-shadow:
+            0 0 0 3px
+            rgba(239, 68, 68, 0.25) !important;
+    }
+
+    .field-error {
+        color: #fca5a5;
+
+        font-size: 0.8rem;
+
+        margin-top: 0.4rem;
+
+        line-height: 1.4;
+
+        animation: fadeIn 0.2s ease;
+    }
 
     .container {
         position: relative;
@@ -919,152 +946,402 @@
 
 
 </div>
-
 <script>
 
+/* ============================================
+   FORM ELEMENTS
+============================================ */
+
+const form = document.getElementById("loginForm");
+
+const submitBtn = document.getElementById("submitBtn");
+
+const emailInput = document.getElementById("email");
+
+const passwordInput = document.getElementById("password");
+
+const toggleBtn = document.getElementById("togglePassword");
+
+const eyeIcon = document.getElementById("eyeIcon");
+
+
+/* ============================================
+   CREATE FIELD ERROR MESSAGE
+============================================ */
+
+function showError(input, message) {
+
+    // Remove existing error for this field
+    clearError(input);
+
+    // Add error styling
+    input.classList.add("error");
+
+    // Create error message
+    const error = document.createElement("div");
+
+    error.className = "field-error";
+
+    error.textContent = message;
+
+    // Add the error after the input wrapper
+    const formGroup = input.closest(".form-group");
+
+    formGroup.appendChild(error);
+}
+
+
+/* ============================================
+   CLEAR FIELD ERROR
+============================================ */
+
+function clearError(input) {
+
+    input.classList.remove("error");
+
+    const formGroup = input.closest(".form-group");
+
+    const existingError =
+        formGroup.querySelector(".field-error");
+
+    if (existingError) {
+        existingError.remove();
+    }
+}
+
+
+/* ============================================
+   CLEAR ALL ERRORS
+============================================ */
+
+function clearAllErrors() {
+
+    clearError(emailInput);
+
+    clearError(passwordInput);
+
+}
+
+
+/* ============================================
+   PASSWORD VISIBILITY
+============================================ */
+
+toggleBtn.addEventListener("click", () => {
+
+    const isPassword =
+        passwordInput.type === "password";
+
+
+    passwordInput.type =
+        isPassword ? "text" : "password";
+
+
+    toggleBtn.setAttribute(
+        "aria-label",
+        isPassword
+            ? "Hide password"
+            : "Show password"
+    );
+
+
+    if (isPassword) {
+
+        eyeIcon.innerHTML = `
+
+            <path
+                d="
+                M17.94 17.94
+                A10.07 10.07 0 0 1 12 20
+                c-7 0-11-8-11-8
+                a18.45 18.45 0 0 1 5.06-5.94
+
+                M9.9 4.24
+                A9.12 9.12 0 0 1 12 4
+                c7 0 11 8 11 8
+                a18.5 18.5 0 0 1-2.16 3.19
+
+                m-6.72-1.07
+                a3 3 0 1 1-4.24-4.24
+                "
+            />
+
+            <line
+                x1="1"
+                y1="1"
+                x2="23"
+                y2="23"
+            />
+
+        `;
+
+    } else {
+
+        eyeIcon.innerHTML = `
+
+            <path
+                d="
+                M1 12
+                s4-8 11-8
+                11 8 11 8
+                -4 8-11 8
+                -11-8-11-8z
+                "
+            />
+
+            <circle
+                cx="12"
+                cy="12"
+                r="3"
+            />
+
+        `;
+
+    }
+
+});
+
+
+/* ============================================
+   LOGIN FORM VALIDATION
+============================================ */
+
+form.addEventListener("submit", (e) => {
+
     /*
-     * Password visibility
+     * Always stop the form first.
+     *
+     * We will only allow submission after
+     * every validation has passed.
      */
 
-    const toggleBtn =
-        document.getElementById("togglePassword");
-
-    const passwordInput =
-        document.getElementById("password");
-
-    const eyeIcon =
-        document.getElementById("eyeIcon");
+    e.preventDefault();
 
 
-    toggleBtn.addEventListener("click", () => {
-
-        const isPassword =
-            passwordInput.type === "password";
+    clearAllErrors();
 
 
-        passwordInput.type =
-            isPassword ? "text" : "password";
+    const email =
+        emailInput.value.trim();
+
+    const password =
+        passwordInput.value;
 
 
-        toggleBtn.setAttribute(
-            "aria-label",
-            isPassword
-                ? "Hide password"
-                : "Show password"
+    let valid = true;
+
+
+    /* ========================================
+       EMAIL EMPTY VALIDATION
+    ======================================== */
+
+    if (email === "") {
+
+        showError(
+            emailInput,
+            "Please enter your email address."
         );
 
+        emailInput.focus();
 
-        if (isPassword) {
-
-            eyeIcon.innerHTML = `
-
-                <path
-                    d="M17.94 17.94
-                    A10.07 10.07 0 0 1 12 20
-                    c-7 0-11-8-11-8
-                    a18.45 18.45 0 0 1 5.06-5.94
-                    M9.9 4.24
-                    A9.12 9.12 0 0 1 12 4
-                    c7 0 11 8 11 8
-                    a18.5 18.5 0 0 1-2.16 3.19
-                    m-6.72-1.07
-                    a3 3 0 1 1-4.24-4.24"
-                />
-
-                <line
-                    x1="1"
-                    y1="1"
-                    x2="23"
-                    y2="23"
-                />
-
-            `;
-
-        } else {
-
-            eyeIcon.innerHTML = `
-
-                <path
-                    d="M1 12s4-8 11-8
-                    11 8 11 8-4 8-11 8
-                    -11-8-11-8z"
-                />
-
-                <circle
-                    cx="12"
-                    cy="12"
-                    r="3"
-                />
-
-            `;
-
-        }
-
-    });
+        valid = false;
+    }
 
 
-    /*
-     * Normal login validation
-     */
+    /* ========================================
+       PASSWORD EMPTY VALIDATION
+    ======================================== */
 
-    const form =
-        document.getElementById("loginForm");
+    if (password.trim() === "") {
 
-    const submitBtn =
-        document.getElementById("submitBtn");
-
-
-    form.addEventListener("submit", (e) => {
-
-        const email =
-            document.getElementById("email")
-            .value
-            .trim();
-
-        const password =
-            passwordInput.value;
-
-
-        if (!email || !password) {
-
-            e.preventDefault();
-
-            return;
-        }
-
-
-        const emailRegex =
-            /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-
-        if (!emailRegex.test(email)) {
-
-            e.preventDefault();
-
-            document
-                .getElementById("email")
-                .focus();
-
-            return;
-        }
-
-
-        submitBtn.classList.add("loading");
-
-        submitBtn.disabled = true;
-
-    });
-
-
-    /*
-     * Microsoft button loading state
-     */
-
-    const microsoftLoginBtn =
-        document.getElementById(
-            "microsoftLoginBtn"
+        showError(
+            passwordInput,
+            "Please enter your password."
         );
 
+        /*
+         * Only focus password if email
+         * is already valid.
+         */
+
+        if (valid) {
+            passwordInput.focus();
+        }
+
+        valid = false;
+    }
+
+
+    /* ========================================
+       EMAIL FORMAT VALIDATION
+    ======================================== */
+
+    if (
+        email !== "" &&
+        validEmail(email) === false
+    ) {
+
+        showError(
+            emailInput,
+            "Please enter a valid email address."
+        );
+
+        emailInput.focus();
+
+        valid = false;
+    }
+
+
+    /* ========================================
+       DUT EMAIL VALIDATION
+    ======================================== */
+
+    if (
+        email !== "" &&
+        validEmail(email) &&
+        !isDUTEmail(email)
+    ) {
+
+        showError(
+            emailInput,
+            "Please use your DUT student email address."
+        );
+
+        emailInput.focus();
+
+        valid = false;
+    }
+
+
+    /* ========================================
+       STOP IF VALIDATION FAILED
+    ======================================== */
+
+    if (!valid) {
+
+        return;
+    }
+
+
+    /* ========================================
+       LOADING STATE
+    ======================================== */
+
+    submitBtn.classList.add("loading");
+
+    submitBtn.disabled = true;
+
+
+    /*
+     * Everything is valid.
+     *
+     * Submit the form normally.
+     */
+
+    form.submit();
+
+});
+
+
+/* ============================================
+   GENERAL EMAIL VALIDATION
+============================================ */
+
+function validEmail(email) {
+
+    const emailRegex =
+        /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    return emailRegex.test(email);
+}
+
+
+/* ============================================
+   DUT EMAIL VALIDATION
+============================================ */
+
+function isDUTEmail(email) {
+
+    /*
+     * DUT student email format:
+     *
+     * 8 digits + @dut4life.ac.za
+     *
+     * Example:
+     *
+     * 22957830@dut4life.ac.za
+     */
+
+    const dutEmailRegex =
+        /^[0-9]{8}@dut4life\.ac\.za$/i;
+
+    return dutEmailRegex.test(email);
+}
+
+
+/* ============================================
+   LIVE EMAIL ERROR CLEARING
+============================================ */
+
+emailInput.addEventListener("input", () => {
+
+    if (emailInput.value.trim() !== "") {
+
+        clearError(emailInput);
+
+    }
+
+});
+
+
+/* ============================================
+   LIVE PASSWORD ERROR CLEARING
+============================================ */
+
+passwordInput.addEventListener("input", () => {
+
+    if (passwordInput.value.trim() !== "") {
+
+        clearError(passwordInput);
+
+    }
+
+});
+
+
+/* ============================================
+   AUTO FOCUS
+============================================ */
+
+window.addEventListener(
+    "DOMContentLoaded",
+    () => {
+
+        if (
+            window.matchMedia(
+                "(min-width: 768px)"
+            ).matches
+        ) {
+
+            emailInput.focus();
+
+        }
+
+    }
+);
+
+
+/* ============================================
+   MICROSOFT LOGIN BUTTON
+============================================ */
+
+const microsoftLoginBtn =
+    document.getElementById(
+        "microsoftLoginBtn"
+    );
+
+
+if (microsoftLoginBtn) {
 
     microsoftLoginBtn.addEventListener(
         "click",
@@ -1079,31 +1356,10 @@
         }
     );
 
-
-    /*
-     * Auto-focus email on desktop
-     */
-
-    window.addEventListener(
-        "DOMContentLoaded",
-        () => {
-
-            if (
-                window.matchMedia(
-                    "(min-width: 768px)"
-                ).matches
-            ) {
-
-                document
-                    .getElementById("email")
-                    .focus();
-
-            }
-
-        }
-    );
+}
 
 </script>
+
 
 </body>
 </html>

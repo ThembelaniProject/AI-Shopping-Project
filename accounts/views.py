@@ -1,6 +1,9 @@
 from decimal import Decimal, InvalidOperation
 import msal
 import uuid
+import re
+import requests
+
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import authenticate, login
@@ -8,28 +11,60 @@ from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
-import requests
-
-
 
 from .models import UserProfile
+
+
+# ==========================================================
+# LOGIN
+# ==========================================================
+
 def login_view(request):
+
     if request.user.is_authenticated:
         return redirect("shopping:dashboard")
 
     if request.method == "POST":
-        email = request.POST.get("email", "").strip()
-        password = request.POST.get("password", "")
+
+        email = request.POST.get(
+            "email",
+            ""
+        ).strip()
+
+        password = request.POST.get(
+            "password",
+            ""
+        )
 
         if not email or not password:
-            messages.error(request, "Please enter your email and password.")
-            return render(request, "accounts/login.html")
+
+            messages.error(
+                request,
+                "Please enter your email and password."
+            )
+
+            return render(
+                request,
+                "accounts/login.html"
+            )
 
         try:
-            user = User.objects.get(email__iexact=email)
+
+            user = User.objects.get(
+                email__iexact=email
+            )
+
         except User.DoesNotExist:
-            messages.error(request, "Invalid email or password.")
-            return render(request, "accounts/login.html")
+
+            messages.error(
+                request,
+                "Invalid email or password."
+            )
+
+            return render(
+                request,
+                "accounts/login.html"
+            )
 
         user = authenticate(
             request,
@@ -38,13 +73,30 @@ def login_view(request):
         )
 
         if user is not None:
-            login(request, user)
-            return redirect("shopping:dashboard")
 
-        messages.error(request, "Invalid email or password.")
+            login(
+                request,
+                user
+            )
 
-    return render(request, "accounts/login.html")
+            return redirect(
+                "shopping:dashboard"
+            )
 
+        messages.error(
+            request,
+            "Invalid email or password."
+        )
+
+    return render(
+        request,
+        "accounts/login.html"
+    )
+
+
+# ==========================================================
+# REGISTER
+# ==========================================================
 
 def register_view(request):
 
@@ -66,7 +118,7 @@ def register_view(request):
         email = request.POST.get(
             "email",
             ""
-        ).strip()
+        ).strip().lower()
 
         password = request.POST.get(
             "password",
@@ -78,25 +130,124 @@ def register_view(request):
             ""
         )
 
-        if not first_name or not last_name or not email or not password:
+        # --------------------------------------------------
+        # POLICY ACCEPTANCE
+        # --------------------------------------------------
+
+        accept_policy = request.POST.get(
+            "accept_policy"
+        )
+
+        if accept_policy != "on":
+
             messages.error(
                 request,
-                "Please fill in all required fields."
+                "You must accept the Privacy Policy and Terms & Conditions before creating your account."
             )
+
             return render(
                 request,
                 "accounts/register.html"
             )
 
-        if password != confirm_password:
+        # --------------------------------------------------
+        # REQUIRED FIELDS
+        # --------------------------------------------------
+
+        if (
+            not first_name
+            or not last_name
+            or not email
+            or not password
+        ):
+
             messages.error(
                 request,
-                "Passwords do not match."
+                "Please fill in all required fields."
             )
+
             return render(
                 request,
                 "accounts/register.html"
             )
+
+        # --------------------------------------------------
+        # DUT STUDENT EMAIL VALIDATION
+        # --------------------------------------------------
+
+        dut_email_pattern = (
+            r"^[0-9]{8}@dut4life\.ac\.za$"
+        )
+
+        if not re.match(
+            dut_email_pattern,
+            email,
+            re.IGNORECASE
+        ):
+
+            messages.error(
+                request,
+                "Please use a valid DUT student email address."
+            )
+
+            return render(
+                request,
+                "accounts/register.html"
+            )
+
+        # --------------------------------------------------
+        # PASSWORD VALIDATION
+        # --------------------------------------------------
+
+        if len(password) < 8:
+
+            messages.error(
+                request,
+                "Password must be at least 8 characters long."
+            )
+
+            return render(
+                request,
+                "accounts/register.html"
+            )
+
+        # --------------------------------------------------
+        # PASSWORD CONFIRMATION
+        # --------------------------------------------------
+
+        if password != confirm_password:
+
+            messages.error(
+                request,
+                "Passwords do not match."
+            )
+
+            return render(
+                request,
+                "accounts/register.html"
+            )
+
+        # --------------------------------------------------
+        # CHECK EMAIL
+        # --------------------------------------------------
+
+        if User.objects.filter(
+            email__iexact=email
+        ).exists():
+
+            messages.error(
+                request,
+                "An account with this email already exists."
+            )
+
+            return render(
+                request,
+                "accounts/register.html"
+            )
+
+        # --------------------------------------------------
+        # CHECK USERNAME
+        # --------------------------------------------------
 
         if User.objects.filter(
             username=email
@@ -112,13 +263,32 @@ def register_view(request):
                 "accounts/register.html"
             )
 
-        User.objects.create_user(
+        # --------------------------------------------------
+        # CREATE USER
+        # --------------------------------------------------
+
+        user = User.objects.create_user(
             username=email,
             email=email,
             password=password,
             first_name=first_name,
             last_name=last_name,
         )
+
+        # --------------------------------------------------
+        # CREATE USER PROFILE
+        # --------------------------------------------------
+
+        UserProfile.objects.get_or_create(
+            user=user,
+            defaults={
+                "available_amount": Decimal("1650.00"),
+            },
+        )
+
+        # --------------------------------------------------
+        # SUCCESS
+        # --------------------------------------------------
 
         messages.success(
             request,
@@ -135,17 +305,33 @@ def register_view(request):
     )
 
 
+# ==========================================================
+# PRIVACY POLICY
+# ==========================================================
+
+def privacy_policy(request):
+
+    return render(
+        request,
+        "accounts/privacy_policy.html"
+    )
+
+
+# ==========================================================
+# TERMS & CONDITIONS
+# ==========================================================
+
+def terms_conditions(request):
+
+    return render(
+        request,
+        "accounts/terms_conditions.html"
+    )
 
 
 # ==========================================================
 # MICROSOFT LOGIN
 # ==========================================================
-
-
-    
-
-   
-
 
 
 # ==========================================================
@@ -157,9 +343,6 @@ def profile(request):
 
     user = request.user
 
-    # Get the user's profile.
-    # If the profile does not exist, create it automatically
-    # with a starting budget of R1650.00.
     user_profile, created = UserProfile.objects.get_or_create(
         user=user,
         defaults={
@@ -167,20 +350,34 @@ def profile(request):
         },
     )
 
-    # Make sure an existing profile with no budget
-    # also receives the default R1650.00.
     if user_profile.available_amount is None:
+
         user_profile.available_amount = Decimal("1650.00")
-        user_profile.save(update_fields=["available_amount"])
 
-    # Get saved location from the session.
-    latitude = request.session.get("user_latitude")
-    longitude = request.session.get("user_longitude")
+        user_profile.save(
+            update_fields=["available_amount"]
+        )
+
+    # ------------------------------------------------------
+    # Get saved location from session
+    # ------------------------------------------------------
+
+    latitude = request.session.get(
+        "user_latitude"
+    )
+
+    longitude = request.session.get(
+        "user_longitude"
+    )
+
     address = request.session.get(
-    "user_address"
-)
+        "user_address"
+    )
 
-    # Display the user's saved database budget.
+    # ------------------------------------------------------
+    # Shopping budget
+    # ------------------------------------------------------
+
     amount = user_profile.available_amount
 
     return render(
@@ -201,6 +398,7 @@ def profile(request):
 # ==========================================================
 # UPDATE USER LOCATION
 # ==========================================================
+
 @login_required
 def update_location(request):
 
@@ -237,6 +435,7 @@ def update_location(request):
     try:
 
         latitude_decimal = Decimal(latitude)
+
         longitude_decimal = Decimal(longitude)
 
     except (
@@ -253,7 +452,9 @@ def update_location(request):
             status=400,
         )
 
+    # ------------------------------------------------------
     # Validate latitude
+    # ------------------------------------------------------
 
     if not (
         Decimal("-90")
@@ -269,7 +470,9 @@ def update_location(request):
             status=400,
         )
 
+    # ------------------------------------------------------
     # Validate longitude
+    # ------------------------------------------------------
 
     if not (
         Decimal("-180")
@@ -286,7 +489,7 @@ def update_location(request):
         )
 
     # ------------------------------------------------------
-    # Save coordinates to session
+    # Save coordinates
     # ------------------------------------------------------
 
     request.session["user_latitude"] = str(
@@ -298,10 +501,12 @@ def update_location(request):
     )
 
     # ------------------------------------------------------
-    # Reverse geocode coordinates
+    # Reverse geocode
     # ------------------------------------------------------
 
-    address = "Address could not be determined."
+    address = (
+        "Address could not be determined."
+    )
 
     try:
 
@@ -333,12 +538,10 @@ def update_location(request):
         ValueError,
     ):
 
-        # Keep the coordinates even if
-        # address lookup fails.
         pass
 
     # ------------------------------------------------------
-    # Save address to session
+    # Save address
     # ------------------------------------------------------
 
     request.session["user_address"] = address
@@ -421,7 +624,8 @@ def update_budget(request):
             "amount": str(amount_decimal),
         }
     )
-    
+
+
 # ==========================================================
 # EDIT PROFILE
 # ==========================================================
@@ -448,7 +652,11 @@ def edit_profile(request):
             ""
         ).strip().lower()
 
-        if not first_name or not last_name or not email:
+        if (
+            not first_name
+            or not last_name
+            or not email
+        ):
 
             messages.error(
                 request,
@@ -463,8 +671,10 @@ def edit_profile(request):
                 }
             )
 
-        # Check whether another account already
-        # uses this email address.
+        # --------------------------------------------------
+        # Check duplicate email
+        # --------------------------------------------------
+
         email_exists = User.objects.filter(
             email__iexact=email
         ).exclude(
@@ -486,16 +696,21 @@ def edit_profile(request):
                 }
             )
 
+        # --------------------------------------------------
+        # Update user
+        # --------------------------------------------------
+
+        old_email = user.email
+
         user.first_name = first_name
+
         user.last_name = last_name
+
         user.email = email
 
-        # Keep username in sync for accounts created
-        # through your normal registration system.
-        #
-        # This is especially useful because your normal
-        # registration currently uses the email as username.
-        if user.username == request.user.email:
+        # Keep username synchronized with email
+        if user.username == old_email:
+
             user.username = email
 
         user.save()
