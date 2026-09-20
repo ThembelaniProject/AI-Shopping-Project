@@ -217,6 +217,28 @@ DATABASES = {
     )
 }
 
+# ============================================================
+# REDIS CACHE
+# ============================================================
+
+REDIS_URL = os.environ.get("REDIS_URL")
+
+if not REDIS_URL:
+    raise RuntimeError(
+        "REDIS_URL environment variable is not configured."
+    )
+
+CACHES = {
+    "default": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": REDIS_URL,
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    },
+}
+
+
 
 # ============================================================
 # PASSWORD VALIDATION

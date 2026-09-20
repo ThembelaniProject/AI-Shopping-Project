@@ -1,13 +1,27 @@
-
-from django.shortcuts import render
-
-import requests
+import json
+import os
 import re
-
 from decimal import Decimal, InvalidOperation
 
+import redis
+import requests
+
 from django.conf import settings
-from django.core.cache import cache
+
+
+# ==========================================================
+# REDIS CLIENT
+# ==========================================================
+
+REDIS_URL = os.environ.get("REDIS_URL")
+
+if not REDIS_URL:
+    raise RuntimeError("REDIS_URL is not configured.")
+
+redis_client = redis.Redis.from_url(
+    REDIS_URL,
+    decode_responses=True,
+)
 
 
 # ==========================================================
@@ -26,7 +40,14 @@ CHECKERS_STORE_URL = (
     "get_store"
 )
 
-CACHE_TIMEOUT = 60 * 30  # 30 minutes
+
+# ==========================================================
+# CACHE SETTINGS
+# ==========================================================
+
+CACHE_TIMEOUT = 60 * 60 * 24
+EMPTY_CACHE_TIMEOUT = 60
+STORE_ERROR_CACHE_TIMEOUT = 60
 
 
 # ==========================================================
@@ -34,26 +55,84 @@ CACHE_TIMEOUT = 60 * 30  # 30 minutes
 # ==========================================================
 
 class StoreAPIError(Exception):
-    """Raised when the Checkers API fails."""
+    """Raised when the Checkers API cannot be used successfully."""
+
     pass
 
 
 # ==========================================================
-# DECIMAL HELPER
+# REDIS HELPERS
 # ==========================================================
 
-def _to_decimal(value, default="0.00"):
+def _redis_json_default(value):
+    """Convert Decimal values to strings for JSON storage."""
+
+    if isinstance(value, Decimal):
+        return str(value)
+
+    raise TypeError(
+        f"Object of type {type(value).__name__} "
+        "is not JSON serializable"
+    )
+
+
+def _redis_get_json(key):
+    """Get and decode JSON from Redis."""
+
     try:
-        return Decimal(str(value))
-    except (ValueError, TypeError, InvalidOperation):
-        return Decimal(default)
+        value = redis_client.get(key)
+    except redis.RedisError as exc:
+        print(f"REDIS GET ERROR [{key}]: {exc}")
+        return None
+
+    if value is None:
+        return None
+
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError) as exc:
+        print(f"REDIS JSON DECODE ERROR [{key}]: {exc}")
+        return None
+
+
+
+def _redis_set_json(key, value, timeout):
+    """Store a Python value as JSON in Redis."""
+
+    try:
+        redis_client.setex(
+            key,
+            int(timeout),
+            json.dumps(
+                value,
+                default=_redis_json_default,
+            ),
+        )
+        return True
+
+    except redis.RedisError as exc:
+        print(f"REDIS SET ERROR [{key}]: {exc}")
+        return False
 
 
 # ==========================================================
-# BOOLEAN HELPER
+# BASIC HELPERS
 # ==========================================================
+
+def _clean_string(value):
+    """Safely convert a simple value to a stripped string."""
+
+    if value is None:
+        return ""
+
+    if isinstance(value, (str, int, float)):
+        return str(value).strip()
+
+    return ""
+
 
 def _to_bool(value):
+    """Convert common API boolean representations to bool."""
 
     if isinstance(value, bool):
         return value
@@ -62,558 +141,85 @@ def _to_bool(value):
         return value != 0
 
     if isinstance(value, str):
-        return value.strip().lower() in [
+        return value.strip().lower() in {
             "true",
             "yes",
             "1",
             "on",
             "available",
-        ]
+            "in stock",
+            "instock",
+        }
 
     return False
 
-# ==========================================================
-# GET STORE LOCATION
-# ==========================================================
-def get_store_location(store_id):
-    """
-    Resolve a Checkers storeId to a store/location.
-    """
 
-    store_id = str(store_id or "").strip()
-
-    if not store_id:
-        print("GET STORE: No store ID")
-        return "Location not available"
-
-    cache_key = f"checkers_store_{store_id}"
-
-    # ======================================================
-    # CACHE
-    # ======================================================
-
-    cached = cache.get(cache_key)
-
-    if cached is not None:
-        print(
-            f"GET STORE CACHE HIT: {store_id} -> {cached}"
-        )
-        return cached
-
-    api_key = getattr(
-        settings,
-        "PARSE_API_KEY",
-        "",
-    )
-
-    if not api_key:
-        print("GET STORE: PARSE_API_KEY missing")
-        return "Location not available"
-
-    print("\n========================================")
-    print("GET STORE REQUEST")
-    print("URL:", CHECKERS_STORE_URL)
-    print("STORE ID:", store_id)
-    print("========================================")
+def _to_decimal(value, default="0.00"):
+    """Convert a value to Decimal."""
 
     try:
-
-        response = requests.post(
-            CHECKERS_STORE_URL,
-            headers={
-                "X-API-Key": api_key,
-                "Accept": "application/json",
-                "Content-Type": "application/json",
-            },
-            json={
-                "storeId": store_id,
-            },
-            timeout=30,
-        )
-
-        print("GET STORE STATUS:", response.status_code)
-        print("GET STORE RAW RESPONSE:")
-        print(response.text)
-
-        if response.status_code == 429:
-
-            print(
-                f"GET STORE RATE LIMITED: {store_id}"
-            )
-
-            cache.set(
-                cache_key,
-                "Location temporarily unavailable",
-                60,
-            )
-
-            return "Location temporarily unavailable"
-
-        response.raise_for_status()
-
-    except requests.RequestException as exc:
-
-        print(
-            f"GET STORE REQUEST FAILED "
-            f"for {store_id}: {exc}"
-        )
-
-        return "Location not available"
-
-    # ======================================================
-    # JSON
-    # ======================================================
-
-    try:
-
-        data = response.json()
-
-    except ValueError:
-
-        print(
-            "GET STORE returned invalid JSON"
-        )
-
-        return "Location not available"
-
-    print("\n========================================")
-    print("GET STORE JSON")
-    print(data)
-    print("========================================")
-
-    # ======================================================
-    # FIND STORE OBJECT
-    # ======================================================
-
-    store = None
-
-    if isinstance(data, dict):
-
-        if isinstance(data.get("store"), dict):
-
-            store = data["store"]
-
-        elif isinstance(data.get("data"), dict):
-
-            nested = data["data"]
-
-            if isinstance(
-                nested.get("store"),
-                dict,
-            ):
-                store = nested["store"]
-
-            else:
-                store = nested
-
-        elif isinstance(data.get("result"), dict):
-
-            store = data["result"]
-
-        else:
-
-            store = data
-
-    elif isinstance(data, list):
-
-        if data and isinstance(data[0], dict):
-
-            store = data[0]
-
-    print("\n========================================")
-    print("EXTRACTED STORE OBJECT")
-    print(store)
-    print("========================================")
-
-    if not isinstance(store, dict):
-
-        print(
-            "GET STORE: Could not find store object"
-        )
-
-        return "Location not available"
-
-    # ======================================================
-    # CLEAN
-    # ======================================================
-
-    def clean(value):
-
-        if value is None:
-            return ""
-
-        if isinstance(
-            value,
-            (str, int, float),
-        ):
-            return str(value).strip()
-
-        return ""
-
-    # ======================================================
-    # DIRECT ADDRESS
-    # ======================================================
-
-    address_fields = [
-        "displayName",
-        "display_name",
-        "formattedAddress",
-        "formatted_address",
-        "fullAddress",
-        "full_address",
-        "addressString",
-        "address_string",
-        "addressText",
-        "address_text",
-    ]
-
-    for field in address_fields:
-
-        value = clean(
-            store.get(field)
-        )
-
-        if value:
-
-            print(
-                f"GET STORE LOCATION FOUND "
-                f"FROM {field}: {value}"
-            )
-
-            cache.set(
-                cache_key,
-                value,
-                CACHE_TIMEOUT,
-            )
-
-            return value
-
-    # ======================================================
-    # BUILD ADDRESS
-    # ======================================================
-
-    parts = []
-
-    fields = [
-        "storeName",
-        "store_name",
-        "branchName",
-        "branch_name",
-        "name",
-        "addressLine",
-        "addressLine1",
-        "addressLine2",
-        "street",
-        "streetAddress",
-        "suburb",
-        "town",
-        "city",
-        "province",
-        "postalCode",
-        "postal_code",
-        "postcode",
-    ]
-
-    for field in fields:
-
-        value = clean(
-            store.get(field)
-        )
-
-        if value and value not in parts:
-
-            parts.append(value)
-
-    # ======================================================
-    # NESTED ADDRESS
-    # ======================================================
-
-    address = store.get("address")
-
-    if isinstance(address, dict):
-
-        for field in [
-            "addressLine1",
-            "addressLine2",
-            "street",
-            "streetAddress",
-            "suburb",
-            "town",
-            "city",
-            "province",
-            "postalCode",
-            "postal_code",
-            "postcode",
-        ]:
-
-            value = clean(
-                address.get(field)
-            )
-
-            if value and value not in parts:
-
-                parts.append(value)
-
-    # ======================================================
-    # RESULT
-    # ======================================================
-
-    if not parts:
-
-        print(
-            "GET STORE: Store response contains "
-            "no recognized address fields."
-        )
-
-        print(
-            "AVAILABLE STORE KEYS:",
-            list(store.keys()),
-        )
-
-        return "Location not available"
-
-    location = ", ".join(parts)
-
-    print(
-        f"GET STORE LOCATION FOUND: {location}"
-    )
-
-    cache.set(
-        cache_key,
-        location,
-        CACHE_TIMEOUT,
-    )
-
-    return location
+        return Decimal(str(value))
+    except (ValueError, TypeError, InvalidOperation):
+        return Decimal(default)
 
 
 # ==========================================================
-# PRODUCT ID
-# ==========================================================
-
-def _extract_product_id(product):
-    """
-    Get the real external Checkers product identifier.
-
-    IDs can be strings, for example:
-
-        64889a3e392f9d86b62b06c5
-
-    Never convert Checkers IDs to int.
-    """
-
-    fields = [
-        "productId",
-        "product_id",
-        "sku",
-        "code",
-        "id",
-    ]
-
-    for field in fields:
-
-        value = product.get(field)
-
-        if value is None:
-            continue
-
-        value = str(value).strip()
-
-        if value:
-            return value
-
-    return ""
-
-
-# ==========================================================
-# IMAGE HELPER
-# ==========================================================
-
-def _extract_image(product):
-
-    image_fields = [
-        "image",
-        "imageURL",
-        "imageUrl",
-        "image_url",
-        "imageProductCardURL",
-        "imageProductCardUrl",
-        "imagePDPURL",
-        "imagePDPUrl",
-        "thumbnail",
-        "thumbnailUrl",
-        "thumbnailURL",
-        "picture",
-        "pictureUrl",
-        "productImage",
-        "productImageUrl",
-        "mainImage",
-        "mainImageUrl",
-    ]
-
-    for field in image_fields:
-
-        value = product.get(field)
-
-        if isinstance(value, str):
-
-            value = value.strip()
-
-            if value:
-                return value
-
-    # ------------------------------------------------------
-    # Images list
-    # ------------------------------------------------------
-
-    images = product.get("images")
-
-    if isinstance(images, list):
-
-        for image in images:
-
-            if isinstance(image, str):
-
-                image = image.strip()
-
-                if image:
-                    return image
-
-            elif isinstance(image, dict):
-
-                for field in [
-                    "url",
-                    "image",
-                    "imageUrl",
-                    "imageURL",
-                    "src",
-                    "source",
-                ]:
-
-                    value = image.get(field)
-
-                    if isinstance(value, str):
-
-                        value = value.strip()
-
-                        if value:
-                            return value
-
-    # ------------------------------------------------------
-    # Nested image object
-    # ------------------------------------------------------
-
-    image_object = product.get("image")
-
-    if isinstance(image_object, dict):
-
-        for field in [
-            "url",
-            "imageUrl",
-            "imageURL",
-            "src",
-        ]:
-
-            value = image_object.get(field)
-
-            if isinstance(value, str):
-
-                value = value.strip()
-
-                if value:
-                    return value
-
-    return ""
-
-
-# ==========================================================
-# IMAGE LIST HELPER
-# ==========================================================
-
-def _extract_images(product):
-
-    images = []
-
-    main_image = _extract_image(product)
-
-    if main_image:
-        images.append(main_image)
-
-    raw_images = product.get("images")
-
-    if isinstance(raw_images, list):
-
-        for image in raw_images:
-
-            url = ""
-
-            if isinstance(image, str):
-
-                url = image.strip()
-
-            elif isinstance(image, dict):
-
-                for field in [
-                    "url",
-                    "image",
-                    "imageUrl",
-                    "imageURL",
-                    "src",
-                    "source",
-                ]:
-
-                    value = image.get(field)
-
-                    if isinstance(value, str):
-
-                        value = value.strip()
-
-                        if value:
-                            url = value
-                            break
-
-            if url and url not in images:
-                images.append(url)
-
-    for field in [
-        "imageURL",
-        "imageUrl",
-        "imageProductCardURL",
-        "imageProductCardUrl",
-        "imagePDPURL",
-        "imagePDPUrl",
-        "thumbnail",
-        "thumbnailUrl",
-        "thumbnailURL",
-        "productImage",
-        "productImageUrl",
-        "mainImage",
-        "mainImageUrl",
-    ]:
-
-        value = product.get(field)
-
-        if isinstance(value, str):
-
-            value = value.strip()
-
-            if value and value not in images:
-                images.append(value)
-
-    return images
-
-
-# ==========================================================
-# PRICE EXTRACTION
+# PRICE HELPERS
 # ==========================================================
 
 def _extract_price(value):
+    """
+    Convert common price formats into Decimal.
+
+    Supports values such as:
+
+        49.99
+        "49.99"
+        "R49.99"
+        "R 49,99"
+        {"value": 49.99}
+        {"amount": 49.99}
+        {"price": 49.99}
+    """
 
     if value is None:
         return None
 
     if isinstance(value, Decimal):
         return value
+
+    # ------------------------------------------------------
+    # NESTED PRICE OBJECT
+    # ------------------------------------------------------
+
+    if isinstance(value, dict):
+
+        possible_fields = [
+            "value",
+            "amount",
+            "price",
+            "salePrice",
+            "regularPrice",
+            "currentPrice",
+            "sellingPrice",
+        ]
+
+        nested_value = None
+
+        for field in possible_fields:
+
+            if field in value and value[field] is not None:
+                nested_value = value[field]
+                break
+
+        if nested_value is None:
+            return None
+
+        return _extract_price(nested_value)
+
+    # ------------------------------------------------------
+    # STRING / NUMBER
+    # ------------------------------------------------------
 
     try:
 
@@ -622,30 +228,96 @@ def _extract_price(value):
         if not text:
             return None
 
-        text = (
-            text
-            .replace("R", "")
-            .replace("r", "")
-            .replace(",", "")
-            .strip()
+        # Remove currency names/symbols.
+        text = re.sub(
+        r"(?i)\bZAR\b",
+        "",
+        text,
         )
 
-        return Decimal(text)
+        text = re.sub(
+            r"(?i)\bR\s*",
+            "",
+            text,
+        )
 
-    except (
-        ValueError,
-        TypeError,
-        InvalidOperation,
-    ):
+        text = text.replace(" ", "")
 
+
+        # Handle South African-style decimal notation.
+        if "," in text and "." not in text:
+            text = text.replace(",", ".")
+
+        elif "," in text and "." in text:
+            text = text.replace(",", "")
+
+        match = re.search(
+            r"-?\d+(?:\.\d+)?",
+            text,
+        )
+
+        if not match:
+            return None
+
+        return Decimal(match.group(0))
+
+    except (ValueError, TypeError, InvalidOperation):
         return None
 
 
-# ==========================================================
-# CHECKERS PRICE
-# ==========================================================
+def _extract_price_from_fields(product, fields):
+    """Extract the first usable price from a list of fields."""
+
+    if not isinstance(product, dict):
+        return None
+
+    for field in fields:
+
+        if field not in product:
+            continue
+
+        value = _extract_price(product.get(field))
+
+        if value is None:
+            continue
+        if "withoutdecimal" in field.lower():
+            if value == value.to_integral_value():
+                value /= Decimal("100")
+
+
+        return value.quantize(Decimal("0.01"))
+
+    return None
+
 
 def _extract_checkers_price(product, *fields):
+    """Extract price from specified Checkers fields."""
+
+    return _extract_price_from_fields(
+        product,
+        fields,
+    )
+
+
+# ==========================================================
+# PRODUCT ID
+# ==========================================================
+
+def _extract_product_id(product):
+    """Extract the most useful product identifier."""
+
+    if not isinstance(product, dict):
+        return ""
+
+    fields = [
+        "external_id",
+        "externalId",
+        "productId",
+        "product_id",
+        "id",
+        "sku",
+        "code",
+    ]
 
     for field in fields:
 
@@ -654,146 +326,293 @@ def _extract_checkers_price(product, *fields):
         if value is None:
             continue
 
-        price = _extract_price(value)
+        if isinstance(value, dict):
 
-        if price is None:
-            continue
+            for nested_field in [
+                "id",
+                "productId",
+                "product_id",
+                "externalId",
+                "external_id",
+                "value",
+            ]:
 
-        if "WithoutDecimal" in field:
-            price = price / Decimal("100")
+                nested_value = value.get(nested_field)
 
-        return price
+                if nested_value is not None:
 
-    return None
+                    nested_value = str(
+                        nested_value
+                    ).strip()
+
+                    if nested_value:
+                        return nested_value
+
+        else:
+
+            value = str(value).strip()
+
+            if value:
+                return value
+
+    return ""
 
 
 # ==========================================================
-# SALE PRICE
+# IMAGE HELPERS
+# ==========================================================
+
+def _image_value(value):
+    """Extract an image URL from a value."""
+
+    if isinstance(value, str):
+        return value.strip()
+
+    if isinstance(value, dict):
+
+        for field in [
+            "url",
+            "image",
+            "imageUrl",
+            "imageURL",
+            "src",
+            "source",
+        ]:
+
+            nested = value.get(field)
+
+            if isinstance(nested, str):
+
+                nested = nested.strip()
+
+                if nested:
+                    return nested
+
+    return ""
+
+
+def _extract_image(product):
+    """Extract the primary product image."""
+
+    if not isinstance(product, dict):
+        return ""
+
+    image_fields = [
+        "image",
+        "imageUrl",
+        "imageURL",
+        "image_url",
+        "thumbnail",
+        "thumbnailUrl",
+        "thumbnailURL",
+        "thumbnail_url",
+        "mainImage",
+        "main_image",
+        "primaryImage",
+        "primary_image",
+        "photo",
+        "photoUrl",
+        "photoURL",
+        "src",
+    ]
+
+    for field in image_fields:
+
+        image = _image_value(
+            product.get(field)
+        )
+
+        if image:
+            return image
+
+    images = product.get("images")
+
+    if isinstance(images, list):
+
+        for image in images:
+
+            image_url = _image_value(image)
+
+            if image_url:
+                return image_url
+
+    media = product.get("media")
+
+    if isinstance(media, list):
+
+        for item in media:
+
+            if not isinstance(item, dict):
+                continue
+
+            media_type = str(
+                item.get(
+                    "type",
+                    item.get("mediaType", ""),
+                )
+            ).lower()
+
+            if media_type and "image" not in media_type:
+                continue
+
+            image_url = _image_value(item)
+
+            if image_url:
+                return image_url
+
+    return ""
+
+
+def _extract_images(product):
+    """Extract all available product images without duplicates."""
+
+    if not isinstance(product, dict):
+        return []
+
+    images = []
+
+    def add_image(value):
+        if value and value not in images:
+            images.append(value)
+
+    add_image(
+        _extract_image(product)
+    )
+
+    raw_images = product.get("images")
+
+    if isinstance(raw_images, list):
+
+        for image in raw_images:
+            add_image(
+                _image_value(image)
+            )
+
+    media = product.get("media")
+
+    if isinstance(media, list):
+
+        for item in media:
+
+            if not isinstance(item, dict):
+                continue
+
+            media_type = str(
+                item.get(
+                    "type",
+                    item.get("mediaType", ""),
+                )
+            ).lower()
+
+            if media_type and "image" not in media_type:
+                continue
+
+            add_image(
+                _image_value(item)
+            )
+
+    return images
+
+
+# ==========================================================
+# SALE / REGULAR PRICE
 # ==========================================================
 
 def _extract_sale_price(product):
-    """
-    Extract the current/sale price from a Checkers product.
-    Handles normal prices and prices stored without decimals.
-    """
+    """Find the current/sale price."""
 
-    sale_fields = [
-        "salePrice",
-        "sale_price",
-        "promotionPrice",
-        "promotion_price",
-        "promoPrice",
-        "promo_price",
-        "discountPrice",
-        "discount_price",
-        "specialPrice",
-        "special_price",
-        "offerPrice",
-        "offer_price",
-        "sellingPrice",
-        "selling_price",
-        "currentPrice",
-        "current_price",
-        "priceAfterDiscount",
-        "price_after_discount",
-        "priceWithoutDecimal",
-        "price",
-    ]
+    return _extract_price_from_fields(
+        product,
+        [
+            "salePrice",
+            "sale_price",
+            "promotionPrice",
+            "promotion_price",
+            "promoPrice",
+            "promo_price",
+            "discountPrice",
+            "discount_price",
+            "specialPrice",
+            "special_price",
+            "offerPrice",
+            "offer_price",
+            "sellingPrice",
+            "selling_price",
+            "currentPrice",
+            "current_price",
+            "priceAfterDiscount",
+            "price_after_discount",
+            "priceWithoutDecimal",
+            "price",
+        ],
+    )
 
-    for field in sale_fields:
-        if field not in product:
-            continue
-
-        value = product.get(field)
-
-        if value is None:
-            continue
-
-        # Support nested price objects
-        if isinstance(value, dict):
-            value = (
-                value.get("value")
-                or value.get("amount")
-                or value.get("price")
-            )
-
-        price = _extract_price(value)
-
-        if price is None:
-            continue
-
-        if "WithoutDecimal" in field:
-            price = price / Decimal("100")
-
-        return price.quantize(Decimal("0.01"))
-
-    return None
-
-
-# ==========================================================
-# REGULAR PRICE
-# ==========================================================
 
 def _extract_regular_price(product):
+    """Find the original/regular price."""
 
-    regular_fields = [
-        "regularPrice",
-        "regular_price",
-        "originalPrice",
-        "original_price",
-        "wasPrice",
-        "was_price",
-        "listPrice",
-        "list_price",
-        "rrp",
-        "RRP",
-        "recommendedRetailPrice",
-        "recommended_retail_price",
-        "priceBeforeDiscount",
-        "price_before_discount",
-        "fullPrice",
-        "full_price",
-        "normalPrice",
-        "normal_price",
-        "priceWithoutDiscount",
-        "price_without_discount",
-    ]
+    return _extract_price_from_fields(
+        product,
+        [
+            "regularPrice",
+            "regular_price",
+            "originalPrice",
+            "original_price",
+            "wasPrice",
+            "was_price",
+            "listPrice",
+            "list_price",
+            "rrp",
+            "RRP",
+            "recommendedRetailPrice",
+            "recommended_retail_price",
+            "priceBeforeDiscount",
+            "price_before_discount",
+            "fullPrice",
+            "full_price",
+            "normalPrice",
+            "normal_price",
+            "priceWithoutDiscount",
+            "price_without_discount",
+            "regularPriceWithoutDecimal",
+            "originalPriceWithoutDecimal",
+        ],
+    )
+# ==========================================================
+# rating
+# ==========================================================
+def _extract_rating(product):
+    if not isinstance(product, dict):
+        return Decimal("0.00")
 
-    for field in regular_fields:
-        if field not in product:
-            continue
+    for field in [
+        "rating",
+        "averageRating",
+        "average_rating",
+        "reviewRating",
+        "review_rating",
+    ]:
+        value = _to_decimal(
+            product.get(field),
+            default="0.00",
+        )
 
-        value = product.get(field)
-
-        if isinstance(value, dict):
-            value = (
-                value.get("value")
-                or value.get("amount")
-                or value.get("price")
+        if value >= Decimal("0.00"):
+            return value.quantize(
+                Decimal("0.01")
             )
 
-        price = _extract_price(value)
-
-        if price is None:
-            continue
-
-        if "WithoutDecimal" in field:
-            price = price / Decimal("100")
-
-        return price.quantize(Decimal("0.01"))
-
-    return None
-
+    return Decimal("0.00")
 
 # ==========================================================
 # PROMOTION
 # ==========================================================
 
 def _extract_promotion(product):
-    """
-    Extract promotion information from a Checkers product.
-    Returns a readable promotion string.
-    """
+    """Extract promotion/deal name or description."""
+
+    if not isinstance(product, dict):
+        return ""
 
     promotion_fields = [
         "promotion",
@@ -815,18 +634,21 @@ def _extract_promotion(product):
     ]
 
     for field in promotion_fields:
+
         value = product.get(field)
 
         if value is None:
             continue
 
         if isinstance(value, str):
+
             value = value.strip()
 
             if value:
                 return value
 
         elif isinstance(value, dict):
+
             for nested_field in [
                 "name",
                 "title",
@@ -835,10 +657,16 @@ def _extract_promotion(product):
                 "displayName",
                 "display_name",
             ]:
-                nested_value = value.get(nested_field)
+
+                nested_value = value.get(
+                    nested_field
+                )
 
                 if nested_value is not None:
-                    nested_value = str(nested_value).strip()
+
+                    nested_value = str(
+                        nested_value
+                    ).strip()
 
                     if nested_value:
                         return nested_value
@@ -846,15 +674,15 @@ def _extract_promotion(product):
     return ""
 
 
-# ==========================================================
-# SALE FLAG
-# ==========================================================
-
 def _extract_on_sale(
     product,
     regular_price=None,
     sale_price=None,
 ):
+    """Determine whether a product is on promotion."""
+
+    if not isinstance(product, dict):
+        return False
 
     promotion_fields = [
         "isOnPromotion",
@@ -884,7 +712,6 @@ def _extract_on_sale(
         if _to_bool(value):
             return True
 
-    # A lower sale price automatically means the product is on sale.
     if (
         regular_price is not None
         and sale_price is not None
@@ -892,24 +719,17 @@ def _extract_on_sale(
     ):
         return True
 
-    # A promotion object/string also means promotion exists.
-    promotion = _extract_promotion(product)
-
-    if promotion:
+    if _extract_promotion(product):
         return True
 
     return False
-
-
-# ==========================================================
-# DISCOUNT
-# ==========================================================
 
 def _extract_discount_amount(
     regular_price,
     sale_price,
     product,
 ):
+    """Calculate discount amount."""
 
     if (
         regular_price is not None
@@ -918,54 +738,23 @@ def _extract_discount_amount(
     ):
         return (
             regular_price - sale_price
-        ).quantize(Decimal("0.01"))
-
-    discount_fields = [
-        "discountAmount",
-        "discount_amount",
-        "saving",
-        "savings",
-        "saveAmount",
-        "save_amount",
-        "promotionDiscount",
-        "promotion_discount",
-        "discount",
-    ]
-
-    for field in discount_fields:
-
-        value = product.get(field)
-
-        if isinstance(value, dict):
-            value = (
-                value.get("value")
-                or value.get("amount")
-            )
-
-        discount = _extract_price(value)
-
-        if discount is not None:
-
-            if "WithoutDecimal" in field:
-                discount = discount / Decimal("100")
-
-            return discount.quantize(
-                Decimal("0.01")
-            )
+        ).quantize(
+            Decimal("0.01")
+        )
 
     return Decimal("0.00")
 
 # ==========================================================
-# COLOUR HELPER
+# COLOUR
 # ==========================================================
 
 def _extract_colour(product):
+    """Extract product colour."""
 
-    # ------------------------------------------------------
-    # DIRECT COLOUR FIELDS
-    # ------------------------------------------------------
+    if not isinstance(product, dict):
+        return "Not specified"
 
-    for field in [
+    direct_fields = [
         "colour",
         "color",
         "colourName",
@@ -976,7 +765,9 @@ def _extract_colour(product):
         "productColor",
         "variantColour",
         "variantColor",
-    ]:
+    ]
+
+    for field in direct_fields:
 
         value = product.get(field)
 
@@ -994,6 +785,7 @@ def _extract_colour(product):
                 "value",
                 "label",
                 "displayName",
+                "display_name",
             ]:
 
                 nested_value = value.get(
@@ -1002,14 +794,12 @@ def _extract_colour(product):
 
                 if isinstance(nested_value, str):
 
-                    nested_value = nested_value.strip()
+                    nested_value = (
+                        nested_value.strip()
+                    )
 
                     if nested_value:
                         return nested_value
-
-    # ------------------------------------------------------
-    # ATTRIBUTES
-    # ------------------------------------------------------
 
     attributes = product.get("attributes")
 
@@ -1056,11 +846,9 @@ def _extract_colour(product):
 
         for key, value in attributes.items():
 
-            key_lower = str(key).lower()
-
             if (
-                "colour" in key_lower
-                or "color" in key_lower
+                "colour" in str(key).lower()
+                or "color" in str(key).lower()
             ):
 
                 if isinstance(value, str):
@@ -1086,19 +874,47 @@ def _extract_colour(product):
                         if value:
                             return value
 
+    variants = product.get("variants")
+
+    if isinstance(variants, list):
+
+        for variant in variants:
+
+            if not isinstance(variant, dict):
+                continue
+
+            for field in [
+                "colour",
+                "color",
+                "colourName",
+                "colorName",
+                "variantColour",
+                "variantColor",
+            ]:
+
+                value = variant.get(field)
+
+                if isinstance(value, str):
+
+                    value = value.strip()
+
+                    if value:
+                        return value
+
     return "Not specified"
 
 
 # ==========================================================
-# CATEGORY HELPER
+# CATEGORY
 # ==========================================================
+
 def _extract_category(product):
+    """Extract product category."""
 
-    # ======================================================
-    # 1. DIRECT CATEGORY FIELDS
-    # ======================================================
+    if not isinstance(product, dict):
+        return "Other"
 
-    for field in [
+    direct_fields = [
         "category",
         "categoryName",
         "category_name",
@@ -1110,7 +926,9 @@ def _extract_category(product):
         "productType",
         "product_type",
         "type",
-    ]:
+    ]
+
+    for field in direct_fields:
 
         value = product.get(field)
 
@@ -1146,10 +964,6 @@ def _extract_category(product):
 
                     if nested_value:
                         return nested_value
-
-    # ======================================================
-    # 2. CATEGORIES LIST
-    # ======================================================
 
     categories = product.get("categories")
 
@@ -1187,13 +1001,7 @@ def _extract_category(product):
                             break
 
         if category_values:
-
-            # Return the most specific/last category.
             return category_values[-1]
-
-    # ======================================================
-    # 3. CATEGORY ATTRIBUTES
-    # ======================================================
 
     attributes = product.get("attributes")
 
@@ -1276,10 +1084,6 @@ def _extract_category(product):
                         if value:
                             return value
 
-    # ======================================================
-    # 4. FALLBACK: PRODUCT NAME
-    # ======================================================
-
     name = (
         product.get("name")
         or product.get("title")
@@ -1287,552 +1091,96 @@ def _extract_category(product):
         or ""
     )
 
-    name = str(name).strip()
+    name_lower = str(name).strip().lower()
 
-    if name:
+    category_keywords = {
+        "ice cream": "Ice Cream",
+        "pet food": "Pet Food",
+        "cat food": "Pet Food",
+        "dog food": "Pet Food",
+        "toilet paper": "Household",
+        "paper towel": "Household",
+        "washing powder": "Cleaning",
+        "dishwashing": "Cleaning",
+        "toothpaste": "Personal Care",
+        "conditioner": "Personal Care",
+        "deodorant": "Personal Care",
+        "shampoo": "Personal Care",
+        "lotion": "Personal Care",
+        "margarine": "Margarine",
+        "yoghurt": "Yoghurt",
+        "yogurt": "Yoghurt",
+        "chocolate": "Chocolate",
+        "biscuits": "Biscuits",
+        "biscuit": "Biscuits",
+        "cookies": "Biscuits",
+        "cookie": "Biscuits",
+        "cereal": "Cereal",
+        "coffee": "Coffee",
+        "tea": "Tea",
+        "milk": "Milk",
+        "cheese": "Cheese",
+        "butter": "Butter",
+        "juice": "Juice",
+        "water": "Water",
+        "bread": "Bread",
+        "rolls": "Bread",
+        "loaf": "Bread",
+        "sugar": "Sugar",
+        "rice": "Rice",
+        "pasta": "Pasta",
+        "flour": "Flour",
+        "ketchup": "Sauces",
+        "mayonnaise": "Sauces",
+        "sauce": "Sauces",
+        "chips": "Snacks",
+        "crisps": "Snacks",
+        "snacks": "Snacks",
+        "snack": "Snacks",
+        "chicken": "Meat",
+        "beef": "Meat",
+        "pork": "Meat",
+        "sausage": "Meat",
+        "fish": "Fish",
+        "eggs": "Eggs",
+        "egg": "Eggs",
+        "vegetables": "Vegetables",
+        "vegetable": "Vegetables",
+        "fruits": "Fruit",
+        "fruit": "Fruit",
+        "frozen": "Frozen Food",
+        "pizza": "Frozen Food",
+        "diapers": "Baby",
+        "diaper": "Baby",
+        "baby": "Baby",
+        "detergent": "Cleaning",
+        "cleaner": "Cleaning",
+        "soap": "Personal Care",
+    }
 
-        name_lower = name.lower()
+    for keyword, category in sorted(
+        category_keywords.items(),
+        key=lambda item: len(item[0]),
+        reverse=True,
+    ):
 
-        # --------------------------------------------------
-        # Grocery / food categories
-        # --------------------------------------------------
-
-        category_keywords = {
-
-            "milk": "Milk",
-
-            "cheese": "Cheese",
-
-            "yoghurt": "Yoghurt",
-            "yogurt": "Yoghurt",
-
-            "butter": "Butter",
-
-            "cream": "Dairy",
-
-            "margarine": "Margarine",
-
-            "juice": "Juice",
-            "fruit juice": "Juice",
-
-            "water": "Water",
-
-            "bread": "Bread",
-
-            "rolls": "Bread",
-
-            "loaf": "Bread",
-
-            "cereal": "Cereal",
-            "cereals": "Cereal",
-
-            "coffee": "Coffee",
-
-            "tea": "Tea",
-
-            "sugar": "Sugar",
-
-            "rice": "Rice",
-
-            "pasta": "Pasta",
-
-            "flour": "Flour",
-
-            "oil": "Cooking Oil",
-
-            "sauce": "Sauces",
-
-            "ketchup": "Sauces",
-
-            "mayonnaise": "Sauces",
-
-            "biscuit": "Biscuits",
-
-            "biscuits": "Biscuits",
-
-            "cookie": "Biscuits",
-            "cookies": "Biscuits",
-
-            "chocolate": "Chocolate",
-
-            "sweet": "Sweets",
-            "sweets": "Sweets",
-
-            "chips": "Snacks",
-            "crisps": "Snacks",
-
-            "snack": "Snacks",
-            "snacks": "Snacks",
-
-            "meat": "Meat",
-
-            "beef": "Meat",
-            "chicken": "Meat",
-            "pork": "Meat",
-
-            "fish": "Fish",
-
-            "sausage": "Meat",
-
-            "egg": "Eggs",
-            "eggs": "Eggs",
-
-            "vegetable": "Vegetables",
-            "vegetables": "Vegetables",
-
-            "fruit": "Fruit",
-            "fruits": "Fruit",
-
-            "frozen": "Frozen Food",
-
-            "pizza": "Frozen Food",
-
-            "ice cream": "Ice Cream",
-
-            "pet food": "Pet Food",
-
-            "cat food": "Pet Food",
-            "dog food": "Pet Food",
-
-            "baby": "Baby",
-
-            "diaper": "Baby",
-            "diapers": "Baby",
-
-            "detergent": "Cleaning",
-
-            "washing powder": "Cleaning",
-
-            "dishwashing": "Cleaning",
-
-            "toilet paper": "Household",
-
-            "paper towel": "Household",
-
-            "cleaner": "Cleaning",
-
-            "shampoo": "Personal Care",
-
-            "conditioner": "Personal Care",
-
-            "soap": "Personal Care",
-
-            "toothpaste": "Personal Care",
-
-            "deodorant": "Personal Care",
-
-            "lotion": "Personal Care",
-        }
-
-        # Check longer phrases first.
-        for keyword, category in sorted(
-            category_keywords.items(),
-            key=lambda item: len(item[0]),
-            reverse=True,
-        ):
-
-            if keyword in name_lower:
-
-                return category
-
-    # ======================================================
-    # 5. NOTHING FOUND
-    # ======================================================
+        if keyword in name_lower:
+            return category
 
     return "Other"
 
 
-    # ------------------------------------------------------
-    # DIRECT CATEGORY FIELDS
-    # ------------------------------------------------------
-
-    for field in [
-        "category",
-        "categoryName",
-        "category_name",
-        "productCategory",
-        "product_category",
-        "department",
-        "departmentName",
-        "department_name",
-        "productType",
-        "product_type",
-        "type",
-    ]:
-
-        value = product.get(field)
-
-        if isinstance(value, str):
-
-            value = value.strip()
-
-            if value:
-                return value
-
-        elif isinstance(value, dict):
-
-            for nested_field in [
-                "name",
-                "value",
-                "label",
-                "displayName",
-                "title",
-            ]:
-
-                nested_value = value.get(
-                    nested_field
-                )
-
-                if isinstance(nested_value, str):
-
-                    nested_value = nested_value.strip()
-
-                    if nested_value:
-                        return nested_value
-
-    # ------------------------------------------------------
-    # CATEGORIES LIST
-    # ------------------------------------------------------
-
-    categories = product.get("categories")
-
-    if isinstance(categories, list):
-
-        for category in categories:
-
-            if isinstance(category, str):
-
-                category = category.strip()
-
-                if category:
-                    return category
-
-            elif isinstance(category, dict):
-
-                for field in [
-                    "name",
-                    "value",
-                    "label",
-                    "displayName",
-                    "title",
-                ]:
-
-                    value = category.get(field)
-
-                    if isinstance(value, str):
-
-                        value = value.strip()
-
-                        if value:
-                            return value
-
-    # ------------------------------------------------------
-    # ATTRIBUTES
-    # ------------------------------------------------------
-
-    attributes = product.get("attributes")
-
-    if isinstance(attributes, list):
-
-        for attribute in attributes:
-
-            if not isinstance(attribute, dict):
-                continue
-
-            attribute_name = str(
-                attribute.get(
-                    "name",
-                    attribute.get(
-                        "key",
-                        attribute.get(
-                            "attribute",
-                            "",
-                        ),
-                    ),
-                )
-            ).lower()
-
-            if (
-                "category" in attribute_name
-                or "department" in attribute_name
-                or "product type" in attribute_name
-                or "producttype" in attribute_name
-            ):
-
-                value = (
-                    attribute.get("value")
-                    or attribute.get("label")
-                    or attribute.get("displayValue")
-                    or attribute.get("displayName")
-                    or attribute.get("title")
-                )
-
-                if isinstance(value, str):
-
-                    value = value.strip()
-
-                    if value:
-                        return value
-
-    elif isinstance(attributes, dict):
-
-        for key, value in attributes.items():
-
-            key_lower = str(key).lower()
-
-            if (
-                "category" in key_lower
-                or "department" in key_lower
-            ):
-
-                if isinstance(value, str):
-
-                    value = value.strip()
-
-                    if value:
-                        return value
-
-                elif isinstance(value, dict):
-
-                    value = (
-                        value.get("value")
-                        or value.get("name")
-                        or value.get("label")
-                        or value.get("displayName")
-                        or value.get("title")
-                    )
-
-                    if isinstance(value, str):
-
-                        value = value.strip()
-
-                        if value:
-                            return value
-
-    return "Other"
-
 # ==========================================================
-# SIZE HELPER
-# ==========================================================
-
-
-    # ------------------------------------------------------
-    # DIRECT SIZE FIELDS
-    # ------------------------------------------------------
-
-    for field in [
-        "size",
-        "sizeName",
-        "size_name",
-        "productSize",
-        "product_size",
-        "variantSize",
-        "variant_size",
-        "sizeValue",
-        "size_value",
-    ]:
-
-        value = product.get(field)
-
-        if isinstance(value, str):
-
-            value = value.strip()
-
-            if value:
-                return value
-
-        elif isinstance(value, (int, float)):
-
-            return str(value)
-
-        elif isinstance(value, dict):
-
-            for nested_field in [
-                "name",
-                "value",
-                "label",
-                "displayName",
-                "title",
-            ]:
-
-                nested_value = value.get(
-                    nested_field
-                )
-
-                if nested_value is not None:
-
-                    nested_value = str(
-                        nested_value
-                    ).strip()
-
-                    if nested_value:
-                        return nested_value
-
-    # ------------------------------------------------------
-    # SIZES LIST
-    # ------------------------------------------------------
-
-    sizes = product.get("sizes")
-
-    if isinstance(sizes, list):
-
-        for size in sizes:
-
-            if isinstance(size, str):
-
-                size = size.strip()
-
-                if size:
-                    return size
-
-            elif isinstance(size, dict):
-
-                for field in [
-                    "name",
-                    "value",
-                    "label",
-                    "displayName",
-                    "title",
-                ]:
-
-                    value = size.get(field)
-
-                    if value is not None:
-
-                        value = str(value).strip()
-
-                        if value:
-                            return value
-
-    # ------------------------------------------------------
-    # ATTRIBUTES
-    # ------------------------------------------------------
-
-    attributes = product.get("attributes")
-
-    if isinstance(attributes, list):
-
-        for attribute in attributes:
-
-            if not isinstance(attribute, dict):
-                continue
-
-            attribute_name = str(
-                attribute.get(
-                    "name",
-                    attribute.get(
-                        "key",
-                        attribute.get(
-                            "attribute",
-                            "",
-                        ),
-                    ),
-                )
-            ).lower()
-
-            if "size" in attribute_name:
-
-                value = (
-                    attribute.get("value")
-                    or attribute.get("label")
-                    or attribute.get("displayValue")
-                    or attribute.get("displayName")
-                    or attribute.get("title")
-                )
-
-                if value is not None:
-
-                    value = str(value).strip()
-
-                    if value:
-                        return value
-
-    elif isinstance(attributes, dict):
-
-        for key, value in attributes.items():
-
-            key_lower = str(key).lower()
-
-            if "size" in key_lower:
-
-                if isinstance(value, str):
-
-                    value = value.strip()
-
-                    if value:
-                        return value
-
-                elif isinstance(value, dict):
-
-                    value = (
-                        value.get("value")
-                        or value.get("name")
-                        or value.get("label")
-                        or value.get("displayName")
-                        or value.get("title")
-                    )
-
-                    if value is not None:
-
-                        value = str(value).strip()
-
-                        if value:
-                            return value
-
-    # ------------------------------------------------------
-    # VARIANTS
-    # ------------------------------------------------------
-
-    variants = product.get("variants")
-
-    if isinstance(variants, list):
-
-        for variant in variants:
-
-            if not isinstance(variant, dict):
-                continue
-
-            for field in [
-                "size",
-                "sizeName",
-                "sizeValue",
-                "variantSize",
-            ]:
-
-                value = variant.get(field)
-
-                if value is not None:
-
-                    if isinstance(value, dict):
-
-                        value = (
-                            value.get("value")
-                            or value.get("name")
-                            or value.get("label")
-                            or value.get("displayName")
-                        )
-
-                    if value is not None:
-
-                        value = str(value).strip()
-
-                        if value:
-                            return value
-
-    return "Not specified"
-
-
-# ==========================================================
-# SIZE HELPER
+# SIZE
 # ==========================================================
 
 def _extract_size(product):
+    """Extract product size."""
 
-    # ======================================================
-    # 1. DIRECT SIZE FIELDS
-    # ======================================================
+    if not isinstance(product, dict):
+        return "Not specified"
 
-    for field in [
+    direct_fields = [
         "size",
         "sizeName",
         "size_name",
@@ -1842,7 +1190,9 @@ def _extract_size(product):
         "product_size",
         "variantSize",
         "variant_size",
-    ]:
+    ]
+
+    for field in direct_fields:
 
         value = product.get(field)
 
@@ -1864,10 +1214,6 @@ def _extract_size(product):
 
             if value:
                 return value
-
-    # ======================================================
-    # 2. SIZE ATTRIBUTE
-    # ======================================================
 
     attributes = product.get("attributes")
 
@@ -1891,12 +1237,7 @@ def _extract_size(product):
                 )
             ).strip().lower()
 
-            if attribute_name in [
-                "size",
-                "product size",
-                "size name",
-                "size value",
-            ]:
+            if "size" in attribute_name:
 
                 value = (
                     attribute.get("value")
@@ -1912,9 +1253,35 @@ def _extract_size(product):
                     if value:
                         return value
 
-    # ======================================================
-    # 3. VARIANTS
-    # ======================================================
+    elif isinstance(attributes, dict):
+
+        for key, value in attributes.items():
+
+            if "size" not in str(key).lower():
+                continue
+
+            if isinstance(value, str):
+
+                value = value.strip()
+
+                if value:
+                    return value
+
+            elif isinstance(value, dict):
+
+                value = (
+                    value.get("value")
+                    or value.get("name")
+                    or value.get("label")
+                    or value.get("displayName")
+                )
+
+                if value is not None:
+
+                    value = str(value).strip()
+
+                    if value:
+                        return value
 
     variants = product.get("variants")
 
@@ -1953,10 +1320,6 @@ def _extract_size(product):
                     if value:
                         return value
 
-    # ======================================================
-    # 4. FALLBACK — SIZE FROM PRODUCT NAME
-    # ======================================================
-
     name = (
         product.get("name")
         or product.get("title")
@@ -1967,20 +1330,6 @@ def _extract_size(product):
     name = str(name).strip()
 
     if name:
-
-        # Supports:
-        #
-        # 500ml
-        # 1L
-        # 2L
-        # 750g
-        # 1kg
-        # 6 x 1L
-        # 6x1L
-        # 12 x 500ml
-        # 24x330ml
-        #
-        # The final size is normally the product/package size.
 
         pattern = re.compile(
             r"""
@@ -2000,30 +1349,30 @@ def _extract_size(product):
         matches = pattern.findall(name)
 
         if matches:
-
             return matches[-1].strip()
-
-    # ======================================================
-    # 5. NOTHING FOUND
-    # ======================================================
 
     return "Not specified"
 
 
-    # ------------------------------------------------------
-    # 1. DIRECT SIZE FIELDS
-    # ------------------------------------------------------
+# ==========================================================
+# STORE ID
+# ==========================================================
+
+def _extract_store_id(product):
+    """Extract Checkers store/branch ID."""
+
+    if not isinstance(product, dict):
+        return ""
 
     for field in [
-        "size",
-        "sizeName",
-        "size_name",
-        "sizeValue",
-        "size_value",
-        "productSize",
-        "product_size",
-        "variantSize",
-        "variant_size",
+        "storeId",
+        "store_id",
+        "branchId",
+        "branch_id",
+        "fulfilmentStoreId",
+        "fulfillmentStoreId",
+        "fulfilment_store_id",
+        "fulfillment_store_id",
     ]:
 
         value = product.get(field)
@@ -2033,255 +1382,33 @@ def _extract_size(product):
 
         if isinstance(value, dict):
 
-            value = (
-                value.get("value")
-                or value.get("name")
-                or value.get("label")
-                or value.get("displayName")
-            )
+            for nested_field in [
+                "storeId",
+                "store_id",
+                "branchId",
+                "branch_id",
+                "id",
+            ]:
 
-        if value is not None:
+                nested_value = value.get(
+                    nested_field
+                )
+
+                if nested_value is not None:
+
+                    nested_value = str(
+                        nested_value
+                    ).strip()
+
+                    if nested_value:
+                        return nested_value
+
+        else:
 
             value = str(value).strip()
 
             if value:
                 return value
-
-    # ------------------------------------------------------
-    # 2. SIZE ATTRIBUTE
-    # ------------------------------------------------------
-
-    attributes = product.get("attributes")
-
-    if isinstance(attributes, list):
-
-        for attribute in attributes:
-
-            if not isinstance(attribute, dict):
-                continue
-
-            attribute_name = str(
-                attribute.get(
-                    "name",
-                    attribute.get(
-                        "key",
-                        attribute.get(
-                            "attribute",
-                            "",
-                        ),
-                    ),
-                )
-            ).strip().lower()
-
-            # Only accept actual size attributes.
-            if attribute_name in [
-                "size",
-                "product size",
-                "clothing size",
-                "shoe size",
-                "apparel size",
-                "size name",
-                "size value",
-            ]:
-
-                value = (
-                    attribute.get("value")
-                    or attribute.get("label")
-                    or attribute.get("displayValue")
-                    or attribute.get("displayName")
-                )
-
-                if value is not None:
-
-                    value = str(value).strip()
-
-                    if value:
-                        return value
-
-    # ------------------------------------------------------
-    # 3. SIZE OBJECT
-    # ------------------------------------------------------
-
-    size_object = product.get("size")
-
-    if isinstance(size_object, dict):
-
-        for field in [
-            "value",
-            "name",
-            "label",
-            "displayName",
-        ]:
-
-            value = size_object.get(field)
-
-            if value is not None:
-
-                value = str(value).strip()
-
-                if value:
-                    return value
-
-    # ------------------------------------------------------
-    # 4. VARIANTS
-    # ------------------------------------------------------
-
-    variants = product.get("variants")
-
-    if isinstance(variants, list):
-
-        for variant in variants:
-
-            if not isinstance(variant, dict):
-                continue
-
-            for field in [
-                "size",
-                "sizeName",
-                "sizeValue",
-                "variantSize",
-            ]:
-
-                value = variant.get(field)
-
-                if value is None:
-                    continue
-
-                if isinstance(value, dict):
-
-                    value = (
-                        value.get("value")
-                        or value.get("name")
-                        or value.get("label")
-                        or value.get("displayName")
-                    )
-
-                if value is not None:
-
-                    value = str(value).strip()
-
-                    if value:
-                        return value
-
-    # ------------------------------------------------------
-    # 5. NOTHING FOUND
-    # ------------------------------------------------------
-
-    return "Not specified"
-
-
-
-# ==========================================================
-# STORE LOCATION HELPER
-# ==========================================================
-def _extract_store_location(product):
-    """Extract the Checkers store/location associated with a product."""
-
-    def clean(value):
-        if value is None:
-            return ""
-
-        if isinstance(value, (str, int, float)):
-            return str(value).strip()
-
-        return ""
-
-    def build_location(data):
-        if not isinstance(data, dict):
-            return ""
-
-        for field in [
-            "displayName",
-            "display_name",
-            "formattedAddress",
-            "formatted_address",
-            "fullAddress",
-            "full_address",
-        ]:
-            value = clean(data.get(field))
-            if value:
-                return value
-
-        parts = []
-
-        for field in [
-            "storeName",
-            "store_name",
-            "branchName",
-            "branch_name",
-            "name",
-            "address",
-            "addressLine",
-            "addressLine1",
-            "addressLine2",
-            "street",
-            "streetAddress",
-            "suburb",
-            "town",
-            "city",
-            "province",
-            "postalCode",
-            "postal_code",
-            "postcode",
-        ]:
-            value = clean(data.get(field))
-
-            if value and value not in parts:
-                parts.append(value)
-
-        return ", ".join(parts)
-
-    # ======================================================
-    # STORE ID
-    # ======================================================
-
-    store_id = (
-        product.get("storeId")
-        or product.get("store_id")
-        or product.get("branchId")
-        or product.get("branch_id")
-    )
-
-    # If storeId itself is an object
-    if isinstance(store_id, dict):
-        location = build_location(store_id)
-
-        if location:
-            return location
-
-    # ======================================================
-    # DIRECT STORE LOCATION
-    # ======================================================
-
-    for field in [
-        "storeLocation",
-        "store_location",
-        "branchLocation",
-        "branch_location",
-        "storeAddress",
-        "store_address",
-        "physicalAddress",
-        "physical_address",
-        "location",
-        "address",
-    ]:
-        value = product.get(field)
-
-        if isinstance(value, str):
-            value = value.strip()
-
-            if value:
-                return value
-
-        elif isinstance(value, dict):
-            location = build_location(value)
-
-            if location:
-                return location
-
-    # ======================================================
-    # STORE / BRANCH OBJECT
-    # ======================================================
 
     for field in [
         "store",
@@ -2294,27 +1421,454 @@ def _extract_store_location(product):
         "seller",
         "merchant",
     ]:
+
+        store = product.get(field)
+
+        if not isinstance(store, dict):
+            continue
+
+        for nested_field in [
+            "storeId",
+            "store_id",
+            "branchId",
+            "branch_id",
+            "id",
+        ]:
+
+            value = store.get(
+                nested_field
+            )
+
+            if value is not None:
+
+                value = str(value).strip()
+
+                if value:
+                    return value
+
+    return ""
+
+
+# ==========================================================
+# STORE LOCATION
+# ==========================================================
+
+def _build_location(data):
+    """Build a human-readable store location."""
+
+    if not isinstance(data, dict):
+        return ""
+
+    for field in [
+        "displayName",
+        "display_name",
+        "formattedAddress",
+        "formatted_address",
+        "fullAddress",
+        "full_address",
+        "addressString",
+        "address_string",
+        "addressText",
+        "address_text",
+    ]:
+
+        value = _clean_string(
+            data.get(field)
+        )
+
+        if value:
+            return value
+
+    parts = []
+
+    for field in [
+        "storeName",
+        "store_name",
+        "branchName",
+        "branch_name",
+        "name",
+        "addressLine",
+        "addressLine1",
+        "addressLine2",
+        "street",
+        "streetAddress",
+        "suburb",
+        "town",
+        "city",
+        "province",
+        "postalCode",
+        "postal_code",
+        "postcode",
+    ]:
+
+        value = _clean_string(
+            data.get(field)
+        )
+
+        if value and value not in parts:
+            parts.append(value)
+
+    address = data.get("address")
+
+    if isinstance(address, dict):
+
+        nested_location = _build_location(
+            address
+        )
+
+        if nested_location:
+
+            for part in nested_location.split(", "):
+
+                if part not in parts:
+                    parts.append(part)
+
+    return ", ".join(parts)
+
+
+def _extract_store_location(product):
+    """Try to find store location directly in product data."""
+
+    if not isinstance(product, dict):
+        return "Location not available"
+
+    for field in [
+        "storeLocation",
+        "store_location",
+        "branchLocation",
+        "branch_location",
+        "storeAddress",
+        "store_address",
+        "physicalAddress",
+        "physical_address",
+        "location",
+    ]:
+
+        value = product.get(field)
+
+        if isinstance(value, str):
+
+            value = value.strip()
+
+            if value:
+                return value
+
+        elif isinstance(value, dict):
+
+            location = _build_location(value)
+
+            if location:
+                return location
+
+    address = product.get("address")
+
+    if isinstance(address, str):
+
+        address = address.strip()
+
+        if address:
+            return address
+
+    elif isinstance(address, dict):
+
+        location = _build_location(address)
+
+        if location:
+            return location
+
+    for field in [
+        "store",
+        "branch",
+        "fulfilmentStore",
+        "fulfillmentStore",
+        "fulfilment_store",
+        "fulfillment_store",
+        "retailer",
+        "seller",
+        "merchant",
+    ]:
+
         store = product.get(field)
 
         if isinstance(store, str):
+
             store = store.strip()
 
             if store:
                 return store
 
         elif isinstance(store, dict):
-            location = build_location(store)
+
+            location = _build_location(store)
 
             if location:
                 return location
 
     return "Location not available"
 
+
+# ==========================================================
+# GET STORE LOCATION
+# ==========================================================
+
+def get_store_location(store_id):
+    """Resolve Checkers store ID into a human-readable location."""
+
+    store_id = str(store_id or "").strip()
+
+    if not store_id:
+        return "Location not available"
+
+    cache_key = f"checkers_store_{store_id}"
+
+    # ------------------------------------------------------
+    # REDIS CACHE
+    # ------------------------------------------------------
+
+    try:
+
+        cached = redis_client.get(cache_key)
+
+    except redis.RedisError as exc:
+
+        print(
+            f"GET STORE REDIS ERROR "
+            f"{store_id}: {exc}"
+        )
+
+        cached = None
+
+    if cached:
+
+        print(
+            f"GET STORE CACHE HIT: "
+            f"{store_id} -> {cached}"
+        )
+
+        return cached
+
+    # ------------------------------------------------------
+    # API KEY
+    # ------------------------------------------------------
+
+    api_key = getattr(
+        settings,
+        "PARSE_API_KEY",
+        "",
+    )
+
+    if not api_key:
+
+        print(
+            "GET STORE: PARSE_API_KEY missing"
+        )
+
+        return "Location not available"
+
+    print(
+        "\n========================================"
+    )
+    print(
+        "GET STORE CACHE MISS"
+    )
+    print(
+        "STORE ID:",
+        store_id,
+    )
+    print(
+        "CALLING CHECKERS STORE API"
+    )
+    print(
+        "========================================"
+    )
+
+    # ------------------------------------------------------
+    # REQUEST
+    # ------------------------------------------------------
+
+    try:
+
+        response = requests.post(
+            CHECKERS_STORE_URL,
+            headers={
+                "X-API-Key": api_key,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            json={
+                "storeId": store_id,
+            },
+            timeout=30,
+        )
+
+        print(
+            "GET STORE STATUS:",
+            response.status_code,
+        )
+
+        if response.status_code == 429:
+
+            print(
+                f"GET STORE RATE LIMITED: "
+                f"{store_id}"
+            )
+
+            return "Location temporarily unavailable"
+
+        response.raise_for_status()
+
+    except requests.Timeout as exc:
+
+        print(
+            f"GET STORE TIMEOUT "
+            f"for {store_id}: {exc}"
+        )
+
+        return "Location not available"
+
+    except requests.HTTPError as exc:
+
+        print(
+            f"GET STORE HTTP ERROR "
+            f"for {store_id}: {exc}"
+        )
+
+        return "Location not available"
+
+    except requests.RequestException as exc:
+
+        print(
+            f"GET STORE REQUEST FAILED "
+            f"for {store_id}: {exc}"
+        )
+
+        return "Location not available"
+
+    # ------------------------------------------------------
+    # JSON
+    # ------------------------------------------------------
+
+    try:
+        data = response.json()
+
+    except ValueError:
+
+        print(
+            "GET STORE returned invalid JSON"
+        )
+
+        return "Location not available"
+
+    print("\n========== CHECKERS STORE API RESPONSE ==========")
+    print(json.dumps(data, indent=2, default=str))
+    print("==================================================\n")
+
+
+    # ------------------------------------------------------
+    # FIND STORE OBJECT
+    # ------------------------------------------------------
+
+    store = None
+
+    if isinstance(data, dict):
+
+        if isinstance(data.get("store"), dict):
+
+            store = data["store"]
+
+        elif isinstance(data.get("data"), dict):
+
+            nested = data["data"]
+
+            if isinstance(
+                nested.get("store"),
+                dict,
+            ):
+
+                store = nested["store"]
+
+            else:
+
+                store = nested
+
+        elif isinstance(data.get("result"), dict):
+
+            store = data["result"]
+
+        else:
+
+            store = data
+
+    elif isinstance(data, list):
+
+        if data and isinstance(data[0], dict):
+            store = data[0]
+
+    if not isinstance(store, dict):
+
+        print(
+            "GET STORE: "
+            "Could not find store object"
+        )
+
+        return "Location not available"
+
+    # ------------------------------------------------------
+    # LOCATION
+    # ------------------------------------------------------
+
+    location = _build_location(store)
+
+    if not location:
+
+        print(
+            "GET STORE: "
+            "No recognized address fields."
+        )
+
+        print(
+            "AVAILABLE STORE KEYS:",
+            list(store.keys()),
+        )
+
+        return "Location not available"
+
+    # ------------------------------------------------------
+    # CACHE
+    # ------------------------------------------------------
+
+    try:
+
+        redis_client.setex(
+            cache_key,
+            CACHE_TIMEOUT,
+            location,
+        )
+
+    except redis.RedisError as exc:
+
+        print(
+            f"GET STORE CACHE ERROR "
+            f"{store_id}: {exc}"
+        )
+
+    print(
+        f"GET STORE LOCATION CACHED: "
+        f"{location}"
+    )
+
+    return location
+
+
 # ==========================================================
 # DEAL EXPIRY
 # ==========================================================
 
 def _extract_deal_expiry(product):
+    """Extract promotion/deal expiry date."""
+
+    if not isinstance(product, dict):
+        return ""
 
     expiry_fields = [
         "dealExpires",
@@ -2352,7 +1906,6 @@ def _extract_deal_expiry(product):
                 return value
 
         elif value:
-
             return value
 
     promotion = product.get("promotion")
@@ -2387,16 +1940,29 @@ def _extract_deal_expiry(product):
 # ==========================================================
 
 def _cache_product(product):
+    """Save normalized product to Redis."""
 
-    product_id = product.get("external_id")
+    if not isinstance(product, dict):
+        return
+
+    product_id = str(
+        product.get("external_id")
+        or product.get("id")
+        or ""
+    ).strip()
 
     if not product_id:
         return
 
-    cache.set(
+    _redis_set_json(
         f"checkers_product_{product_id}",
         product,
         CACHE_TIMEOUT,
+    )
+
+    print(
+        f"PRODUCT SAVED TO REDIS: "
+        f"{product_id}"
     )
 
 
@@ -2405,16 +1971,14 @@ def _cache_product(product):
 # ==========================================================
 
 def get_product(product_id):
-    """
-    Get a single normalized product from cache.
+    """Retrieve a product from Redis."""
 
-    search_products() caches every product returned
-    by the Checkers API.
-    """
-
-    product_id = str(product_id).strip()
+    product_id = str(
+        product_id or ""
+    ).strip()
 
     if not product_id:
+
         raise StoreAPIError(
             "No product ID was provided."
         )
@@ -2423,12 +1987,25 @@ def get_product(product_id):
         f"checkers_product_{product_id}"
     )
 
-    product = cache.get(cache_key)
+    product = _redis_get_json(cache_key)
 
     if product is None:
-        raise StoreAPIError(
-            f"Product '{product_id}' could not be found."
+
+        print(
+            f"PRODUCT CACHE MISS: "
+            f"{product_id}"
         )
+
+        raise StoreAPIError(
+            f"Product '{product_id}' "
+            "could not be found in Redis cache. "
+            "Search for the product again."
+        )
+
+    print(
+        f"PRODUCT CACHE HIT: "
+        f"{product_id}"
+    )
 
     return product
 
@@ -2436,12 +2013,103 @@ def get_product(product_id):
 # ==========================================================
 # SEARCH PRODUCTS
 # ==========================================================
-def search_products(keyword="", limit=100):
+
+def search_products(
+    keyword="",
+    limit=100,
+):
+    """Search Checkers products."""
 
     keyword = (keyword or "").strip()
 
     if not keyword:
         return []
+
+    # ------------------------------------------------------
+    # LIMIT
+    # ------------------------------------------------------
+
+    try:
+        limit = int(limit)
+    except (ValueError, TypeError):
+        limit = 100
+
+    limit = max(
+        1,
+        min(limit, 100),
+    )
+
+    # ------------------------------------------------------
+    # CACHE KEY
+    # ------------------------------------------------------
+
+    cache_key = (
+        f"checkers_search:"
+        f"{keyword.lower()}:"
+        f"{limit}"
+    )
+
+    # ------------------------------------------------------
+    # REDIS
+    # ------------------------------------------------------
+
+    cached_products = _redis_get_json(
+        cache_key
+    )
+
+    if cached_products is not None:
+
+        print(
+            "\n========================================"
+        )
+        print(
+            "CHECKERS SEARCH REDIS HIT"
+        )
+        print(
+            "KEY:",
+            cache_key,
+        )
+        print(
+            "QUERY:",
+            keyword,
+        )
+        print(
+            "PRODUCTS:",
+            len(cached_products),
+        )
+        print(
+            "API CALL: NO"
+        )
+        print(
+            "========================================\n"
+        )
+
+        return cached_products
+
+    print(
+        "\n========================================"
+    )
+    print(
+        "CHECKERS SEARCH REDIS MISS"
+    )
+    print(
+        "KEY:",
+        cache_key,
+    )
+    print(
+        "QUERY:",
+        keyword,
+    )
+    print(
+        "CALLING CHECKERS API"
+    )
+    print(
+        "========================================\n"
+    )
+
+    # ------------------------------------------------------
+    # API KEY
+    # ------------------------------------------------------
 
     api_key = getattr(
         settings,
@@ -2450,9 +2118,15 @@ def search_products(keyword="", limit=100):
     )
 
     if not api_key:
+
         raise StoreAPIError(
-            "PARSE_API_KEY is not configured in settings.py."
+            "PARSE_API_KEY is not configured "
+            "in settings.py."
         )
+
+    # ------------------------------------------------------
+    # REQUEST
+    # ------------------------------------------------------
 
     try:
 
@@ -2471,7 +2145,17 @@ def search_products(keyword="", limit=100):
             timeout=30,
         )
 
+        if response.status_code == 429:
+
+            raise StoreAPIError(
+                "Checkers API rate limit reached. "
+                "Please try again shortly."
+            )
+
         response.raise_for_status()
+
+    except StoreAPIError:
+        raise
 
     except requests.Timeout as exc:
 
@@ -2490,12 +2174,22 @@ def search_products(keyword="", limit=100):
     except requests.RequestException as exc:
 
         raise StoreAPIError(
-            f"Unable to connect to Checkers API: {exc}"
+            f"Unable to connect to Checkers API: "
+            f"{exc}"
         ) from exc
+
+    # ------------------------------------------------------
+    # JSON
+    # ------------------------------------------------------
 
     try:
 
         data = response.json()
+        print("=" * 80)
+        print("CHECKERS RAW SEARCH RESPONSE")
+        print(json.dumps(data, indent=2))
+        print("=" * 80)
+
 
     except ValueError as exc:
 
@@ -2504,109 +2198,184 @@ def search_products(keyword="", limit=100):
             f"{response.text[:500]}"
         ) from exc
 
-    print("\n========================================")
-    print("CHECKERS API RESPONSE")
-    print("========================================")
-    print(data)
-    print("========================================\n")
-
-    # ======================================================
+    # ------------------------------------------------------
     # FIND PRODUCTS
-    # ======================================================
+    # ------------------------------------------------------
 
     raw_products = []
 
     if isinstance(data, dict):
 
-        if isinstance(data.get("products"), list):
+        possible_lists = [
+            data.get("products"),
+            data.get("results"),
+            data.get("items"),
+        ]
 
-            raw_products = data["products"]
+        for candidate in possible_lists:
 
-        elif isinstance(data.get("data"), list):
+            if isinstance(candidate, list):
 
-            raw_products = data["data"]
+                raw_products = candidate
+                break
 
-        elif isinstance(data.get("results"), list):
+        if not raw_products:
 
-            raw_products = data["results"]
+            nested = data.get("data")
 
-        elif isinstance(data.get("items"), list):
+            if isinstance(nested, list):
 
-            raw_products = data["items"]
+                raw_products = nested
 
-        elif isinstance(data.get("data"), dict):
+            elif isinstance(nested, dict):
 
-            nested = data["data"]
+                for field in [
+                    "products",
+                    "results",
+                    "items",
+                ]:
 
-            if isinstance(
-                nested.get("products"),
-                list,
-            ):
+                    candidate = nested.get(field)
 
-                raw_products = nested["products"]
+                    if isinstance(candidate, list):
 
-            elif isinstance(
-                nested.get("results"),
-                list,
-            ):
-
-                raw_products = nested["results"]
-
-            elif isinstance(
-                nested.get("items"),
-                list,
-            ):
-
-                raw_products = nested["items"]
+                        raw_products = candidate
+                        break
 
     elif isinstance(data, list):
 
         raw_products = data
 
+    # ------------------------------------------------------
+    # EMPTY RESULT
+    # ------------------------------------------------------
+
     if not raw_products:
+
+        _redis_set_json(
+            cache_key,
+            [],
+            EMPTY_CACHE_TIMEOUT,
+        )
+
+        print(
+            "CHECKERS SEARCH: "
+            "No products found."
+        )
+
         return []
 
-    # ======================================================
+    # ------------------------------------------------------
     # NORMALIZE
-    # ======================================================
+    # ------------------------------------------------------
 
     products = []
 
     for raw_product in raw_products:
 
-        if not isinstance(raw_product, dict):
+        if not isinstance(
+            raw_product,
+            dict,
+        ):
             continue
 
         try:
 
             normalized = normalize_product(
-                raw_product,resolve_store=False,
+                raw_product,
+                resolve_store=True,
             )
 
-            _cache_product(normalized)
+            if not normalized.get("id"):
 
-            products.append(normalized)
+                print(
+                    "CHECKERS PRODUCT "
+                    "SKIPPED: No product ID"
+                )
+
+                continue
+
+            _cache_product(
+                normalized
+            )
+
+            products.append(
+                normalized
+            )
 
         except Exception as exc:
 
             print(
-                "Could not normalize Checkers product:",
+                "Could not normalize "
+                "Checkers product:",
                 exc,
             )
 
-            continue
+    # ------------------------------------------------------
+    # CACHE SEARCH
+    # ------------------------------------------------------
+
+    _redis_set_json(
+        cache_key,
+        products,
+        CACHE_TIMEOUT,
+    )
+
+    print(
+        "\n========================================"
+    )
+    print(
+        "CHECKERS SEARCH SAVED TO REDIS"
+    )
+    print(
+        "KEY:",
+        cache_key,
+    )
+    print(
+        "PRODUCTS:",
+        len(products),
+    )
+    print(
+        "TTL:",
+        CACHE_TIMEOUT,
+    )
+    print(
+        "========================================\n"
+    )
 
     return products
 
 
+# ==========================================================
+# NORMALIZE PRODUCT
+# ==========================================================
 
-def normalize_product(product, resolve_store=True):
+def normalize_product(
+    product,
+    resolve_store=True,
+):
+    """
+    Convert a raw Checkers API product into the application's
+    normalized product format.
+    """
 
-    # ======================================================
-    # PRODUCT ID
-    # ======================================================
+    if not isinstance(product, dict):
 
-    product_id = _extract_product_id(product)
+        raise StoreAPIError(
+            "Invalid Checkers product data."
+        )
+
+    # ------------------------------------------------------
+    # ID
+    # ------------------------------------------------------
+
+    product_id = _extract_product_id(
+        product
+    )
+
+    # ------------------------------------------------------
+    # RAW IDs
+    # ------------------------------------------------------
 
     raw_id = product.get("id")
     raw_product_id = product.get("productId")
@@ -2614,9 +2383,9 @@ def normalize_product(product, resolve_store=True):
     raw_sku = product.get("sku")
     raw_code = product.get("code")
 
-    # ======================================================
+    # ------------------------------------------------------
     # NAME
-    # ======================================================
+    # ------------------------------------------------------
 
     name = (
         product.get("name")
@@ -2625,9 +2394,11 @@ def normalize_product(product, resolve_store=True):
         or "Unknown Checkers Product"
     )
 
-    # ======================================================
+    name = str(name).strip()
+
+    # ------------------------------------------------------
     # DESCRIPTION
-    # ======================================================
+    # ------------------------------------------------------
 
     description = (
         product.get("description")
@@ -2636,14 +2407,16 @@ def normalize_product(product, resolve_store=True):
         or ""
     )
 
-    # ======================================================
+    if not isinstance(description, str):
+        description = str(description)
+
+    # ------------------------------------------------------
     # PRICES
-    # ======================================================
+    # ------------------------------------------------------
 
     sale_price = _extract_sale_price(product)
     regular_price = _extract_regular_price(product)
 
-    # Generic fallback price
     generic_price = _extract_checkers_price(
         product,
         "priceWithoutDecimal",
@@ -2663,11 +2436,21 @@ def normalize_product(product, resolve_store=True):
     if regular_price is None:
         regular_price = sale_price
 
-    # ======================================================
-    # PROMOTION
-    # ======================================================
+    sale_price = sale_price.quantize(
+        Decimal("0.01")
+    )
 
-    promotion = _extract_promotion(product)
+    regular_price = regular_price.quantize(
+        Decimal("0.01")
+    )
+
+    # ------------------------------------------------------
+    # PROMOTION
+    # ------------------------------------------------------
+
+    promotion = _extract_promotion(
+        product
+    )
 
     on_sale = _extract_on_sale(
         product,
@@ -2675,17 +2458,17 @@ def normalize_product(product, resolve_store=True):
         sale_price=sale_price,
     )
 
-    # If there is a promotion but no explicit sale flag
-    if promotion:
+    if promotion and regular_price > sale_price:
         on_sale = True
 
-    # Never allow regular price to be lower than sale price
-    if on_sale and regular_price < sale_price:
+    if regular_price < sale_price:
         regular_price = sale_price
+        on_sale = False
 
-    # ======================================================
+
+    # ------------------------------------------------------
     # DISCOUNT
-    # ======================================================
+    # ------------------------------------------------------
 
     discount_amount = _extract_discount_amount(
         regular_price,
@@ -2694,26 +2477,37 @@ def normalize_product(product, resolve_store=True):
     )
 
     if (
-        regular_price > 0
+        regular_price > Decimal("0.00")
         and sale_price < regular_price
     ):
+
         discount_percentage = (
-            (regular_price - sale_price)
+            (
+                regular_price - sale_price
+            )
             / regular_price
             * Decimal("100")
-        ).quantize(Decimal("0.01"))
+        ).quantize(
+            Decimal("0.01")
+        )
+
     else:
-        discount_percentage = Decimal("0.00")
 
-    # ======================================================
+        discount_percentage = Decimal(
+            "0.00"
+        )
+
+    # ------------------------------------------------------
     # EXPIRY
-    # ======================================================
+    # ------------------------------------------------------
 
-    deal_expiry = _extract_deal_expiry(product)
+    deal_expiry = _extract_deal_expiry(
+        product
+    )
 
-    # ======================================================
+    # ------------------------------------------------------
     # BRAND
-    # ======================================================
+    # ------------------------------------------------------
 
     brand = (
         product.get("brand")
@@ -2721,65 +2515,75 @@ def normalize_product(product, resolve_store=True):
         or "Unknown"
     )
 
-    # ======================================================
-    # CATEGORY
-    # ======================================================
+    if isinstance(brand, dict):
 
-    category = _extract_category(product)
-
-    # ======================================================
-    # COLOUR
-    # ======================================================
-
-    colour = _extract_colour(product)
-
-    # ======================================================
-    # SIZE
-    # ======================================================
-
-    size = _extract_size(product)
-
-    # ======================================================
-    # STORE ID
-    # ======================================================
-
-    store_id = (
-        product.get("storeId")
-        or product.get("store_id")
-        or product.get("branchId")
-        or product.get("branch_id")
-    )
-
-    # Check nested store object
-    store_object = product.get("store")
-
-    if (
-        not store_id
-        and isinstance(store_object, dict)
-    ):
-        store_id = (
-            store_object.get("storeId")
-            or store_object.get("store_id")
-            or store_object.get("branchId")
-            or store_object.get("branch_id")
+        brand = (
+            brand.get("name")
+            or brand.get("value")
+            or brand.get("label")
+            or "Unknown"
         )
 
-    # ======================================================
-    # STORE LOCATION
-    # ======================================================
+    brand = str(brand).strip()
 
-    store_location = _extract_store_location(product)
+    # ------------------------------------------------------
+    # CATEGORY
+    # ------------------------------------------------------
 
+    category = _extract_category(
+        product
+    )
+
+    # ------------------------------------------------------
+    # COLOUR
+    # ------------------------------------------------------
+
+    colour = _extract_colour(
+        product
+    )
+
+    # ------------------------------------------------------
+    # SIZE
+    # ------------------------------------------------------
+
+    size = _extract_size(
+        product
+    )
+
+    # ------------------------------------------------------
+    # STORE
+    # ------------------------------------------------------
+
+    store_location = _extract_store_location(
+            product
+        )
+    
+    store_id = _extract_store_id(
+        product
+    )
+    print(
+    f"CHECKERS STORE DEBUG | "
+    f"product={name} | "
+    f"store_id={store_id} | "
+    f"location={store_location}")
+
+
+
+
+    
     if (
         resolve_store
         and store_location == "Location not available"
         and store_id
     ):
-        store_location = get_store_location(store_id)
 
-    # ======================================================
+        store_location = get_store_location(
+            store_id
+        )
+
+    # ------------------------------------------------------
     # STOCK
-    # ======================================================
+    # ------------------------------------------------------
 
     stock_fields = [
         "stock",
@@ -2804,13 +2608,42 @@ def normalize_product(product, resolve_store=True):
             continue
 
         try:
-            parsed_stock = int(value)
+
+            if isinstance(value, dict):
+
+                for nested_field in [
+                    "quantity",
+                    "available",
+                    "stock",
+                    "value",
+                    "count",
+                ]:
+
+                    nested_value = value.get(
+                        nested_field
+                    )
+
+                    if nested_value is not None:
+
+                        value = nested_value
+                        break
+
+            if isinstance(value, bool):
+
+                stock = 1 if value else 0
+                break
+
+            parsed_stock = int(
+                float(value)
+            )
 
             if parsed_stock >= 0:
+
                 stock = parsed_stock
                 break
 
         except (ValueError, TypeError):
+
             continue
 
     if stock is None:
@@ -2832,188 +2665,120 @@ def normalize_product(product, resolve_store=True):
             else 0
         )
 
-    # ======================================================
+    # ------------------------------------------------------
     # IMAGES
-    # ======================================================
+    # ------------------------------------------------------
 
-    image = _extract_image(product)
-    images = _extract_images(product)
+    image = _extract_image(
+        product
+    )
 
-    # ======================================================
+    images = _extract_images(
+        product
+    )
+
+    # ------------------------------------------------------
     # URL
-    # ======================================================
+    # ------------------------------------------------------
 
     url = (
         product.get("url")
         or product.get("productUrl")
         or product.get("productURL")
+        or product.get("product_url")
         or product.get("link")
         or ""
     )
 
-    # ======================================================
-    # SHIPPING
-    # ======================================================
+    if not isinstance(url, str):
+        url = str(url)
 
-    shipping_cost = Decimal("0.00")
+    url = url.strip()
 
-    # ======================================================
-    # CURRENT PRICE
-    # ======================================================
+    # ------------------------------------------------------
+    # COST
+    # ------------------------------------------------------
+
+    shipping_cost = Decimal(
+        "0.00"
+    )
 
     current_price = sale_price
 
-    # ======================================================
-    # NORMALIZED PRODUCT
-    # ======================================================
+    total_cost = (
+        current_price + shipping_cost
+    ).quantize(
+        Decimal("0.01")
+    )
 
-    normalized = {
+    # ------------------------------------------------------
+    # NORMALIZED PRODUCT
+    # ------------------------------------------------------
+
+    return {
+        # IDENTIFIERS
         "id": product_id,
         "external_id": product_id,
 
         "raw_id": raw_id,
         "raw_product_id": raw_product_id,
-        "raw_product_id_underscore":
-            raw_product_id_underscore,
+        "raw_product_id_underscore": (
+            raw_product_id_underscore
+        ),
         "raw_sku": raw_sku,
         "raw_code": raw_code,
 
+        # SOURCE
         "source": "checkers",
 
+        # BASIC INFORMATION
         "name": name,
         "title": name,
         "description": description,
 
+        # PRODUCT INFORMATION
         "brand": brand,
         "category": category,
         "colour": colour,
         "size": size,
 
-        # ------------------------------
         # PRICE
-        # ------------------------------
-
         "price": current_price,
-
         "regular_price": regular_price,
-
         "sale_price": (
             current_price
             if on_sale
             else None
         ),
 
-        # ------------------------------
         # PROMOTION
-        # ------------------------------
-
         "on_sale": on_sale,
-
         "promotion": promotion,
-
         "discount_amount": discount_amount,
-
-        "discount_percentage":
-            discount_percentage,
-
+        "discount_percentage": (
+            discount_percentage
+        ),
         "deal_expiry": deal_expiry,
 
-        # ------------------------------
         # COST
-        # ------------------------------
-
         "shipping_cost": shipping_cost,
+        "total_cost": total_cost,
 
-        "total_cost": (
-            current_price
-            + shipping_cost
-        ),
-
-        # ------------------------------
         # STOCK
-        # ------------------------------
-
         "stock": stock,
+        "rating": _extract_rating(product),
 
-        "rating": Decimal("0.00"),
 
-        # ------------------------------
         # STORE
-        # ------------------------------
-
         "store": "Checkers",
-
+        "store_id": store_id,
         "location": store_location,
 
-        # ------------------------------
         # IMAGES
-        # ------------------------------
-
         "image": image,
-
         "thumbnail": image,
-
         "images": images,
 
-        # ------------------------------
         # URL
-        # ------------------------------
-
         "url": url,
     }
-
-    return normalized
-
-
-
-
-
-# ==========================================================
-# GET PRODUCT
-# ==========================================================
-
-# ==========================================================
-# DETAIL
-# ==========================================================
-def detail(request, product_id):
-    product_id = str(product_id).strip()
-
-    if not product_id:
-        return render(
-            request,
-            "products/detail.html",
-            {
-                "product": None,
-                "api_error": "No product ID was provided.",
-            },
-        )
-
-    try:
-        product = get_product(product_id)
-
-    except StoreAPIError as exc:
-        return render(
-            request,
-            "products/detail.html",
-            {
-                "product": None,
-                "api_error": str(exc),
-            },
-        )
-
-    print("========================================")
-    print("PRODUCT DETAIL")
-    print("Product ID:", product_id)
-    print("Product:", product.get("name"))
-    print("Store:", product.get("store"))
-    print("Location:", product.get("location"))
-    print("========================================")
-
-    return render(
-        request,
-        "products/detail.html",
-        {
-            "product": product,
-        },
-    )
-    
