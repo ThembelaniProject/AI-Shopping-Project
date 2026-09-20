@@ -20,4 +20,5 @@ urlpatterns = [
 
     # Shopping
     path("shopping/", include("shopping.urls")),
+    
 ]

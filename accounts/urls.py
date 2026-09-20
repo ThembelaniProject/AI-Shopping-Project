@@ -54,7 +54,17 @@ path(
 # MICROSOFT LOGIN
 # ------------------------------------------------------
 
+path(
+        "microsoft/login/",
+        views.microsoft_login,
+        name="microsoft_login",
+    ),
 
+    path(
+        "microsoft/callback/",
+        views.microsoft_callback,
+        name="microsoft_callback",
+    ),
 
 # ------------------------------------------------------
 # PROFILE

@@ -332,7 +332,301 @@ def terms_conditions(request):
 # ==========================================================
 # MICROSOFT LOGIN
 # ==========================================================
+def microsoft_login(request):
 
+
+    if request.user.is_authenticated:
+        return redirect("shopping:dashboard")
+
+    if not settings.MICROSOFT_CLIENT_ID:
+        messages.error(
+            request,
+            "Microsoft login is not configured."
+        )
+        return redirect("accounts:login")
+
+    if not settings.MICROSOFT_CLIENT_SECRET:
+        messages.error(
+            request,
+            "Microsoft login is not configured."
+        )
+        return redirect("accounts:login")
+
+    if not settings.MICROSOFT_REDIRECT_URI:
+        messages.error(
+            request,
+            "Microsoft redirect URI is not configured."
+        )
+        return redirect("accounts:login")
+
+    msal_app = msal.ConfidentialClientApplication(
+        client_id=settings.MICROSOFT_CLIENT_ID,
+        authority=settings.MICROSOFT_AUTHORITY,
+        client_credential=settings.MICROSOFT_CLIENT_SECRET,
+    )
+
+    # Generate the Microsoft authorization URL.
+    auth_url = msal_app.get_authorization_request_url(
+        scopes=settings.MICROSOFT_SCOPE,
+        redirect_uri=settings.MICROSOFT_REDIRECT_URI,
+        state=str(uuid.uuid4()),
+    )
+
+    return redirect(auth_url)
+
+def microsoft_callback(request):
+
+    # ------------------------------------------------------
+    # Microsoft returned an error
+    # ------------------------------------------------------
+
+    if request.GET.get("error"):
+        error_description = request.GET.get(
+            "error_description",
+            "Microsoft login was cancelled or failed."
+        )
+
+        messages.error(
+            request,
+            error_description
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Authorization code
+    # ------------------------------------------------------
+
+    code = request.GET.get("code")
+
+    if not code:
+        messages.error(
+            request,
+            "Microsoft did not return an authorization code."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # MSAL application
+    # ------------------------------------------------------
+
+    msal_app = msal.ConfidentialClientApplication(
+        client_id=settings.MICROSOFT_CLIENT_ID,
+        authority=settings.MICROSOFT_AUTHORITY,
+        client_credential=settings.MICROSOFT_CLIENT_SECRET,
+    )
+
+    # ------------------------------------------------------
+    # Exchange authorization code for tokens
+    # ------------------------------------------------------
+
+    result = msal_app.acquire_token_by_authorization_code(
+        code=code,
+        scopes=settings.MICROSOFT_SCOPE,
+        redirect_uri=settings.MICROSOFT_REDIRECT_URI,
+    )
+
+    if "error" in result:
+
+        messages.error(
+            request,
+            result.get(
+                "error_description",
+                "Microsoft authentication failed."
+            )
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Validate Microsoft tenant
+    # ------------------------------------------------------
+
+    id_token_claims = result.get(
+        "id_token_claims",
+        {}
+    )
+
+    microsoft_tenant_id = id_token_claims.get(
+        "tid"
+    )
+
+    allowed_tenant_ids = getattr(
+        settings,
+        "MICROSOFT_ALLOWED_TENANT_IDS",
+        []
+    )
+
+    if (
+        allowed_tenant_ids
+        and microsoft_tenant_id not in allowed_tenant_ids
+    ):
+
+        messages.error(
+            request,
+            "Your Microsoft organization is not authorized to use SmartSpend."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Access token
+    # ------------------------------------------------------
+
+    access_token = result.get(
+        "access_token"
+    )
+
+    if not access_token:
+
+        messages.error(
+            request,
+            "Microsoft did not provide an access token."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Get Microsoft profile
+    # ------------------------------------------------------
+
+    graph_response = requests.get(
+        "https://graph.microsoft.com/v1.0/me",
+        headers={
+            "Authorization": f"Bearer {access_token}"
+        },
+        timeout=10,
+    )
+
+    if not graph_response.ok:
+
+        messages.error(
+            request,
+            "Could not retrieve your Microsoft account."
+        )
+
+        return redirect("accounts:login")
+
+    microsoft_user = graph_response.json()
+
+    # ------------------------------------------------------
+    # Get email
+    # ------------------------------------------------------
+
+    email = (
+        microsoft_user.get("mail")
+        or microsoft_user.get("userPrincipalName")
+        or ""
+    ).strip().lower()
+
+    first_name = (
+        microsoft_user.get("givenName")
+        or ""
+    ).strip()
+
+    last_name = (
+        microsoft_user.get("surname")
+        or ""
+    ).strip()
+
+    # ------------------------------------------------------
+    # Validate email
+    # ------------------------------------------------------
+
+    if not email:
+
+        messages.error(
+            request,
+            "Microsoft did not provide an email address."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # DUT student email validation
+    # ------------------------------------------------------
+
+    dut_email_pattern = (
+        r"^[0-9]{8}@dut4life\.ac\.za$"
+    )
+
+    if not re.match(
+        dut_email_pattern,
+        email,
+        re.IGNORECASE
+    ):
+
+        messages.error(
+            request,
+            "Please sign in using your DUT student Microsoft account."
+        )
+
+        return redirect("accounts:login")
+
+    # ------------------------------------------------------
+    # Find existing Django user
+    # ------------------------------------------------------
+
+    try:
+
+        user = User.objects.get(
+            email__iexact=email
+        )
+
+        changed = False
+
+        if first_name and user.first_name != first_name:
+            user.first_name = first_name
+            changed = True
+
+        if last_name and user.last_name != last_name:
+            user.last_name = last_name
+            changed = True
+
+        if user.email != email:
+            user.email = email
+            changed = True
+
+        if changed:
+            user.save()
+
+    except User.DoesNotExist:
+
+        # --------------------------------------------------
+        # Create new Django user
+        # --------------------------------------------------
+
+        user = User.objects.create_user(
+            username=email,
+            email=email,
+            first_name=first_name,
+            last_name=last_name,
+        )
+
+    # ------------------------------------------------------
+    # Create profile if necessary
+    # ------------------------------------------------------
+
+    UserProfile.objects.get_or_create(
+        user=user,
+        defaults={
+            "available_amount": Decimal("1650.00"),
+        },
+    )
+
+    # ------------------------------------------------------
+    # Django login
+    # ------------------------------------------------------
+
+    login(
+        request,
+        user
+    )
+
+    return redirect(
+        "shopping:dashboard"
+    )
 
 # ==========================================================
 # PROFILE

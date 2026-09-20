@@ -74,19 +74,11 @@ MICROSOFT_REDIRECT_URI = os.environ.get(
     ""
 )
 
-MICROSOFT_SCOPE = [
-    "openid",
-    "profile",
-    "email",
-    "User.Read",
-]
+MICROSOFT_SCOPE = ["User.Read"]
 
 # Only create the Microsoft authority when a tenant exists.
-MICROSOFT_AUTHORITY = (
-    f"https://login.microsoftonline.com/{MICROSOFT_TENANT_ID}"
-    if MICROSOFT_TENANT_ID
-    else ""
-)
+MICROSOFT_AUTHORITY = "https://login.microsoftonline.com/common"
+
 
 
 
