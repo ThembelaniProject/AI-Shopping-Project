@@ -1452,14 +1452,17 @@ def _extract_store_id(product):
 # ==========================================================
 # STORE LOCATION
 # ==========================================================
-
 def _build_location(data):
-    """Build a human-readable store location."""
+    """Build a human-readable store location from Checkers store data."""
 
     if not isinstance(data, dict):
         return ""
 
-    for field in [
+    # ------------------------------------------------------
+    # 1. DIRECT FORMATTED ADDRESS
+    # ------------------------------------------------------
+
+    direct_fields = [
         "displayName",
         "display_name",
         "formattedAddress",
@@ -1470,60 +1473,111 @@ def _build_location(data):
         "address_string",
         "addressText",
         "address_text",
-    ]:
+        "addressLine",
+        "address_line",
+    ]
 
-        value = _clean_string(
-            data.get(field)
-        )
+    for field in direct_fields:
+        value = data.get(field)
 
-        if value:
-            return value
+        if isinstance(value, str):
+            value = value.strip()
+
+            if value:
+                return value
+
+    # ------------------------------------------------------
+    # 2. BUILD ADDRESS FROM INDIVIDUAL FIELDS
+    # ------------------------------------------------------
 
     parts = []
 
-    for field in [
+    address_fields = [
         "storeName",
         "store_name",
         "branchName",
         "branch_name",
         "name",
-        "addressLine",
-        "addressLine1",
-        "addressLine2",
         "street",
         "streetAddress",
+        "street_address",
+        "addressLine1",
+        "address_line_1",
+        "addressLine2",
+        "address_line_2",
         "suburb",
         "town",
         "city",
         "province",
+        "state",
         "postalCode",
         "postal_code",
         "postcode",
+        "zipCode",
+        "zip_code",
+    ]
+
+    for field in address_fields:
+        value = data.get(field)
+
+        if value is None:
+            continue
+
+        if isinstance(value, (str, int, float)):
+            value = str(value).strip()
+
+            if value and value not in parts:
+                parts.append(value)
+
+    if parts:
+        return ", ".join(parts)
+
+    # ------------------------------------------------------
+    # 3. NESTED ADDRESS OBJECT
+    # ------------------------------------------------------
+
+    for field in [
+        "address",
+        "storeAddress",
+        "store_address",
+        "location",
+        "storeLocation",
+        "store_location",
+        "branch",
+        "store",
     ]:
 
-        value = _clean_string(
-            data.get(field)
-        )
+        nested = data.get(field)
 
-        if value and value not in parts:
-            parts.append(value)
+        if isinstance(nested, dict):
 
-    address = data.get("address")
+            location = _build_location(nested)
 
-    if isinstance(address, dict):
+            if location:
+                return location
 
-        nested_location = _build_location(
-            address
-        )
+    # ------------------------------------------------------
+    # 4. NESTED LOCATION OBJECTS
+    # ------------------------------------------------------
 
-        if nested_location:
+    for field in [
+        "contact",
+        "details",
+        "storeDetails",
+        "store_details",
+        "metadata",
+    ]:
 
-            for part in nested_location.split(", "):
+        nested = data.get(field)
 
-                if part not in parts:
-                    parts.append(part)
+        if isinstance(nested, dict):
 
-    return ", ".join(parts)
+            location = _build_location(nested)
+
+            if location:
+                return location
+
+    return ""
 
 
 def _extract_store_location(product):
@@ -1820,15 +1874,22 @@ def get_store_location(store_id):
     location = _build_location(store)
 
     if not location:
-
         print(
-            "GET STORE: "
-            "No recognized address fields."
+            "GET STORE: No recognized address fields."
         )
 
         print(
             "AVAILABLE STORE KEYS:",
             list(store.keys()),
+        )
+
+        print(
+            "FULL STORE OBJECT:",
+            json.dumps(
+                store,
+                indent=2,
+                default=str,
+            ),
         )
 
         return "Location not available"
@@ -2567,20 +2628,21 @@ def normalize_product(
     f"store_id={store_id} | "
     f"location={store_location}")
 
-
-
-
-    
     if (
-        resolve_store
-        and store_location == "Location not available"
-        and store_id
+    resolve_store
+    and store_id
+    and (
+        not store_location
+        or store_location == "Location not available"
+    )
     ):
+        store_location = get_store_location(store_id)
 
-        store_location = get_store_location(
-            store_id
-        )
-
+    print(
+        f"CHECKERS STORE FINAL | "
+        f"store_id={store_id} | "
+        f"location={store_location}"
+    )
     # ------------------------------------------------------
     # STOCK
     # ------------------------------------------------------
