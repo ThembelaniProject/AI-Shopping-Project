@@ -763,6 +763,10 @@ def microsoft_callback(request):
         return redirect("accounts:login")
 
     microsoft_user = graph_response.json()
+    
+    print("MICROSOFT GRAPH MAIL:", microsoft_user.get("mail"))
+    print("MICROSOFT GRAPH UPN:", microsoft_user.get("userPrincipalName"))
+
 
     # ------------------------------------------------------
     # Get email
