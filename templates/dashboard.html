@@ -549,6 +549,37 @@
 
 
     <!-- ================================
+         SPENDING SUMMARY
+    ================================= -->
+
+    <section class="spending-summary">
+
+        <div class="spending-card">
+            <span>Monthly Budget</span>
+            <strong>R{{ monthly_budget|floatformat:2 }}</strong>
+        </div>
+
+        <div class="spending-card">
+            <span>Spent This Month</span>
+            <strong>R{{ monthly_spent|floatformat:2 }}</strong>
+        </div>
+
+        <div class="spending-card">
+            <span>Budget Remaining</span>
+            <strong>R{{ remaining_budget|floatformat:2 }}</strong>
+        </div>
+
+        <a
+            href="{% url 'shopping:purchase_history' %}"
+            class="history-button"
+        >
+            View Purchase History →
+        </a>
+
+    </section>
+
+
+    <!-- ================================
          MAIN AI SEARCH
     ================================= -->
 
