@@ -35,7 +35,9 @@ PARSE_API_KEY = (
     or os.getenv("PARSE_API_KEY", "")
 ).strip()
 
-CACHE_TIMEOUT = int(os.getenv("PRODUCT_CACHE_TIMEOUT", "1800"))
+CACHE_TIMEOUT = int(os.getenv("PRODUCT_CACHE_TIMEOUT", "21600"))
+STALE_CACHE_TIMEOUT = int(os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "86400"))
+RATE_LIMIT_COOLDOWN = int(os.getenv("RETAILER_RATE_LIMIT_COOLDOWN", "65"))
 STORE_CACHE_TIMEOUT = int(os.getenv("STORE_CACHE_TIMEOUT", "86400"))
 EMPTY_CACHE_TIMEOUT = 60
 REQUEST_TIMEOUT = int(os.getenv("RETAILER_REQUEST_TIMEOUT", "15"))
@@ -53,7 +55,7 @@ CHECKERS_SEARCH_URL = (
     f"{PARSE_BASE_URL}/{CHECKERS_SCRAPER_ID}/search_products"
 )
 CHECKERS_STORE_URL = (
-    f"{PARSE_BASE_URL}/{CHECKERS_SCRAPER_ID}/get_store"
+    f"{PARSE_BASE_URL}/{CHECKERS_SCRAPER_ID}/find_stores"
 )
 
 PNP_SEARCH_URL = (
@@ -114,6 +116,18 @@ def _cache_set(key: str, value: Any, timeout: int = CACHE_TIMEOUT):
     except Exception:
         # A cache outage must not take down product search.
         pass
+
+
+def _stale_key(key: str) -> str:
+    return f"{key}:stale"
+
+
+def _cache_stale_set(key: str, value: Any):
+    _cache_set(_stale_key(key), value, STALE_CACHE_TIMEOUT)
+
+
+def _cache_stale_get(key: str):
+    return _cache_get(_stale_key(key))
 
 
 # ============================================================
@@ -570,6 +584,22 @@ def _parse_request(
         "Accept": "application/json",
     }
 
+    if CHECKERS_SCRAPER_ID in url:
+        cooldown_key = "retailer:cooldown:checkers"
+        retailer_name = "Checkers"
+    elif PNP_SCRAPER_ID in url:
+        cooldown_key = "retailer:cooldown:pnp"
+        retailer_name = "Pick n Pay"
+    else:
+        cooldown_key = ""
+        retailer_name = "retailer"
+
+    if cooldown_key and _cache_get(cooldown_key):
+        raise StoreAPIError(
+            f"{retailer_name} API is temporarily rate-limited. "
+            f"Retry after the {RATE_LIMIT_COOLDOWN}-second cooldown."
+        )
+
     try:
         if method.upper() == "POST":
             response = SESSION.post(
@@ -596,8 +626,21 @@ def _parse_request(
         )
 
     if response.status_code == 429:
+        if CHECKERS_SCRAPER_ID in url:
+            retailer_name = "Checkers"
+            cooldown_key = "retailer:cooldown:checkers"
+        elif PNP_SCRAPER_ID in url:
+            retailer_name = "Pick n Pay"
+            cooldown_key = "retailer:cooldown:pnp"
+        else:
+            retailer_name = "retailer"
+            cooldown_key = "retailer:cooldown:unknown"
+
+        _cache_set(cooldown_key, True, RATE_LIMIT_COOLDOWN)
         raise StoreAPIError(
-            "Retailer API rate limit reached. Cached results will continue to work."
+            f"{retailer_name} API rate limit reached. "
+            f"Using cached data when available; new live requests are paused "
+            f"for {RATE_LIMIT_COOLDOWN} seconds."
         )
 
     if response.status_code >= 400:
@@ -918,34 +961,43 @@ def search_checkers_products(
     if cached is not None:
         products = cached
     else:
-        data = _parse_request(
-            CHECKERS_SEARCH_URL,
-            CHECKERS_SNAPSHOT_VERSION,
-            params={
-                "query": keyword,
-                "page": "0",
-                "limit": str(limit),
-            },
-            method="POST",
-        )
-
-        products = [
+        try:
+            data = _parse_request(
+                CHECKERS_SEARCH_URL,
+                CHECKERS_SNAPSHOT_VERSION,
+                params={
+                    "query": keyword,
+                    "page": "0",
+                    "limit": str(limit),
+                },
+                method="POST",
+            )
+        except StoreAPIError:
+            stale = _cache_stale_get(cache_key)
+            if stale is not None:
+                products = stale
+            else:
+                raise
+        else:
+            products = [
             normalize_product(
                 raw,
                 resolve_store=False,
                 retailer="Checkers",
             )
             for raw in _extract_raw_products(data)
-        ]
+            ]
 
-        for product in products:
-            _cache_product(product)
+            for product in products:
+                _cache_product(product)
 
-        _cache_set(
-            cache_key,
-            products,
-            CACHE_TIMEOUT if products else EMPTY_CACHE_TIMEOUT,
-        )
+            _cache_set(
+                cache_key,
+                products,
+                CACHE_TIMEOUT if products else EMPTY_CACHE_TIMEOUT,
+            )
+            if products:
+                _cache_stale_set(cache_key, products)
 
     for product in products:
         _add_distance(product, latitude, longitude)
@@ -988,17 +1040,23 @@ def search_pnp_products(
     if cached is not None:
         return cached
 
-    data = _parse_request(
-        PNP_SEARCH_URL,
-        PNP_SNAPSHOT_VERSION,
-        params={
-            "query": keyword,
-            "page": "0",
-            "page_size": str(limit),
-            "sort": "relevance",
-        },
-        method="GET",
-    )
+    try:
+        data = _parse_request(
+            PNP_SEARCH_URL,
+            PNP_SNAPSHOT_VERSION,
+            params={
+                "query": keyword,
+                "page": "0",
+                "page_size": str(limit),
+                "sort": "relevance",
+            },
+            method="GET",
+        )
+    except StoreAPIError:
+        stale = _cache_stale_get(cache_key)
+        if stale is not None:
+            return stale
+        raise
 
     products = [
         normalize_product(
@@ -1017,6 +1075,8 @@ def search_pnp_products(
         products,
         CACHE_TIMEOUT if products else EMPTY_CACHE_TIMEOUT,
     )
+    if products:
+        _cache_stale_set(cache_key, products)
     return products
 
 
@@ -1028,12 +1088,18 @@ def get_pnp_stores(query: str = ""):
     if cached is not None:
         return cached
 
-    data = _parse_request(
-        PNP_STORES_URL,
-        PNP_SNAPSHOT_VERSION,
-        params={"query": query} if query else {},
-        method="GET",
-    )
+    try:
+        data = _parse_request(
+            PNP_STORES_URL,
+            PNP_SNAPSHOT_VERSION,
+            params={"query": query} if query else {},
+            method="GET",
+        )
+    except StoreAPIError:
+        stale = _cache_stale_get(cache_key)
+        if stale is not None:
+            return stale
+        raise
 
     section = _response_data(data)
     if isinstance(section, dict):
@@ -1062,6 +1128,8 @@ def get_pnp_stores(query: str = ""):
         stores,
         STORE_CACHE_TIMEOUT if stores else EMPTY_CACHE_TIMEOUT,
     )
+    if stores:
+        _cache_stale_set(cache_key, stores)
     return stores
 
 
@@ -1085,17 +1153,23 @@ def search_pnp_store_products(
     if cached is not None:
         return cached
 
-    data = _parse_request(
-        PNP_STORE_PRODUCTS_URL,
-        PNP_SNAPSHOT_VERSION,
-        params={
-            "query": query,
-            "store_id": store_id,
-            "page": "0",
-            "page_size": str(page_size),
-        },
-        method="GET",
-    )
+    try:
+        data = _parse_request(
+            PNP_STORE_PRODUCTS_URL,
+            PNP_SNAPSHOT_VERSION,
+            params={
+                "query": query,
+                "store_id": store_id,
+                "page": "0",
+                "page_size": str(page_size),
+            },
+            method="GET",
+        )
+    except StoreAPIError:
+        stale = _cache_stale_get(cache_key)
+        if stale is not None:
+            return stale
+        raise
 
     products = []
     for raw in _extract_raw_products(data):
@@ -1122,6 +1196,8 @@ def search_pnp_store_products(
         products,
         CACHE_TIMEOUT if products else EMPTY_CACHE_TIMEOUT,
     )
+    if products:
+        _cache_stale_set(cache_key, products)
     return products
 
 
@@ -1457,8 +1533,9 @@ def search_all_retailers(
             nearby_pnp.sort(key=lambda x: x["distance_km"])
 
             # Avoid making a branch API call for every store.
-            # Three nearest branches are enough for a student price search.
-            for store in nearby_pnp[:3]:
+            # One nearest branch keeps API usage within the free-tier limit.
+            # The generic PnP catalogue is used as fallback if this branch fails.
+            for store in nearby_pnp[:1]:
                 store_id = store.get("store_id")
                 if not store_id:
                     continue
@@ -1484,7 +1561,9 @@ def search_all_retailers(
                         f"Pick n Pay {store_id}: {exc}"
                     )
 
-            # If no branch is usable, fall back to generic catalogue.
+            # If the branch lookup fails, use the single generic catalogue call.
+            # If PnP is rate-limited, search_pnp_products() will use stale cache
+            # when available instead of repeatedly hammering the API.
             if not pnp:
                 pnp = search_pnp_products(keyword, limit)
                 osm_pnp = find_nearby_stores(
@@ -1767,6 +1846,7 @@ def clear_store_cache():
                 "pnp:*",
                 "product:*",
                 "osm:*",
+                "retailer:cooldown:*",
             ):
                 delete_pattern(pattern)
             return True
