@@ -346,6 +346,19 @@
                 {% endif %}
 
                 <div class="purchase-box">
+                    <h2>🛒 Want to buy this product?</h2>
+                    <p>
+                        Add it to your shopping list first. The current retailer price is saved as your planned price.
+                    </p>
+                    <form method="post" action="{% url 'shopping:add_to_shopping_list' product_id=product_id %}" class="purchase-form">
+                        {% csrf_token %}
+                        <label for="shopping_quantity">Quantity</label>
+                        <input id="shopping_quantity" name="quantity" type="number" min="1" max="999" value="1" required>
+                        <button type="submit" class="purchase-button">🛒 Add to Shopping List</button>
+                    </form>
+                </div>
+
+                <div class="purchase-box">
                     <h2>Did you purchase this product?</h2>
 
                     <p>
