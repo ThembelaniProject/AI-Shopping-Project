@@ -528,7 +528,15 @@ def normalize_product(
         else Decimal("0")
     )
 
+    # The retailer's current/sale price must win over the regular price.
+    # Some live feeds return both fields even when the sale price is the
+    # actual amount charged at checkout.
     final_price = price
+
+    if sale_price > 0 and (
+        final_price <= 0 or sale_price < final_price
+    ):
+        final_price = sale_price
 
     if final_price <= 0 and sale_price > 0:
         final_price = sale_price
@@ -800,6 +808,10 @@ def normalize_product(
         "images": clean_images,
         "url": url,
         "updated_at": updated_at,
+        # Set by each provider after its price format has been normalized.
+        "price_source": source_retailer,
+        "price_is_live": False,
+        "price_freshness": "unknown",
         "recommendation_score": Decimal("0"),
         "matched_preferences": [],
         "distance_km": None,
@@ -930,6 +942,9 @@ def search_azlabs_products(
 
     for row in rows[:limit]:
         product = normalize_product(row)
+        product["price_source"] = "AZ Labs live grocery catalogue"
+        product["price_is_live"] = True
+        product["price_freshness"] = "live"
         products.append(product)
         _cache_product(product)
 
@@ -1023,12 +1038,22 @@ def search_checkers_products(
             row.get("regular_price") in (None, "")
             and row.get("oldPrice") not in (None, "")
         ):
-            row["regular_price"] = row.get("oldPrice")
+            old_price = row.get("oldPrice")
+            # Checkers can expose oldPrice as cents as well.
+            if row.get("oldPriceWithoutDecimal") not in (None, ""):
+                old_price = (
+                    Decimal(str(row["oldPriceWithoutDecimal"]))
+                    / Decimal("100")
+                )
+            row["regular_price"] = old_price
 
         product = normalize_product(
             row,
             retailer="Checkers",
         )
+        product["price_source"] = "Checkers live catalogue"
+        product["price_is_live"] = True
+        product["price_freshness"] = "live"
         products.append(product)
         _cache_product(product)
 
@@ -1418,6 +1443,9 @@ def search_pnp_store_products(
             retailer="Pick n Pay",
             location=store_location,
         )
+        product["price_source"] = "Pick n Pay live branch catalogue"
+        product["price_is_live"] = True
+        product["price_freshness"] = "live"
 
         products.append(product)
         _cache_product(product)
@@ -1571,6 +1599,9 @@ def search_pnp_products(
             row,
             retailer="Pick n Pay",
         )
+        product["price_source"] = "Pick n Pay live catalogue"
+        product["price_is_live"] = True
+        product["price_freshness"] = "live"
         products.append(product)
         _cache_product(product)
 
@@ -1672,6 +1703,9 @@ def search_loyaltyhub_products(
             row["updated_at"] = freshness
 
         product = normalize_product(row)
+        product["price_source"] = "LoyaltyHub price feed"
+        product["price_is_live"] = False
+        product["price_freshness"] = "refreshed feed"
         products.append(product)
         _cache_product(product)
 
