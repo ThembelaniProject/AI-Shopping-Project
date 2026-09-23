@@ -1309,8 +1309,8 @@ def _normalized_match_key(product: dict) -> str:
     ).lower()
 
     name = re.sub(
-        r"\\b\\d+(?:[.,]\\d+)?\\s*"
-        r"(kg|g|l|ml|pack|pk)\\b",
+        r"\b\d+(?:[.,]\d+)?\s*"
+        r"(kg|g|l|ml|pack|pk)\b",
         "",
         name,
     )
