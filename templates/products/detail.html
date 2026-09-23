@@ -105,6 +105,61 @@
         margin-bottom: 1.5rem;
     }
 
+    .purchase-box {
+        margin-top: 1.5rem;
+        padding: 1.25rem;
+        background: rgba(34, 197, 94, 0.08);
+        border: 1px solid rgba(34, 197, 94, 0.25);
+        border-radius: 12px;
+    }
+
+    .purchase-box h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1.05rem;
+        color: #e2e8f0;
+    }
+
+    .purchase-box p {
+        margin: 0.35rem 0 1rem;
+        color: #94a3b8;
+        line-height: 1.5;
+    }
+
+    .purchase-form {
+        display: grid;
+        gap: 0.55rem;
+    }
+
+    .purchase-form label {
+        color: #cbd5e1;
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .purchase-form input {
+        width: 100%;
+        padding: 0.75rem;
+        border-radius: 9px;
+        border: 1px solid #475569;
+        background: #0f172a;
+        color: #f8fafc;
+        margin-bottom: 0.5rem;
+    }
+
+    .purchase-button {
+        border: none;
+        border-radius: 10px;
+        padding: 0.8rem 1rem;
+        background: #22c55e;
+        color: #052e16;
+        font-weight: 800;
+        cursor: pointer;
+    }
+
+    .purchase-button:hover {
+        background: #16a34a;
+    }
+
     .retailer-box {
         margin-top: 1.5rem;
         padding: 1.25rem;
@@ -289,6 +344,59 @@
                         {{ product.description }}
                     </div>
                 {% endif %}
+
+                <div class="purchase-box">
+                    <h2>Did you purchase this product?</h2>
+
+                    <p>
+                        After buying the product on the retailer's website,
+                        record it here so SmartSpend can track your spending.
+                    </p>
+
+                    <form
+                        method="post"
+                        action="{% url 'shopping:mark_purchased' product_id=request.resolver_match.kwargs.product_id %}"
+                        class="purchase-form"
+                    >
+                        {% csrf_token %}
+
+                        <label for="quantity">
+                            Quantity
+                        </label>
+                        <input
+                            id="quantity"
+                            name="quantity"
+                            type="number"
+                            min="1"
+                            max="999"
+                            value="1"
+                            required
+                        >
+
+                        <label for="amount_spent">
+                            Amount actually spent (R)
+                        </label>
+                        <input
+                            id="amount_spent"
+                            name="amount_spent"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value="{{ product.total_cost|floatformat:2 }}"
+                            required
+                        >
+
+                        <button type="submit" class="purchase-button">
+                            ✓ Mark as Purchased
+                        </button>
+                    </form>
+
+                    <div class="scope-note">
+                        This only records your spending history. Payment,
+                        checkout and retailer order processing remain outside
+                        SmartSpend.
+                    </div>
+                </div>
 
                 <div class="retailer-box">
                     <h2>Purchase from the retailer</h2>
