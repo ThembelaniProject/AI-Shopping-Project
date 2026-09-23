@@ -70,6 +70,26 @@ PNP_SCRAPER_ID = "b87810bc-903f-41b8-b38d-c5c911cab324"
 PNP_SEARCH_URL = (
     f"{PARSE_BASE_URL}/{PNP_SCRAPER_ID}/search_products"
 )
+PNP_STORES_URL = (
+    f"{PARSE_BASE_URL}/{PNP_SCRAPER_ID}/get_stores"
+)
+PNP_STORE_SEARCH_URL = (
+    f"{PARSE_BASE_URL}/{PNP_SCRAPER_ID}/search_store_products"
+)
+
+# Branch-aware Pick n Pay pricing is enabled by default. It is only
+# used when the caller supplies latitude + longitude.
+PNP_BRANCH_LOOKUP_ENABLED = (
+    os.getenv("PNP_BRANCH_LOOKUP_ENABLED", "true")
+    .strip()
+    .lower()
+    in {"1", "true", "yes", "on"}
+)
+
+PNP_MAX_BRANCHES_TO_TRY = max(
+    1,
+    int(os.getenv("PNP_MAX_BRANCHES_TO_TRY", "1")),
+)
 
 LOYALTYHUB_BASE_URL = "https://loyaltyhub.co.za/api/v1"
 LOYALTYHUB_PRICES_URL = f"{LOYALTYHUB_BASE_URL}/prices"
@@ -758,6 +778,9 @@ def normalize_product(
         "store": store,
         "store_id": store_id,
         "location": product_location,
+        "branch_price": final_price,
+        "branch_store_id": store_id,
+        "branch_specific": bool(store_id and product_location),
         "image": image,
         "thumbnail": image,
         "images": clean_images,
@@ -988,12 +1011,296 @@ def search_checkers_products(
 
 
 # ============================================================
+# PICK N PAY BRANCH DISCOVERY / BRANCH PRICING
+# ============================================================
+
+def _pnp_store_distance(
+    store: dict,
+    latitude: float,
+    longitude: float,
+) -> float | None:
+    lat = store.get("latitude") or store.get("lat")
+    lon = (
+        store.get("longitude")
+        or store.get("lon")
+        or store.get("lng")
+    )
+
+    if lat is None or lon is None:
+        return None
+
+    try:
+        return _haversine_km(
+            latitude,
+            longitude,
+            float(lat),
+            float(lon),
+        )
+    except (TypeError, ValueError):
+        return None
+
+
+def get_pnp_stores(
+    latitude: float | None = None,
+    longitude: float | None = None,
+) -> list[dict]:
+    """
+    Get Pick n Pay branches from Parse.
+
+    The result is cached for 24 hours because branch addresses and
+    coordinates change much less frequently than prices.
+    """
+
+    if not PARSE_API_KEY:
+        raise StoreAPIError(
+            "PARSE_API_KEY is not configured."
+        )
+
+    cache_key = "pnp:stores:all"
+
+    stores = _cache_get(cache_key)
+
+    if stores is None:
+        payload = _request_json(
+            "GET",
+            PNP_STORES_URL,
+            headers={
+                "X-API-Key": PARSE_API_KEY,
+                "Accept": "application/json",
+            },
+            provider="Pick n Pay stores",
+        )
+
+        if isinstance(payload, dict):
+            stores = payload.get("stores") or payload.get("data") or []
+        elif isinstance(payload, list):
+            stores = payload
+        else:
+            stores = []
+
+        stores = [
+            item
+            for item in stores
+            if isinstance(item, dict)
+        ]
+
+        _cache_set(
+            cache_key,
+            stores,
+            STORE_CACHE_TIMEOUT,
+        )
+
+    if latitude is None or longitude is None:
+        return stores
+
+    nearby = []
+
+    for store in stores:
+        distance = _pnp_store_distance(
+            store,
+            float(latitude),
+            float(longitude),
+        )
+
+        if distance is None:
+            continue
+
+        item = dict(store)
+        item["distance_km"] = round(distance, 2)
+        item["distance"] = round(distance, 2)
+        item["store_id"] = _safe_string(
+            store.get("storeId")
+            or store.get("store_id")
+            or store.get("id")
+        )
+        item["name"] = _safe_string(
+            store.get("storeName")
+            or store.get("name")
+            or store.get("store_name")
+        )
+        item["retailer"] = "Pick n Pay"
+
+        address = _safe_string(
+            store.get("storeAddress")
+            or store.get("address")
+        )
+
+        item["address"] = address
+        nearby.append(item)
+
+    nearby.sort(
+        key=lambda item: item["distance_km"]
+    )
+
+    return nearby
+
+
+def search_pnp_store_products(
+    keyword: str,
+    store_id: str,
+    limit: int = 20,
+    store_location: dict | None = None,
+) -> list[dict]:
+    """
+    Search Pick n Pay using a specific branch store_id.
+
+    Unlike the generic PnP catalogue endpoint, this endpoint returns
+    branch-specific price, oldPrice, savings, promotion and stock.
+    """
+
+    if not PARSE_API_KEY:
+        raise StoreAPIError(
+            "PARSE_API_KEY is not configured."
+        )
+
+    keyword = _safe_string(keyword)
+    store_id = _safe_string(store_id)
+
+    if not keyword or not store_id:
+        return []
+
+    limit = max(1, min(int(limit), 20))
+
+    cache_key = (
+        f"pnp:branch-search:"
+        f"{store_id}:"
+        f"{keyword.lower()}:"
+        f"{limit}"
+    )
+
+    cached = _cache_get(cache_key)
+
+    if cached is not None:
+        return cached
+
+    payload = _request_json(
+        "GET",
+        PNP_STORE_SEARCH_URL,
+        headers={
+            "X-API-Key": PARSE_API_KEY,
+            "Accept": "application/json",
+        },
+        params={
+            "store_id": store_id,
+            "query": keyword,
+            "page": 0,
+            "page_size": limit,
+        },
+        provider="Pick n Pay branch",
+    )
+
+    rows = _extract_rows(payload)
+
+    # Some responses wrap products inside data.products.
+    if not rows and isinstance(payload, dict):
+        data = payload.get("data")
+        if isinstance(data, dict):
+            rows = _extract_rows(data)
+
+    products = []
+
+    for row in rows[:limit]:
+        row = dict(row)
+
+        # Preserve the branch context even if the upstream row
+        # omits storeId.
+        row["storeId"] = (
+            row.get("storeId")
+            or row.get("store_id")
+            or store_id
+        )
+
+        if store_location:
+            row["location"] = store_location
+
+        product = normalize_product(
+            row,
+            retailer="Pick n Pay",
+            location=store_location,
+        )
+
+        products.append(product)
+        _cache_product(product)
+
+    _cache_set(
+        cache_key,
+        products,
+        CACHE_TIMEOUT if products else 60,
+    )
+
+    if products:
+        _cache_stale_set(
+            cache_key,
+            products,
+        )
+
+    return products
+
+
+def search_nearest_pnp_branch_products(
+    keyword: str,
+    latitude: float,
+    longitude: float,
+    radius_km: float = OSM_RADIUS_KM,
+    limit: int = 20,
+) -> list[dict]:
+    """
+    Find the nearest online-shopping PnP branch and retrieve prices
+    scoped to that branch.
+
+    Only the nearest branch is queried by default to control Parse
+    credits. Set PNP_MAX_BRANCHES_TO_TRY > 1 if comparison across
+    multiple nearby PnP branches is required.
+    """
+
+    if not PNP_BRANCH_LOOKUP_ENABLED:
+        return []
+
+    stores = get_pnp_stores(
+        latitude=latitude,
+        longitude=longitude,
+    )
+
+    nearby = [
+        store
+        for store in stores
+        if store.get("distance_km") is not None
+        and store["distance_km"] <= float(radius_km)
+        and store.get("store_id")
+    ]
+
+    if not nearby:
+        return []
+
+    products = []
+
+    for store in nearby[:PNP_MAX_BRANCHES_TO_TRY]:
+        branch_products = search_pnp_store_products(
+            keyword=keyword,
+            store_id=store["store_id"],
+            limit=limit,
+            store_location=store,
+        )
+
+        products.extend(branch_products)
+
+        # One branch is the default to keep API usage low.
+        if branch_products and PNP_MAX_BRANCHES_TO_TRY == 1:
+            break
+
+    return products
+
+
+# ============================================================
 # PICK N PAY THROUGH PARSE
 # ============================================================
 
 def search_pnp_products(
     keyword: str,
     limit: int = 20,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    radius_km: float = OSM_RADIUS_KM,
 ) -> list[dict]:
     if not PARSE_API_KEY:
         raise StoreAPIError(
@@ -1009,6 +1316,25 @@ def search_pnp_products(
         1,
         min(int(limit), 20),
     )
+
+    # If the student supplied a location, use the branch-specific
+    # endpoint first. This gives the UI the actual PnP branch price
+    # and stock rather than a generic online catalogue price.
+    if (
+        latitude is not None
+        and longitude is not None
+        and PNP_BRANCH_LOOKUP_ENABLED
+    ):
+        branch_products = search_nearest_pnp_branch_products(
+            keyword=keyword,
+            latitude=float(latitude),
+            longitude=float(longitude),
+            radius_km=float(radius_km),
+            limit=limit,
+        )
+
+        if branch_products:
+            return branch_products
 
     cache_key = (
         f"pnp:search:"
@@ -1200,6 +1526,9 @@ def _search_provider(
     provider: str,
     keyword: str,
     limit: int,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    radius_km: float | None = None,
 ) -> list[dict]:
     if provider == "azlabs":
         return search_azlabs_products(
@@ -1218,6 +1547,13 @@ def _search_provider(
         return search_pnp_products(
             keyword,
             limit=limit,
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=(
+                float(radius_km)
+                if radius_km is not None
+                else OSM_RADIUS_KM
+            ),
         )
 
     if provider == "loyaltyhub":
@@ -1310,6 +1646,9 @@ def search_products(
                 provider,
                 keyword,
                 provider_limit,
+                latitude=latitude,
+                longitude=longitude,
+                radius_km=radius_km,
             )
 
             if results:
@@ -1342,6 +1681,45 @@ def search_products(
         )
 
     products = products[:requested_limit]
+
+    # If AZ Labs or another provider returned PnP products, upgrade
+    # those PnP rows to branch-specific PnP pricing when possible.
+    if (
+        latitude is not None
+        and longitude is not None
+        and PNP_BRANCH_LOOKUP_ENABLED
+        and any(
+            product.get("retailer") == "Pick n Pay"
+            for product in products
+        )
+    ):
+        try:
+            branch_products = search_nearest_pnp_branch_products(
+                keyword=keyword,
+                latitude=float(latitude),
+                longitude=float(longitude),
+                radius_km=(
+                    float(radius_km)
+                    if radius_km is not None
+                    else OSM_RADIUS_KM
+                ),
+                limit=provider_limit,
+            )
+
+            if branch_products:
+                products = [
+                    product
+                    for product in products
+                    if product.get("retailer") != "Pick n Pay"
+                ]
+                products.extend(branch_products)
+                products = _deduplicate_products(products)
+                products = products[:requested_limit]
+
+        except StoreAPIError:
+            # Do not break a successful AZ Labs/Checkers search just
+            # because branch-level PnP lookup is unavailable.
+            pass
 
     if (
         latitude is not None
