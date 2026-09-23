@@ -1901,6 +1901,30 @@
 
 
                     <!-- ==================================
+                         ADD TO SHOPPING LIST
+                    =================================== -->
+
+                    {% if product.external_id %}
+                        <form method="post"
+                              action="{% url 'shopping:add_to_shopping_list' product_id=product.external_id %}"
+                              style="display:flex;gap:.6rem;align-items:center;margin-bottom:1rem;">
+                            {% csrf_token %}
+                            <input type="number"
+                                   name="quantity"
+                                   min="1"
+                                   max="999"
+                                   value="1"
+                                   aria-label="Quantity for {{ product.name }}"
+                                   style="width:82px;padding:.7rem .65rem;background:#0f172a;border:1px solid #334155;border-radius:10px;color:#f1f5f9;">
+                            <button type="submit"
+                                    style="flex:1;padding:.75rem 1rem;background:#22c55e;border:1px solid #16a34a;color:#fff;border-radius:10px;font-size:.9rem;font-weight:700;cursor:pointer;min-height:44px;">
+                                🛒 Add to Shopping List
+                            </button>
+                        </form>
+                    {% endif %}
+
+
+                    <!-- ==================================
                          DESCRIPTION
                     =================================== -->
 
