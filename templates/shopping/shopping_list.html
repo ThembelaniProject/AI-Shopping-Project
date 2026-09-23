@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Shopping List - SmartSpend{% endblock %}
+{% block content %}
+<main style="max-width:1100px;margin:0 auto;padding:2rem 1rem 4rem;color:#f8fafc;">
+<h1>🛒 Shopping List</h1>
+<p style="color:#94a3b8;">Products you plan to buy. The saved price is the live price snapshot from when you added the product.</p>
+<div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin:1.5rem 0;">
+<div style="background:#1e293b;border:1px solid #334155;padding:1.25rem;border-radius:14px;">Estimated list total<br><strong style="font-size:1.5rem;">R{{ estimated_total|floatformat:2 }}</strong></div>
+<div style="background:#1e293b;border:1px solid #334155;padding:1.25rem;border-radius:14px;">Budget after planned list<br><strong style="font-size:1.5rem;">R{{ remaining_after_list|floatformat:2 }}</strong></div>
+</div>
+{% if items %}
+<div style="display:grid;gap:1rem;">
+{% for item in items %}
+<article style="display:grid;grid-template-columns:90px 1fr auto;gap:1rem;align-items:center;background:#1e293b;border:1px solid #334155;border-radius:14px;padding:1rem;">
+{% if item.image_url %}<img src="{{ item.image_url }}" alt="{{ item.product_name }}" style="width:90px;height:90px;object-fit:contain;background:#0f172a;border-radius:10px;">{% else %}<div style="width:90px;height:90px;display:grid;place-items:center;background:#0f172a;border-radius:10px;">🛍️</div>{% endif %}
+<div><h2 style="font-size:1.05rem;margin:.1rem 0;color:#f8fafc;">{{ item.product_name }}</h2><p style="color:#94a3b8;margin:.25rem 0;">{{ item.store|default:"Retailer" }} · Quantity {{ item.quantity }} · R{{ item.unit_price|floatformat:2 }} each</p><strong style="color:#86efac;">Estimated total: R{{ item.estimated_total|floatformat:2 }}</strong></div>
+<div style="display:flex;flex-direction:column;gap:.5rem;"><form method="post" action="{% url 'shopping:purchase_from_list' item.id %}">{% csrf_token %}<button type="submit" style="border:0;border-radius:8px;padding:.65rem 1rem;background:#22c55e;color:#052e16;font-weight:800;">✓ Mark Purchased</button></form><form method="post" action="{% url 'shopping:remove_from_shopping_list' item.id %}">{% csrf_token %}<button type="submit" style="border:1px solid #475569;border-radius:8px;padding:.6rem 1rem;background:transparent;color:#cbd5e1;">Remove</button></form></div>
+</article>
+{% endfor %}
+</div>
+{% else %}<div style="background:#1e293b;border:1px solid #334155;padding:2rem;border-radius:14px;text-align:center;"><h2>Your shopping list is empty</h2><a href="{% url 'products:search' %}" style="color:#a5b4fc;">Find products</a></div>{% endif %}
+</main>
+{% endblock %}
