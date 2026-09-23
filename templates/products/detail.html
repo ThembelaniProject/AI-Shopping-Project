@@ -4,1635 +4,326 @@
     {{ product.name|default:"Product Details" }} - AI Shopping
 {% endblock %}
 
-
 {% block extra_css %}
-
 <style>
-
-/* =========================================
-   PAGE
-========================================= */
-
-.detail-page {
-    width: 100%;
-    max-width: 1100px;
-    margin: 0 auto;
-    padding: 2rem 1rem 4rem;
-}
-
-
-/* =========================================
-   BACK LINK
-========================================= */
-
-.back-link {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-
-    color: #a5b4fc;
-    text-decoration: none;
-
-    font-size: 0.9rem;
-
-    margin-bottom: 1.5rem;
-
-    transition: color 0.2s ease;
-}
-
-.back-link:hover {
-    color: #c7d2fe;
-}
-
-
-/* =========================================
-   PRODUCT DETAIL
-========================================= */
-
-.product-detail {
-    display: grid;
-
-    grid-template-columns:
-        minmax(300px, 1fr)
-        minmax(300px, 1fr);
-
-    gap: 2rem;
-
-    background: #1e293b;
-
-    border: 1px solid #334155;
-
-    border-radius: 16px;
-
-    padding: 2rem;
-
-    box-shadow:
-        0 20px 40px rgba(0, 0, 0, 0.4);
-}
-
-
-/* =========================================
-   IMAGE
-========================================= */
-
-.detail-image {
-    width: 100%;
-    min-height: 400px;
-
-    background: #0f172a;
-
-    border-radius: 12px;
-
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    overflow: hidden;
-}
-
-.detail-image img {
-    display: block;
-
-    width: 100%;
-    height: 400px;
-
-    object-fit: contain;
-}
-
-.no-image {
-    color: #64748b;
-
-    text-align: center;
-}
-
-
-/* =========================================
-   PRODUCT INFORMATION
-========================================= */
-
-.detail-info {
-    min-width: 0;
-}
-
-.detail-info h1 {
-    margin: 0 0 1rem;
-
-    font-size: 2rem;
-    line-height: 1.2;
-
-    color: #f8fafc;
-
-    overflow-wrap: anywhere;
-}
-
-
-/* =========================================
-   PRICE
-========================================= */
-
-.detail-price {
-    color: #a5b4fc;
-
-    font-size: 2rem;
-    font-weight: 700;
-
-    margin-bottom: 0.5rem;
-}
-
-.price-note {
-    color: #64748b;
-
-    font-size: 0.85rem;
-
-    margin-bottom: 1.5rem;
-}
-
-
-/* =========================================
-   DESCRIPTION
-========================================= */
-
-.detail-description {
-    color: #94a3b8;
-
-    line-height: 1.7;
-
-    margin: 0 0 1.5rem;
-}
-
-
-/* =========================================
-   PRODUCT META
-========================================= */
-
-.detail-meta {
-    display: grid;
-
-    gap: 0.7rem;
-
-    padding: 1.25rem 0;
-
-    border-top: 1px solid #334155;
-    border-bottom: 1px solid #334155;
-}
-
-.detail-meta p {
-    display: flex;
-
-    justify-content: space-between;
-    align-items: flex-start;
-
-    gap: 1rem;
-
-    margin: 0;
-
-    color: #94a3b8;
-}
-
-.detail-meta strong {
-    color: #f1f5f9;
-
-    flex-shrink: 0;
-}
-
-.stock {
-    color: #86efac;
-
-    font-weight: 600;
-}
-
-.stock-out {
-    color: #f87171;
-
-    font-weight: 600;
-}
-
-
-/* =========================================
-   SHOPPING BOX
-========================================= */
-
-.shopping-box {
-    margin-top: 1.5rem;
-
-    padding: 1.25rem;
-
-    background: #0f172a;
-
-    border: 1px solid #334155;
-
-    border-radius: 12px;
-}
-
-.shopping-label {
-    display: block;
-
-    color: #f1f5f9;
-
-    font-weight: 600;
-
-    margin-bottom: 0.7rem;
-}
-
-
-/* =========================================
-   QUANTITY
-========================================= */
-
-.quantity-row {
-    display: flex;
-
-    align-items: center;
-
-    gap: 0.75rem;
-
-    margin-bottom: 1rem;
-}
-
-.quantity-control {
-    display: inline-flex;
-
-    align-items: center;
-
-    border: 1px solid #475569;
-
-    border-radius: 8px;
-
-    overflow: hidden;
-
-    position: relative;
-
-    z-index: 10;
-}
-
-.quantity-control button {
-    width: 48px;
-    height: 44px;
-
-    padding: 0;
-    margin: 0;
-
-    border: 0;
-    outline: none;
-
-    background: #1e293b;
-
-    color: #f8fafc;
-
-    font-size: 1.4rem;
-    line-height: 1;
-
-    cursor: pointer;
-
-    pointer-events: auto;
-
-    position: relative;
-    z-index: 20;
-
-    transition:
-        background 0.2s ease,
-        opacity 0.2s ease;
-}
-
-.quantity-control button:hover {
-    background: #334155;
-}
-
-.quantity-control button:active {
-    background: #475569;
-}
-
-.quantity-control button:disabled {
-    opacity: 0.4;
-
-    cursor: not-allowed;
-}
-
-.quantity-control input {
-    width: 60px;
-    height: 44px;
-
-    padding: 0;
-    margin: 0;
-
-    border: 0;
-
-    border-left: 1px solid #475569;
-    border-right: 1px solid #475569;
-
-    border-radius: 0;
-
-    outline: none;
-
-    background: #0f172a;
-
-    color: #ffffff;
-
-    text-align: center;
-
-    font-size: 1rem;
-
-    position: relative;
-    z-index: 20;
-}
-
-.quantity-control input::-webkit-outer-spin-button,
-.quantity-control input::-webkit-inner-spin-button {
-    -webkit-appearance: none;
-
-    margin: 0;
-}
-
-.quantity-control input[type="number"] {
-    -moz-appearance: textfield;
-}
-
-
-/* =========================================
-   ORDER SUMMARY
-========================================= */
-
-.order-summary {
-    display: grid;
-
-    gap: 0.6rem;
-
-    margin: 1rem 0;
-
-    padding-top: 1rem;
-
-    border-top: 1px solid #334155;
-}
-
-.summary-row {
-    display: flex;
-
-    justify-content: space-between;
-
-    gap: 1rem;
-
-    color: #94a3b8;
-}
-
-.summary-row.total {
-    padding-top: 0.7rem;
-
-    border-top: 1px solid #334155;
-
-    color: #f8fafc;
-
-    font-size: 1.15rem;
-
-    font-weight: 700;
-}
-
-
-/* =========================================
-   BUTTONS
-========================================= */
-
-.shopping-actions {
-    display: grid;
-
-    gap: 0.7rem;
-}
-
-.shop-button {
-    display: flex;
-
-    align-items: center;
-    justify-content: center;
-
-    width: 100%;
-    min-height: 48px;
-
-    border: 0;
-
-    border-radius: 10px;
-
-    font-size: 1rem;
-
-    font-weight: 700;
-
-    text-decoration: none;
-
-    cursor: pointer;
-
-    transition:
-        background 0.2s ease,
-        transform 0.2s ease,
-        opacity 0.2s ease;
-}
-
-.shop-button:hover {
-    transform: translateY(-1px);
-}
-
-.shop-button:disabled {
-    opacity: 0.5;
-
-    cursor: not-allowed;
-
-    transform: none;
-}
-
-
-/* =========================================
-   ADD TO CART
-========================================= */
-
-.add-cart {
-    background: #6366f1;
-
-    color: #ffffff;
-}
-
-.add-cart:hover {
-    background: #4f46e5;
-}
-
-
-/* =========================================
-   BUY NOW
-========================================= */
-
-.buy-now {
-    background: #22c55e;
-
-    color: #052e16;
-}
-
-.buy-now:hover {
-    background: #16a34a;
-}
-
-
-/* =========================================
-   EXTERNAL STORE
-========================================= */
-
-.external-link {
-    background: transparent;
-
-    border: 1px solid #475569;
-
-    color: #cbd5e1;
-}
-
-.external-link:hover {
-    background: #1e293b;
-}
-
-
-/* =========================================
-   ERROR CARD
-========================================= */
-
-.error-card {
-    background: #1e293b;
-
-    border: 1px solid #ef4444;
-
-    border-radius: 14px;
-
-    padding: 2rem;
-
-    text-align: center;
-
-    box-shadow:
-        0 20px 40px rgba(0, 0, 0, 0.3);
-}
-
-.error-card h2 {
-    margin-top: 0;
-
-    color: #f87171;
-}
-
-.error-card p {
-    color: #94a3b8;
-
-    line-height: 1.6;
-}
-
-
-/* =========================================
-   MOBILE
-========================================= */
-
-@media (max-width: 700px) {
-
     .detail-page {
-        padding-top: 1rem;
+        width: 100%;
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 2rem 1rem 4rem;
+    }
+
+    .back-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        color: #a5b4fc;
+        text-decoration: none;
+        margin-bottom: 1.5rem;
+    }
+
+    .back-link:hover {
+        color: #c7d2fe;
     }
 
     .product-detail {
-        grid-template-columns: 1fr;
-
-        padding: 1.25rem;
+        display: grid;
+        grid-template-columns: minmax(300px, 1fr) minmax(300px, 1fr);
+        gap: 2rem;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 16px;
+        padding: 2rem;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
     }
 
     .detail-image {
-        min-height: 300px;
+        width: 100%;
+        min-height: 400px;
+        background: #0f172a;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
     }
 
     .detail-image img {
-        height: 300px;
+        width: 100%;
+        height: 400px;
+        object-fit: contain;
     }
 
-    .detail-info h1 {
-        font-size: 1.5rem;
+    .no-image {
+        color: #64748b;
     }
 
-    .detail-price {
-        font-size: 1.7rem;
+    .product-info h1 {
+        margin: 0 0 1rem;
+        color: #f8fafc;
+        font-size: 2rem;
     }
 
-    .detail-meta p {
-        flex-direction: column;
-
-        gap: 0.2rem;
+    .price {
+        color: #a5b4fc;
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 0.5rem;
     }
 
-}
-
-
-/* =========================================
-   VERY SMALL SCREENS
-========================================= */
-
-@media (max-width: 400px) {
-
-    .detail-page {
-        padding-left: 0.75rem;
-        padding-right: 0.75rem;
+    .regular-price {
+        color: #94a3b8;
+        text-decoration: line-through;
+        margin-bottom: 1rem;
     }
 
-    .product-detail {
-        padding: 1rem;
+    .sale-badge {
+        display: inline-block;
+        padding: 0.35rem 0.65rem;
+        margin-bottom: 1rem;
+        border-radius: 999px;
+        background: rgba(34, 197, 94, 0.15);
+        border: 1px solid rgba(34, 197, 94, 0.35);
+        color: #86efac;
+        font-weight: 700;
     }
 
-    .quantity-control button {
-        width: 44px;
+    .meta {
+        display: grid;
+        gap: 0.65rem;
+        margin: 1.5rem 0;
+        color: #94a3b8;
     }
 
-    .quantity-control input {
-        width: 52px;
+    .meta strong {
+        color: #f1f5f9;
     }
 
-}
+    .description {
+        color: #cbd5e1;
+        line-height: 1.6;
+        margin-bottom: 1.5rem;
+    }
 
+    .retailer-box {
+        margin-top: 1.5rem;
+        padding: 1.25rem;
+        background: rgba(99, 102, 241, 0.10);
+        border: 1px solid rgba(99, 102, 241, 0.30);
+        border-radius: 12px;
+    }
+
+    .retailer-box h2 {
+        margin: 0 0 0.5rem;
+        font-size: 1.05rem;
+        color: #e2e8f0;
+    }
+
+    .retailer-box p {
+        margin: 0.35rem 0;
+        color: #94a3b8;
+    }
+
+    .store-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        min-height: 46px;
+        margin-top: 1rem;
+        padding: 0.75rem 1rem;
+        border-radius: 10px;
+        background: #6366f1;
+        color: white;
+        text-decoration: none;
+        font-weight: 700;
+    }
+
+    .store-button:hover {
+        background: #4f46e5;
+    }
+
+    .scope-note {
+        margin-top: 1rem;
+        padding: 0.85rem 1rem;
+        border-radius: 10px;
+        background: rgba(15, 23, 42, 0.8);
+        color: #94a3b8;
+        font-size: 0.85rem;
+        line-height: 1.5;
+    }
+
+    .error-box {
+        background: rgba(239, 68, 68, 0.10);
+        border: 1px solid rgba(239, 68, 68, 0.35);
+        color: #fca5a5;
+        border-radius: 12px;
+        padding: 1.25rem;
+    }
+
+    @media (max-width: 760px) {
+        .product-detail {
+            grid-template-columns: 1fr;
+            padding: 1.25rem;
+        }
+
+        .detail-image {
+            min-height: 300px;
+        }
+
+        .detail-image img {
+            height: 300px;
+        }
+    }
 </style>
-
 {% endblock %}
 
-
 {% block content %}
-
 <main class="detail-page">
 
-
-    <!-- =========================================
-         BACK LINK
-    ========================================== -->
-
-    <a
-        href="{{ return_url|default:request.META.HTTP_REFERER|default:'/' }}"
-        class="back-link"
-    >
-        ← Back to Search
+    <a href="{% url 'products:search' %}" class="back-link">
+        ← Back to products
     </a>
 
-
-    <!-- =========================================
-         API ERROR
-    ========================================== -->
-
-    {% if api_error %}
-
-        <div class="error-card">
-
-            <h2>
-                Product unavailable
-            </h2>
-
-            <p>
-                {{ api_error }}
-            </p>
-
+    {% if error %}
+        <div class="error-box">
+            {{ error }}
         </div>
-
-
-    <!-- =========================================
-         PRODUCT FOUND
-    ========================================== -->
-
     {% elif product %}
 
-        <article class="product-detail">
-
-
-            <!-- =====================================
-                 PRODUCT IMAGE
-            ====================================== -->
+        <section class="product-detail">
 
             <div class="detail-image">
-
                 {% if product.image %}
-
                     <img
                         src="{{ product.image }}"
-                        alt="{{ product.name|default:'Product image' }}"
+                        alt="{{ product.name }}"
                         loading="lazy"
-                        onerror="
-                            this.style.display='none';
-                            this.nextElementSibling.style.display='block';
-                        "
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='block';"
                     >
-
-                    <span
-                        class="no-image"
-                        style="display: none;"
-                    >
+                    <span class="no-image" style="display:none;">
                         Image unavailable
                     </span>
-
                 {% else %}
-
                     <span class="no-image">
-                        No image available
+                        No product image available
                     </span>
-
                 {% endif %}
-
             </div>
 
-
-            <!-- =====================================
-                 PRODUCT INFORMATION
-            ====================================== -->
-
-            <div class="detail-info">
-
-
-                <!-- PRODUCT NAME -->
+            <div class="product-info">
 
                 <h1>
-                    {{ product.name }}
+                    {{ product.name|default:"Product" }}
                 </h1>
 
-
-                <!-- PRICE -->
-
-                <div class="detail-price">
-
-                    R<span id="unit-price">
-                        {{ product.price|floatformat:2 }}
+                {% if product.on_sale %}
+                    <span class="sale-badge">
+                        On Sale
                     </span>
-
-                </div>
-
-
-                <div class="price-note">
-                    Price per item
-                </div>
-
-
-                <!-- DESCRIPTION -->
-
-                {% if product.description %}
-
-                    <p class="detail-description">
-                        {{ product.description }}
-                    </p>
-
                 {% endif %}
 
+                <div class="price">
+                    R{{ product.price|floatformat:2 }}
+                </div>
 
-                <!-- =================================
-                     PRODUCT META
-                ================================== -->
+                {% if product.on_sale and product.regular_price > product.price %}
+                    <div class="regular-price">
+                        R{{ product.regular_price|floatformat:2 }}
+                    </div>
+                {% endif %}
 
-                <div class="detail-meta">
-
+                <div class="meta">
 
                     {% if product.brand %}
-
                         <p>
-                            <strong>Brand</strong>
-
-                            <span>
-                                {{ product.brand }}
-                            </span>
+                            <strong>Brand:</strong>
+                            {{ product.brand }}
                         </p>
-
                     {% endif %}
-
-
-                    {% if product.category %}
-
-                        <p>
-                            <strong>Category</strong>
-
-                            <span>
-                                {{ product.category }}
-                            </span>
-                        </p>
-
-                    {% endif %}
-
-
-                    {% if product.colour %}
-
-                        <p>
-                            <strong>Colour</strong>
-
-                            <span>
-                                {{ product.colour }}
-                            </span>
-                        </p>
-
-                    {% endif %}
-
-
-                    {% if product.size %}
-
-                        <p>
-                            <strong>Size</strong>
-
-                            <span>
-                                {{ product.size }}
-                            </span>
-                        </p>
-
-                    {% endif %}
-
 
                     {% if product.store %}
-
                         <p>
-                            <strong>Store</strong>
-
-                            <span>
-                                {{ product.store }}
-                            </span>
+                            <strong>Store:</strong>
+                            {{ product.store }}
                         </p>
-
                     {% endif %}
 
-
-                    {% if product.location %}
-
+                    {% if product.colour %}
                         <p>
-                            <strong>Location</strong>
-
-                            <span>
-                                {{ product.location }}
-                            </span>
+                            <strong>Colour:</strong>
+                            {{ product.colour }}
                         </p>
-
                     {% endif %}
 
-
-                    <!-- SHIPPING -->
+                    {% if product.size %}
+                        <p>
+                            <strong>Size:</strong>
+                            {{ product.size }}
+                        </p>
+                    {% endif %}
 
                     <p>
-                        <strong>Shipping</strong>
-
-                        <span>
-
-                            {% if product.shipping_cost > 0 %}
-
-                                R{{ product.shipping_cost|floatformat:2 }}
-
-                            {% else %}
-
-                                Free
-
-                            {% endif %}
-
-                        </span>
+                        <strong>Shipping:</strong>
+                        R{{ product.shipping_cost|floatformat:2 }}
                     </p>
 
-
-                    <!-- RATING -->
-
-                    {% if product.rating > 0 %}
-
+                    {% if product.rating %}
                         <p>
-                            <strong>Rating</strong>
-
-                            <span>
-                                ⭐ {{ product.rating }}
-                            </span>
+                            <strong>Rating:</strong>
+                            ⭐ {{ product.rating }}
                         </p>
-
                     {% endif %}
 
+                    {% if product.distance %}
+                        <p>
+                            <strong>Distance:</strong>
+                            {{ product.distance }} km
+                        </p>
+                    {% endif %}
 
                 </div>
 
-
-                <!-- =================================
-                     SHOPPING
-                ================================== -->
-
-                {% if product.stock > 0 %}
-
-
-                    <div class="shopping-box">
-
-
-                        <!-- =================================
-                             ADD TO CART FORM
-                        ================================== -->
-
-                        <form
-                            id="cart-form"
-                            method="post"
-                            action="{% url 'shopping:add_to_cart' product.external_id %}"
-                        >
-
-                            {% csrf_token %}
-
-
-                            <!-- QUANTITY -->
-
-                            <label
-                                class="shopping-label"
-                                for="quantity"
-                            >
-                                Quantity
-                            </label>
-
-
-                            <div class="quantity-row">
-
-                                <div class="quantity-control">
-
-
-                                    <!-- DECREASE -->
-
-                                    <button
-                                        type="button"
-                                        id="decrease"
-                                        aria-label="Decrease quantity"
-                                        title="Decrease quantity"
-                                    >
-                                        −
-                                    </button>
-
-
-                                    <!-- INPUT -->
-
-                                    <input
-                                        type="number"
-                                        id="quantity"
-                                        name="quantity"
-                                        value="1"
-                                        min="1"
-                                        max="{{ product.stock }}"
-                                        step="1"
-                                        inputmode="numeric"
-                                        aria-label="Quantity"
-                                        autocomplete="off"
-                                    >
-
-
-                                    <!-- INCREASE -->
-
-                                    <button
-                                        type="button"
-                                        id="increase"
-                                        aria-label="Increase quantity"
-                                        title="Increase quantity"
-                                    >
-                                        +
-                                    </button>
-
-
-                                </div>
-
-                            </div>
-
-
-                            <!-- =================================
-                                 ORDER SUMMARY
-                            ================================== -->
-
-                            <div class="order-summary">
-
-
-                                <!-- PRODUCT -->
-
-                                <div class="summary-row">
-
-                                    <span>
-                                        Product
-                                    </span>
-
-                                    <span>
-                                        R<span id="subtotal">
-                                            {{ product.price|floatformat:2 }}
-                                        </span>
-                                    </span>
-
-                                </div>
-
-
-                                <!-- SHIPPING -->
-
-                                <div class="summary-row">
-
-                                    <span>
-                                        Shipping
-                                    </span>
-
-                                    <span>
-
-                                        {% if product.shipping_cost > 0 %}
-
-                                            R<span id="shipping">
-                                                {{ product.shipping_cost|floatformat:2 }}
-                                            </span>
-
-                                        {% else %}
-
-                                            Free
-
-                                        {% endif %}
-
-                                    </span>
-
-                                </div>
-
-
-                                <!-- TOTAL -->
-
-                                <div class="summary-row total">
-
-                                    <span>
-                                        Total
-                                    </span>
-
-                                    <span>
-                                        R<span id="total">
-                                            {{ product.total_cost|floatformat:2 }}
-                                        </span>
-                                    </span>
-
-                                </div>
-
-
-                            </div>
-
-
-                            <!-- =================================
-                                 ADD TO CART BUTTON
-                            ================================== -->
-
-                            <div class="shopping-actions">
-
-                                <button
-                                    type="submit"
-                                    id="add-cart-button"
-                                    class="shop-button add-cart"
-                                >
-                                    🛒 Add to Cart
-                                </button>
-
-                            </div>
-
-
-                        </form>
-
-
-                        <!-- =================================
-                             BUY NOW
-                        ================================== -->
-
-                        {% if product.url %}
-
-                            <a
-                                href="{{ product.url }}"
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                class="shop-button buy-now"
-                                style="margin-top: 0.7rem;"
-                            >
-                                Buy Now →
-                            </a>
-
-                        {% endif %}
-
-
+                {% if product.description %}
+                    <div class="description">
+                        {{ product.description }}
                     </div>
-
-
-                {% else %}
-
-
-                    <!-- =================================
-                         OUT OF STOCK
-                    ================================== -->
-
-                    <div class="shopping-box">
-
-                        <button
-                            type="button"
-                            class="shop-button"
-                            disabled
-                        >
-                            Out of Stock
-                        </button>
-
-                    </div>
-
-
                 {% endif %}
 
+                <div class="retailer-box">
+                    <h2>Purchase from the retailer</h2>
 
-                <!-- =====================================
-                     VIEW STORE
-                ====================================== -->
+                    <p>
+                        AI Shopping helps you find and compare products.
+                        The actual purchase is completed on the external
+                        retailer's website.
+                    </p>
 
-                {% if product.url %}
+                    {% if product.url %}
+                        <a
+                            href="{{ product.url }}"
+                            class="store-button"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            View Product at {{ product.store|default:"Retailer" }} ↗
+                        </a>
+                    {% endif %}
 
-                    <a
-                        href="{{ product.url }}"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="shop-button external-link"
-                        style="margin-top: 0.75rem;"
-                    >
-                        View on
-                        {{ product.store|default:"Store" }}
-                        ↗
-                    </a>
-
-                {% endif %}
-
+                    <div class="scope-note">
+                        Payment processing, checkout, orders and refunds
+                        are outside the scope of this application.
+                    </div>
+                </div>
 
             </div>
-
-        </article>
-
-
-    <!-- =========================================
-         PRODUCT NOT FOUND
-    ========================================== -->
+        </section>
 
     {% else %}
-
-        <div class="error-card">
-
-            <h2>
-                Product not found
-            </h2>
-
-            <p>
-                We couldn't find the product you're looking for.
-            </p>
-
+        <div class="error-box">
+            Product not found.
         </div>
-
     {% endif %}
 
-
 </main>
-
-
-<!-- =========================================
-     QUANTITY + CART JAVASCRIPT
-========================================= -->
-
-{% if product and product.stock > 0 %}
-
-<script>
-
-document.addEventListener("DOMContentLoaded", function () {
-
-    "use strict";
-
-
-    /* =========================================
-       ELEMENTS
-    ========================================= */
-
-    const quantityInput =
-        document.getElementById("quantity");
-
-    const decreaseButton =
-        document.getElementById("decrease");
-
-    const increaseButton =
-        document.getElementById("increase");
-
-    const subtotalElement =
-        document.getElementById("subtotal");
-
-    const totalElement =
-        document.getElementById("total");
-
-    const cartForm =
-        document.getElementById("cart-form");
-
-    const submitButton =
-        document.getElementById("add-cart-button");
-
-
-    /* =========================================
-       SAFETY CHECK
-    ========================================= */
-
-    if (
-        !quantityInput ||
-        !decreaseButton ||
-        !increaseButton ||
-        !cartForm
-    ) {
-
-        console.error(
-            "Product detail: required elements not found."
-        );
-
-        return;
-    }
-
-
-    /* =========================================
-       PRODUCT VALUES
-    ========================================= */
-
-    const unitPrice =
-        parseFloat(
-            "{{ product.price|default:'0' }}"
-        ) || 0;
-
-
-    const shippingCost =
-        parseFloat(
-            "{{ product.shipping_cost|default:'0' }}"
-        ) || 0;
-
-
-    const maxStock =
-        parseInt(
-            "{{ product.stock|default:'1' }}",
-            10
-        ) || 1;
-
-
-    /* =========================================
-       GET QUANTITY
-    ========================================= */
-
-    function getQuantity() {
-
-        let quantity =
-            parseInt(
-                quantityInput.value,
-                10
-            );
-
-
-        if (Number.isNaN(quantity)) {
-            quantity = 1;
-        }
-
-
-        if (quantity < 1) {
-            quantity = 1;
-        }
-
-
-        if (quantity > maxStock) {
-            quantity = maxStock;
-        }
-
-
-        return quantity;
-    }
-
-
-    /* =========================================
-       UPDATE TOTALS
-    ========================================= */
-
-    function updateTotals() {
-
-        const quantity =
-            getQuantity();
-
-
-        quantityInput.value =
-            quantity;
-
-
-        const subtotal =
-            unitPrice * quantity;
-
-
-        const total =
-            subtotal + shippingCost;
-
-
-        if (subtotalElement) {
-
-            subtotalElement.textContent =
-                subtotal.toFixed(2);
-        }
-
-
-        if (totalElement) {
-
-            totalElement.textContent =
-                total.toFixed(2);
-        }
-
-
-        decreaseButton.disabled =
-            quantity <= 1;
-
-
-        increaseButton.disabled =
-            quantity >= maxStock;
-
-    }
-
-
-    /* =========================================
-       PLUS
-    ========================================= */
-
-    increaseButton.addEventListener(
-        "click",
-        function (event) {
-
-            event.preventDefault();
-
-
-            let quantity =
-                getQuantity();
-
-
-            if (quantity < maxStock) {
-
-                quantity += 1;
-
-                quantityInput.value =
-                    quantity;
-
-                updateTotals();
-
-            }
-
-        }
-    );
-
-
-    /* =========================================
-       MINUS
-    ========================================= */
-
-    decreaseButton.addEventListener(
-        "click",
-        function (event) {
-
-            event.preventDefault();
-
-
-            let quantity =
-                getQuantity();
-
-
-            if (quantity > 1) {
-
-                quantity -= 1;
-
-                quantityInput.value =
-                    quantity;
-
-                updateTotals();
-
-            }
-
-        }
-    );
-
-
-    /* =========================================
-       MANUAL INPUT
-    ========================================= */
-
-    quantityInput.addEventListener(
-        "input",
-        function () {
-
-            /*
-             * Allow the user to temporarily
-             * clear the input.
-             */
-
-            if (
-                quantityInput.value === ""
-            ) {
-                return;
-            }
-
-
-            let quantity =
-                parseInt(
-                    quantityInput.value,
-                    10
-                );
-
-
-            if (Number.isNaN(quantity)) {
-                return;
-            }
-
-
-            if (quantity < 1) {
-                quantity = 1;
-            }
-
-
-            if (quantity > maxStock) {
-                quantity = maxStock;
-            }
-
-
-            quantityInput.value =
-                quantity;
-
-
-            updateTotals();
-
-        }
-    );
-
-
-    /* =========================================
-       INPUT CHANGE
-    ========================================= */
-
-    quantityInput.addEventListener(
-        "change",
-        function () {
-
-            updateTotals();
-
-        }
-    );
-
-
-    /* =========================================
-       ADD TO CART
-    ========================================= */
-
-    cartForm.addEventListener(
-        "submit",
-        async function (event) {
-
-            event.preventDefault();
-
-
-            const quantity =
-                getQuantity();
-
-
-            quantityInput.value =
-                quantity;
-
-
-            /* =================================
-               CSRF
-            ================================= */
-
-            const csrfInput =
-                cartForm.querySelector(
-                    "[name='csrfmiddlewaretoken']"
-                );
-
-
-            if (!csrfInput) {
-
-                alert(
-                    "Security token missing. Please refresh the page."
-                );
-
-                return;
-            }
-
-
-            /* =================================
-               DISABLE BUTTON
-            ================================= */
-
-            if (submitButton) {
-
-                submitButton.disabled =
-                    true;
-
-                submitButton.textContent =
-                    "Adding...";
-
-            }
-
-
-            try {
-
-                const response =
-                    await fetch(
-                        cartForm.action,
-                        {
-                            method: "POST",
-
-                            headers: {
-
-                                "X-CSRFToken":
-                                    csrfInput.value,
-
-                                "X-Requested-With":
-                                    "XMLHttpRequest",
-
-                                "Content-Type":
-                                    "application/x-www-form-urlencoded; charset=UTF-8"
-
-                            },
-
-                            body:
-                                new URLSearchParams({
-                                    quantity:
-                                        quantity
-                                })
-                        }
-                    );
-
-
-                /* =================================
-                   READ RESPONSE
-                ================================= */
-
-                let data = {};
-
-
-                try {
-
-                    data =
-                        await response.json();
-
-                } catch (jsonError) {
-
-                    console.error(
-                        "Cart response was not JSON:",
-                        jsonError
-                    );
-
-                }
-
-
-                /* =================================
-                   SUCCESS
-                ================================= */
-
-                if (
-                    response.ok &&
-                    data.success
-                ) {
-
-
-                    /* =============================
-                       UPDATE CART COUNT
-                    ============================= */
-
-                    const cartCount =
-                        document.getElementById(
-                            "cart-count"
-                        );
-
-
-                    if (cartCount) {
-
-                        cartCount.textContent =
-                            data.cart_count ?? 0;
-
-
-                        cartCount.classList.remove(
-                            "bump"
-                        );
-
-
-                        void cartCount.offsetWidth;
-
-
-                        cartCount.classList.add(
-                            "bump"
-                        );
-
-                    }
-
-
-                    /* =============================
-                       BUTTON SUCCESS
-                    ============================= */
-
-                    if (submitButton) {
-
-                        submitButton.disabled =
-                            false;
-
-                        submitButton.textContent =
-                            "✓ Added to Cart";
-
-                    }
-
-
-                    /*
-                     * Keep the successful state
-                     * visible briefly.
-                     */
-
-                    setTimeout(
-                        function () {
-
-                            if (submitButton) {
-
-                                submitButton.textContent =
-                                    "🛒 Add to Cart";
-
-                            }
-
-                        },
-                        2000
-                    );
-
-
-                    return;
-                }
-
-
-                /* =================================
-                   SERVER ERROR
-                ================================= */
-
-                alert(
-                    data.error ||
-                    "Unable to add product to cart."
-                );
-
-
-                if (submitButton) {
-
-                    submitButton.disabled =
-                        false;
-
-                    submitButton.textContent =
-                        "🛒 Add to Cart";
-
-                }
-
-
-            } catch (error) {
-
-                console.error(
-                    "Add to cart error:",
-                    error
-                );
-
-
-                alert(
-                    "Unable to connect to the shopping cart."
-                );
-
-
-                if (submitButton) {
-
-                    submitButton.disabled =
-                        false;
-
-                    submitButton.textContent =
-                        "🛒 Add to Cart";
-
-                }
-
-            }
-
-        }
-    );
-
-
-    /* =========================================
-       INITIALISE
-    ========================================= */
-
-    updateTotals();
-
-});
-
-</script>
-
-{% endif %}
-
 {% endblock %}
