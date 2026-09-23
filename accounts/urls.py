@@ -50,6 +50,12 @@ path(
         views.terms_conditions,
         name="terms_conditions"
     ),
+
+path(
+        "accept-terms/",
+        views.accept_terms,
+        name="accept_terms"
+    ),
 # ------------------------------------------------------
 # MICROSOFT LOGIN
 # ------------------------------------------------------

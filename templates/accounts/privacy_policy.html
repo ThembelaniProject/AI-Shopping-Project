@@ -513,12 +513,30 @@
     </section>
 
 
-    <a
-        href="{% url 'accounts:register' %}"
-        class="back-button"
-    >
-        Back to Registration
-    </a>
+    {% if user.is_authenticated %}
+        {% if not user.profile.terms_accepted %}
+            <a
+                href="{% url 'accounts:accept_terms' %}"
+                class="back-button"
+            >
+                Back to Agreement
+            </a>
+        {% else %}
+            <a
+                href="{% url 'shopping:dashboard' %}"
+                class="back-button"
+            >
+                Back to Dashboard
+            </a>
+        {% endif %}
+    {% else %}
+        <a
+            href="{% url 'accounts:register' %}"
+            class="back-button"
+        >
+            Back to Registration
+        </a>
+    {% endif %}
 
 </main>
 

@@ -75,6 +75,15 @@ def edit_preferences(request):
 
         preference.save()
 
+        # Check if user has accepted Terms & Privacy Policy
+        profile = getattr(request.user, "profile", None)
+        if profile and not profile.terms_accepted:
+            messages.success(
+                request,
+                "Your preferences have been saved successfully. Please review and accept the Terms & Conditions and Privacy Policy to continue."
+            )
+            return redirect("accounts:accept_terms")
+
         messages.success(
             request,
             "Your preferences have been saved successfully."

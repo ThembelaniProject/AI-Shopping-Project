@@ -15,108 +15,99 @@ from .services.store_api import (
 )
 
 
-
-
 # ==========================================================
 # IMAGE HELPER
 # ==========================================================
 
 def get_product_image(product):
+    """
+    Safely get a product image from different possible
+    API response formats.
+    """
 
-    fields = [
-        "image",
-        "imageURL",
-        "imageUrl",
-        "imageProductCardURL",
-        "imageProductCardUrl",
-        "imagePDPURL",
-        "imagePDPUrl",
-        "thumbnail",
-        "thumbnailURL",
-        "thumbnailUrl",
-        "productImage",
-        "productImageUrl",
-        "mainImage",
-        "mainImageUrl",
-    ]
+    images = product.get("images")
 
-    for field in fields:
+    if isinstance(images, list) and images:
+        first_image = images[0]
 
-        value = product.get(field)
+        if isinstance(first_image, dict):
+            return (
+                first_image.get("url")
+                or first_image.get("src")
+                or first_image.get("image")
+            )
 
-        if isinstance(value, str):
+        if isinstance(first_image, str):
+            return first_image
 
-            value = value.strip()
-
-            if value:
-                return value
-
-    images = product.get("images", [])
-
-    if isinstance(images, list):
-
-        for image in images:
-
-            if isinstance(image, str):
-
-                image = image.strip()
-
-                if image:
-                    return image
-
-            elif isinstance(image, dict):
-
-                for field in [
-                    "url",
-                    "image",
-                    "imageUrl",
-                    "imageURL",
-                    "src",
-                    "source",
-                ]:
-
-                    value = image.get(field)
-
-                    if isinstance(value, str):
-
-                        value = value.strip()
-
-                        if value:
-                            return value
-
-    return ""
+    return (
+        product.get("image")
+        or product.get("image_url")
+        or product.get("thumbnail")
+        or ""
+    )
 
 
 # ==========================================================
 # DECIMAL HELPER
 # ==========================================================
 
-def to_decimal(value, default="0.00"):
+def to_decimal(value, default=Decimal("0")):
+    """
+    Convert a value safely to Decimal.
+    """
+
+    if value is None:
+        return default
+
+    if isinstance(value, Decimal):
+        return value
 
     try:
+        value = str(value).replace(",", "").replace("R", "").strip()
 
-        return Decimal(
-            str(value)
-        )
+        if not value:
+            return default
 
-    except (
-        ValueError,
-        TypeError,
-        InvalidOperation,
-    ):
+        return Decimal(value)
 
-        return Decimal(default)
+    except (InvalidOperation, ValueError, TypeError):
+        return default
 
 
 # ==========================================================
-# PREFERENCE LIST HELPER
+# PREFERENCE HELPER
 # ==========================================================
 
 def preference_values(value):
+    """
+    Convert preferences into a clean lowercase list.
+
+    Supports:
+
+        ["Black", "Blue"]
+
+    and:
+
+        "Black,Blue"
+
+    and:
+
+        "Black, Blue"
+    """
 
     if not value:
         return []
 
+    # Preferences stored as a Python list/tuple
+    if isinstance(value, (list, tuple)):
+        return [
+            str(item).strip().lower()
+            for item in value
+            if str(item).strip()
+        ]
+
+    # Preferences stored as a comma-separated string
     return [
         item.strip().lower()
         for item in str(value).split(",")
@@ -125,14 +116,282 @@ def preference_values(value):
 
 
 # ==========================================================
-# SEARCH
+# AI RECOMMENDATION SCORE
+# ==========================================================
+
+def recommendation_score(item, preferences=None, keyword=""):
+    """
+    Calculate a personalized recommendation score.
+
+    The score is based primarily on the user's saved
+    preferences:
+
+        Colour  = 25 points
+        Store   = 25 points
+        Style   = 20 points
+        Hobby   = 15 points
+
+    Additional signals:
+
+        Keyword match = up to 10 points
+        Rating        = up to 5 points
+        In stock      = 2 points
+        On sale       = 3 points
+
+    Maximum score = 100.
+    """
+
+    score = Decimal("0")
+
+    matched_preferences = []
+
+    # ------------------------------------------------------
+    # PRODUCT INFORMATION
+    # ------------------------------------------------------
+
+    name = str(
+        item.get("name", "")
+    ).lower()
+
+    description = str(
+        item.get("description", "")
+    ).lower()
+
+    category = str(
+        item.get("category", "")
+    ).lower()
+
+    brand = str(
+        item.get("brand", "")
+    ).lower()
+
+    product_colour = str(
+        item.get("colour", "")
+    ).lower()
+
+    product_store = str(
+        item.get("store", "")
+    ).lower()
+
+    product_size = str(
+        item.get("size", "")
+    ).lower()
+
+    # Everything searchable about the product
+    product_text = " ".join(
+        [
+            name,
+            description,
+            category,
+            brand,
+            product_colour,
+            product_store,
+            product_size,
+        ]
+    )
+
+    # ------------------------------------------------------
+    # USER PREFERENCES
+    # ------------------------------------------------------
+
+    if preferences:
+
+        preferred_colours = preference_values(
+            getattr(
+                preferences,
+                "colours",
+                []
+            )
+        )
+
+        preferred_stores = preference_values(
+            getattr(
+                preferences,
+                "stores",
+                []
+            )
+        )
+
+        preferred_styles = preference_values(
+            getattr(
+                preferences,
+                "styles",
+                []
+            )
+        )
+
+        preferred_hobbies = preference_values(
+            getattr(
+                preferences,
+                "hobbies",
+                []
+            )
+        )
+
+        # --------------------------------------------------
+        # COLOUR MATCH
+        # --------------------------------------------------
+
+        for preferred_colour in preferred_colours:
+
+            if preferred_colour in product_colour:
+
+                score += Decimal("25")
+
+                matched_preferences.append(
+                    f"Colour: {preferred_colour.title()}"
+                )
+
+                break
+
+        # --------------------------------------------------
+        # STORE MATCH
+        # --------------------------------------------------
+
+        for preferred_store in preferred_stores:
+
+            if (
+                preferred_store in product_store
+                or product_store in preferred_store
+            ):
+
+                score += Decimal("25")
+
+                matched_preferences.append(
+                    f"Store: {preferred_store.title()}"
+                )
+
+                break
+
+        # --------------------------------------------------
+        # STYLE MATCH
+        # --------------------------------------------------
+
+        for preferred_style in preferred_styles:
+
+            if preferred_style in product_text:
+
+                score += Decimal("20")
+
+                matched_preferences.append(
+                    f"Style: {preferred_style.title()}"
+                )
+
+                break
+
+        # --------------------------------------------------
+        # HOBBY MATCH
+        # --------------------------------------------------
+
+        for hobby in preferred_hobbies:
+
+            if hobby in product_text:
+
+                score += Decimal("15")
+
+                matched_preferences.append(
+                    f"Hobby: {hobby.title()}"
+                )
+
+                break
+
+    # ------------------------------------------------------
+    # SEARCH KEYWORD MATCH
+    # ------------------------------------------------------
+
+    if keyword:
+
+        search_term = str(
+            keyword
+        ).strip().lower()
+
+        if search_term:
+
+            if search_term in name:
+
+                score += Decimal("5")
+
+            elif search_term in category:
+
+                score += Decimal("3")
+
+            elif search_term in brand:
+
+                score += Decimal("2")
+
+    # ------------------------------------------------------
+    # PRODUCT RATING
+    # ------------------------------------------------------
+
+    rating = to_decimal(
+        item.get("rating", 0)
+    )
+
+    # Limit rating contribution to 5 points
+    if rating > Decimal("5"):
+        rating = Decimal("5")
+
+    if rating < Decimal("0"):
+        rating = Decimal("0")
+
+    score += rating
+
+    # ------------------------------------------------------
+    # STOCK
+    # ------------------------------------------------------
+
+    try:
+
+        stock = int(
+            item.get("stock", 0) or 0
+        )
+
+    except (ValueError, TypeError):
+
+        stock = 0
+
+    if stock > 0:
+
+        score += Decimal("2")
+
+    # ------------------------------------------------------
+    # SALE
+    # ------------------------------------------------------
+
+    if item.get("on_sale"):
+
+        score += Decimal("3")
+
+    # ------------------------------------------------------
+    # SAVE MATCH INFORMATION
+    # ------------------------------------------------------
+
+    item["matched_preferences"] = matched_preferences
+
+    # ------------------------------------------------------
+    # KEEP SCORE BETWEEN 0 AND 100
+    # ------------------------------------------------------
+
+    score = max(
+        Decimal("0"),
+        min(
+            score,
+            Decimal("100")
+        )
+    )
+
+    return score
+
+
+# ==========================================================
+# SEARCH PRODUCTS
 # ==========================================================
 
 @login_required
 def search(request):
 
     # ======================================================
-    # USER PREFERENCES
+    # LOAD USER PREFERENCES
     # ======================================================
 
     try:
@@ -146,70 +405,74 @@ def search(request):
         preferences = None
 
     # ======================================================
-    # SEARCH PARAMETERS
+    # GET SEARCH PARAMETERS
     # ======================================================
 
     keyword = request.GET.get(
         "keyword",
-        "",
+        ""
     ).strip()
 
     budget = request.GET.get(
         "budget",
-        "",
+        ""
     ).strip()
 
     colour = request.GET.get(
         "colour",
-        "",
+        ""
     ).strip()
 
     size = request.GET.get(
         "size",
-        "",
+        ""
     ).strip()
 
     store = request.GET.get(
         "store",
-        "",
+        ""
     ).strip()
 
     location = request.GET.get(
         "location",
-        "",
+        ""
     ).strip()
 
     max_shipping = request.GET.get(
         "max_shipping",
-        "",
+        ""
     ).strip()
 
     max_distance = request.GET.get(
         "max_distance",
-        "",
+        ""
     ).strip()
 
     sort = request.GET.get(
         "sort",
-        "price_asc",
+        "price_asc"
     ).strip()
 
     user_latitude = request.GET.get(
         "user_latitude",
-        "",
+        ""
     ).strip()
 
     user_longitude = request.GET.get(
         "user_longitude",
-        "",
+        ""
     ).strip()
+
+    # ======================================================
+    # START WITH EMPTY PRODUCTS
+    # ======================================================
 
     products = []
 
-    api_error = None
+    error = None
 
     # ======================================================
-    # SEARCH API
+    # SEARCH RETAILER API
     # ======================================================
 
     if keyword:
@@ -223,253 +486,366 @@ def search(request):
 
         except StoreAPIError as exc:
 
-            api_error = str(exc)
+            error = str(exc)
 
-    # ======================================================
-    # NORMALIZE PRODUCT DATA
-    # ======================================================
+            products = []
 
-    for item in products:
+        except Exception as exc:
 
-        item.setdefault(
-            "name",
-            "Unnamed Product",
-        )
-
-        item.setdefault(
-            "colour",
-            "Not specified",
-        )
-
-        item.setdefault(
-            "size",
-            "Not specified",
-        )
-
-        item.setdefault(
-            "store",
-            "Checkers",
-        )
-
-        item.setdefault(
-            "location",
-            "Location not available",
-        )
-
-        item.setdefault(
-            "description",
-            "",
-        )
-
-        item.setdefault(
-            "category",
-            "Other",
-        )
-
-        item.setdefault(
-            "brand",
-            "Unknown",
-        )
-
-        item.setdefault(
-            "url",
-            "",
-        )
-
-        item.setdefault(
-            "images",
-            [],
-        )
-
-        item["image"] = get_product_image(
-            item
-        )
-
-        # ==================================================
-        # CURRENT PRICE
-        # ==================================================
-
-        item["price"] = to_decimal(
-            item.get("price", 0)
-        ).quantize(
-            Decimal("0.01")
-        )
-
-        # ==================================================
-        # REGULAR PRICE
-        # ==================================================
-
-        item["regular_price"] = to_decimal(
-            item.get(
-                "regular_price",
-                item["price"],
+            error = (
+                "Unable to retrieve products. "
+                f"{str(exc)}"
             )
-        ).quantize(
-            Decimal("0.01")
+
+            products = []
+
+    # ======================================================
+    # NORMALIZE PRODUCTS
+    # ======================================================
+
+    normalized_products = []
+
+    for product in products:
+
+        if not isinstance(product, dict):
+
+            continue
+
+        # --------------------------------------------------
+        # BASIC INFORMATION
+        # --------------------------------------------------
+
+        product_name = str(
+            product.get(
+                "name",
+                ""
+            )
+        ).strip()
+
+        product_colour = str(
+            product.get(
+                "colour",
+                ""
+            )
+        ).strip()
+
+        product_size = str(
+            product.get(
+                "size",
+                ""
+            )
+        ).strip()
+
+        product_store = str(
+            product.get(
+                "store",
+                ""
+            )
+        ).strip()
+
+        product_location = str(
+            product.get(
+                "location",
+                ""
+            )
+        ).strip()
+
+        description = str(
+            product.get(
+                "description",
+                ""
+            )
+        ).strip()
+
+        category = str(
+            product.get(
+                "category",
+                ""
+            )
+        ).strip()
+
+        brand = str(
+            product.get(
+                "brand",
+                ""
+            )
+        ).strip()
+
+        url = str(
+            product.get(
+                "url",
+                ""
+            )
+        ).strip()
+
+        # --------------------------------------------------
+        # IMAGE
+        # --------------------------------------------------
+
+        image = get_product_image(
+            product
         )
 
-        # ==================================================
-        # SALE PRICE
-        # ==================================================
+        # --------------------------------------------------
+        # PRICE
+        # --------------------------------------------------
 
-        sale_price = item.get(
+        price = to_decimal(
+            product.get(
+                "price",
+                0
+            )
+        )
+
+        regular_price = to_decimal(
+            product.get(
+                "regular_price",
+                price
+            )
+        )
+
+        sale_price_value = product.get(
             "sale_price"
         )
 
-        if sale_price is not None:
+        if sale_price_value is not None:
 
-            item["sale_price"] = to_decimal(
-                sale_price
-            ).quantize(
-                Decimal("0.01")
+            sale_price = to_decimal(
+                sale_price_value
             )
 
         else:
 
-            item["sale_price"] = None
+            sale_price = None
 
-        # ==================================================
+        # --------------------------------------------------
         # ON SALE
-        # ==================================================
+        # --------------------------------------------------
 
-        item["on_sale"] = bool(
-            item.get(
+        on_sale = bool(
+            product.get(
                 "on_sale",
-                False,
+                False
             )
         )
 
-        # ==================================================
+        # If sale price is lower than regular price,
+        # automatically mark it as on sale.
+
+        if (
+            sale_price is not None
+            and sale_price > 0
+            and regular_price > 0
+            and sale_price < regular_price
+        ):
+
+            on_sale = True
+
+        # --------------------------------------------------
+        # FINAL PRICE
+        # --------------------------------------------------
+
+        if (
+            on_sale
+            and sale_price is not None
+            and sale_price > 0
+        ):
+
+            final_price = sale_price
+
+        else:
+
+            final_price = price
+
+        # --------------------------------------------------
         # DISCOUNT
-        # ==================================================
+        # --------------------------------------------------
 
-        item["discount_amount"] = to_decimal(
-            item.get(
+        discount_amount = to_decimal(
+            product.get(
                 "discount_amount",
-                0,
+                0
             )
-        ).quantize(
-            Decimal("0.01")
         )
 
-        item["discount_percentage"] = to_decimal(
-            item.get(
+        discount_percentage = to_decimal(
+            product.get(
                 "discount_percentage",
-                0,
+                0
             )
-        ).quantize(
-            Decimal("0.01")
         )
 
-        # ==================================================
-        # EXPIRY
-        # ==================================================
+        if (
+            discount_amount <= 0
+            and regular_price > final_price
+        ):
 
-        item.setdefault(
-            "deal_expiry",
-            "",
-        )
+            discount_amount = (
+                regular_price - final_price
+            )
 
-        # ==================================================
+        if (
+            discount_percentage <= 0
+            and regular_price > 0
+            and final_price < regular_price
+        ):
+
+            discount_percentage = (
+                (
+                    regular_price - final_price
+                )
+                / regular_price
+            ) * Decimal("100")
+
+        # --------------------------------------------------
         # SHIPPING
-        # ==================================================
+        # --------------------------------------------------
 
-        item["shipping_cost"] = to_decimal(
-            item.get(
+        shipping_cost = to_decimal(
+            product.get(
                 "shipping_cost",
-                0,
+                0
             )
-        ).quantize(
-            Decimal("0.01")
         )
 
-        # ==================================================
+        # --------------------------------------------------
         # RATING
-        # ==================================================
+        # --------------------------------------------------
 
-        item["rating"] = to_decimal(
-            item.get(
+        rating = to_decimal(
+            product.get(
                 "rating",
-                0,
+                0
             )
-        ).quantize(
-            Decimal("0.01")
         )
 
-        # ==================================================
+        # --------------------------------------------------
         # STOCK
-        # ==================================================
+        # --------------------------------------------------
+
+        stock = product.get(
+            "stock",
+            0
+        )
 
         try:
 
-            item["stock"] = int(
-                item.get(
-                    "stock",
-                    0,
-                )
-                or 0
+            stock = int(
+                stock
             )
 
-        except (
-            ValueError,
-            TypeError,
-        ):
+        except (ValueError, TypeError):
 
-            item["stock"] = 0
+            stock = 0
 
-        if item["stock"] < 0:
-            item["stock"] = 0
-
-        # ==================================================
+        # --------------------------------------------------
         # DISTANCE
-        # ==================================================
+        # --------------------------------------------------
 
-        item.setdefault(
-            "distance",
-            None,
+        distance = to_decimal(
+            product.get(
+                "distance",
+                0
+            )
         )
+
+        # --------------------------------------------------
+        # TOTAL COST
+        # --------------------------------------------------
+
+        total_cost = (
+            final_price
+            + shipping_cost
+        )
+
+        # --------------------------------------------------
+        # BUILD NORMALIZED PRODUCT
+        # --------------------------------------------------
+
+        normalized_product = {
+
+            **product,
+
+            "name": product_name,
+
+            "colour": product_colour,
+
+            "size": product_size,
+
+            "store": product_store,
+
+            "location": product_location,
+
+            "description": description,
+
+            "category": category,
+
+            "brand": brand,
+
+            "url": url,
+
+            "image": image,
+
+            "price": final_price,
+
+            "regular_price": regular_price,
+
+            "sale_price": sale_price,
+
+            "on_sale": on_sale,
+
+            "discount_amount": discount_amount,
+
+            "discount_percentage": discount_percentage,
+
+            "shipping_cost": shipping_cost,
+
+            "rating": rating,
+
+            "stock": stock,
+
+            "distance": distance,
+
+            "total_cost": total_cost,
+
+            "recommendation_score": Decimal("0"),
+
+            "matched_preferences": [],
+
+        }
+
+        normalized_products.append(
+            normalized_product
+        )
+
+    # Replace original list
+    products = normalized_products
 
     # ======================================================
     # BUDGET FILTER
     # ======================================================
 
+    budget_value = None
+
     if budget:
 
         try:
 
-            max_budget = Decimal(
+            budget_value = Decimal(
                 budget
             )
 
-            filtered_products = []
+        except InvalidOperation:
 
-            for item in products:
+            budget_value = None
 
-                effective_price = (
-                    item["sale_price"]
-                    if (
-                        item.get("on_sale")
-                        and item.get("sale_price")
-                        is not None
-                    )
-                    else item["price"]
-                )
+    if budget_value is not None:
 
-                if effective_price <= max_budget:
-
-                    filtered_products.append(
-                        item
-                    )
-
-            products = filtered_products
-
-        except (
-            ValueError,
-            TypeError,
-            InvalidOperation,
-        ):
-
-            pass
+        products = [
+            product
+            for product in products
+            if product["total_cost"] <= budget_value
+        ]
 
     # ======================================================
     # COLOUR FILTER
@@ -480,12 +856,12 @@ def search(request):
         colour_lower = colour.lower()
 
         products = [
-            item
-            for item in products
+            product
+            for product in products
             if colour_lower in str(
-                item.get(
+                product.get(
                     "colour",
-                    "",
+                    ""
                 )
             ).lower()
         ]
@@ -499,12 +875,12 @@ def search(request):
         size_lower = size.lower()
 
         products = [
-            item
-            for item in products
+            product
+            for product in products
             if size_lower in str(
-                item.get(
+                product.get(
                     "size",
-                    "",
+                    ""
                 )
             ).lower()
         ]
@@ -518,12 +894,12 @@ def search(request):
         store_lower = store.lower()
 
         products = [
-            item
-            for item in products
+            product
+            for product in products
             if store_lower in str(
-                item.get(
+                product.get(
                     "store",
-                    "",
+                    ""
                 )
             ).lower()
         ]
@@ -537,12 +913,12 @@ def search(request):
         location_lower = location.lower()
 
         products = [
-            item
-            for item in products
+            product
+            for product in products
             if location_lower in str(
-                item.get(
+                product.get(
                     "location",
-                    "",
+                    ""
                 )
             ).lower()
         ]
@@ -551,351 +927,75 @@ def search(request):
     # SHIPPING FILTER
     # ======================================================
 
+    max_shipping_value = None
+
     if max_shipping:
 
         try:
 
-            shipping_limit = Decimal(
+            max_shipping_value = Decimal(
                 max_shipping
             )
 
-            products = [
-                item
-                for item in products
-                if item["shipping_cost"]
-                <= shipping_limit
-            ]
+        except InvalidOperation:
 
-        except (
-            ValueError,
-            TypeError,
-            InvalidOperation,
-        ):
+            max_shipping_value = None
 
-            pass
+    if max_shipping_value is not None:
+
+        products = [
+            product
+            for product in products
+            if product["shipping_cost"]
+            <= max_shipping_value
+        ]
 
     # ======================================================
-    # MAX DISTANCE
+    # DISTANCE FILTER
     # ======================================================
+
+    max_distance_value = None
 
     if max_distance:
 
         try:
 
-            distance_limit = Decimal(
+            max_distance_value = Decimal(
                 max_distance
             )
 
-            filtered_products = []
+        except InvalidOperation:
 
-            for item in products:
+            max_distance_value = None
 
-                distance = item.get(
-                    "distance"
-                )
+    if max_distance_value is not None:
 
-                if distance is None:
-                    continue
-
-                try:
-
-                    distance = Decimal(
-                        str(distance)
-                    )
-
-                except (
-                    ValueError,
-                    TypeError,
-                    InvalidOperation,
-                ):
-
-                    continue
-
-                if distance <= distance_limit:
-
-                    filtered_products.append(
-                        item
-                    )
-
-            products = filtered_products
-
-        except (
-            ValueError,
-            TypeError,
-            InvalidOperation,
-        ):
-
-            pass
+        products = [
+            product
+            for product in products
+            if product["distance"]
+            <= max_distance_value
+        ]
 
     # ======================================================
-    # TOTAL COST
-    # ======================================================
-
-    for item in products:
-
-        effective_price = (
-            item["sale_price"]
-            if (
-                item.get("on_sale")
-                and item.get("sale_price")
-                is not None
-            )
-            else item["price"]
-        )
-
-        item["total_cost"] = (
-            effective_price
-            + item["shipping_cost"]
-        )
-
-    # ======================================================
-    # RECOMMENDATION SCORE
-    # ======================================================
-
-    def recommendation_score(item):
-
-        score = Decimal("0")
-
-        name = str(
-            item.get(
-                "name",
-                "",
-            )
-        ).lower()
-
-        description = str(
-            item.get(
-                "description",
-                "",
-            )
-        ).lower()
-
-        category = str(
-            item.get(
-                "category",
-                "",
-            )
-        ).lower()
-
-        brand = str(
-            item.get(
-                "brand",
-                "",
-            )
-        ).lower()
-
-        product_colour = str(
-            item.get(
-                "colour",
-                "",
-            )
-        ).lower()
-
-        product_store = str(
-            item.get(
-                "store",
-                "",
-            )
-        ).lower()
-
-        # --------------------------------------------------
-        # RATING
-        # --------------------------------------------------
-
-        rating = to_decimal(
-            item.get(
-                "rating",
-                0,
-            )
-        )
-
-        score += (
-            rating
-            * Decimal("10")
-        )
-
-        # --------------------------------------------------
-        # EFFECTIVE PRICE
-        # --------------------------------------------------
-
-        price = (
-            item["sale_price"]
-            if (
-                item.get("on_sale")
-                and item.get("sale_price")
-                is not None
-            )
-            else item["price"]
-        )
-
-        if price > 0:
-
-            score += (
-                Decimal("1000")
-                / price
-            )
-
-        # --------------------------------------------------
-        # STOCK
-        # --------------------------------------------------
-
-        stock = item.get(
-            "stock",
-            0,
-        )
-
-        try:
-
-            stock = int(stock)
-
-        except (
-            ValueError,
-            TypeError,
-        ):
-
-            stock = 0
-
-        if stock > 0:
-
-            score += Decimal("5")
-
-        else:
-
-            score -= Decimal("20")
-
-        # --------------------------------------------------
-        # SEARCH RELEVANCE
-        # --------------------------------------------------
-
-        if keyword:
-
-            search_term = keyword.lower()
-
-            if search_term in name:
-                score += Decimal("30")
-
-            if search_term in category:
-                score += Decimal("15")
-
-            if search_term in brand:
-                score += Decimal("10")
-
-            if search_term in description:
-                score += Decimal("5")
-
-        # --------------------------------------------------
-        # USER PREFERENCES
-        # --------------------------------------------------
-
-        if preferences:
-
-            preferred_colours = (
-                preference_values(
-                    getattr(
-                        preferences,
-                        "colours",
-                        "",
-                    )
-                )
-            )
-
-            for preferred_colour in preferred_colours:
-
-                if preferred_colour in product_colour:
-
-                    score += Decimal("25")
-                    break
-
-            preferred_stores = (
-                preference_values(
-                    getattr(
-                        preferences,
-                        "stores",
-                        "",
-                    )
-                )
-            )
-
-            for preferred_store in preferred_stores:
-
-                if preferred_store in product_store:
-
-                    score += Decimal("20")
-                    break
-
-            preferred_styles = (
-                preference_values(
-                    getattr(
-                        preferences,
-                        "styles",
-                        "",
-                    )
-                )
-            )
-
-            for preferred_style in preferred_styles:
-
-                if (
-                    preferred_style in name
-                    or preferred_style in description
-                    or preferred_style in category
-                ):
-
-                    score += Decimal("20")
-                    break
-
-            preferred_hobbies = (
-                preference_values(
-                    getattr(
-                        preferences,
-                        "hobbies",
-                        "",
-                    )
-                )
-            )
-
-            for hobby in preferred_hobbies:
-
-                if (
-                    hobby in name
-                    or hobby in description
-                    or hobby in category
-                ):
-
-                    score += Decimal("10")
-                    break
-
-        return score
-
-    # ======================================================
-    # SORT
+    # SORTING
     # ======================================================
 
     if sort == "price_asc":
 
         products.sort(
-            key=lambda item: (
-                item["sale_price"]
-                if (
-                    item.get("on_sale")
-                    and item.get("sale_price")
-                    is not None
-                )
-                else item["price"]
+            key=lambda product: product.get(
+                "price",
+                Decimal("0")
             )
         )
 
     elif sort == "price_desc":
 
         products.sort(
-            key=lambda item: (
-                item["sale_price"]
-                if (
-                    item.get("on_sale")
-                    and item.get("sale_price")
-                    is not None
-                )
-                else item["price"]
+            key=lambda product: product.get(
+                "price",
+                Decimal("0")
             ),
             reverse=True,
         )
@@ -903,17 +1003,19 @@ def search(request):
     elif sort == "shipping_asc":
 
         products.sort(
-            key=lambda item:
-                item["shipping_cost"]
+            key=lambda product: product.get(
+                "shipping_cost",
+                Decimal("0")
+            )
         )
 
     elif sort == "name_asc":
 
         products.sort(
-            key=lambda item: str(
-                item.get(
+            key=lambda product: str(
+                product.get(
                     "name",
-                    "",
+                    ""
                 )
             ).lower()
         )
@@ -921,27 +1023,43 @@ def search(request):
     elif sort == "distance_asc":
 
         products.sort(
-            key=lambda item: (
-                item["distance"]
-                if item.get(
-                    "distance"
-                ) is not None
-                else Decimal("999999")
+            key=lambda product: product.get(
+                "distance",
+                Decimal("999999")
             )
         )
+
+    # ======================================================
+    # AI RECOMMENDATION
+    # ======================================================
 
     elif sort == "recommendation":
 
+        # --------------------------------------------------
+        # Calculate score ONCE for every product
+        # --------------------------------------------------
+
+        for product in products:
+
+            product["recommendation_score"] = (
+                recommendation_score(
+                    product,
+                    preferences=preferences,
+                    keyword=keyword,
+                )
+            )
+
+        # --------------------------------------------------
+        # Sort highest AI score first
+        # --------------------------------------------------
+
         products.sort(
-            key=recommendation_score,
+            key=lambda product: product.get(
+                "recommendation_score",
+                Decimal("0")
+            ),
             reverse=True,
         )
-
-        for item in products:
-
-            item["recommendation_score"] = (
-                recommendation_score(item)
-            )
 
     # ======================================================
     # CONTEXT
@@ -973,147 +1091,94 @@ def search(request):
 
         "user_longitude": user_longitude,
 
-        "api_error": api_error,
-
         "preferences": preferences,
+
+        "error": error,
+
+        "product_count": len(
+            products
+        ),
     }
+
+    # ======================================================
+    # RENDER
+    # ======================================================
 
     return render(
         request,
         "products/search.html",
-        context,
+        context
     )
 
 
 # ==========================================================
-# DETAIL
+# PRODUCT DETAIL
 # ==========================================================
 
 @login_required
 def detail(request, product_id):
 
-    product_id = str(
-        product_id or ""
-    ).strip()
-
-    if not product_id:
-
-        return render(
-            request,
-            "products/detail.html",
-            {
-                "product": None,
-                "api_error":
-                    "No product ID was provided.",
-            },
-        )
-
     try:
+
+        # ==================================================
+        # GET PRODUCT
+        # ==================================================
 
         product = get_product(
             product_id
         )
 
+        if not product:
+
+            return render(
+                request,
+                "products/detail.html",
+                {
+                    "product": None,
+                    "error": "Product not found.",
+                }
+            )
+
         # ==================================================
-        # STORE LOCATION
+        # STORE ID
         # ==================================================
 
         store_id = _extract_store_id(
             product
         )
 
-        if (
-            store_id
-            and product.get("location")
-            in {
-                None,
-                "",
-                "Location not available",
-                "Location temporarily unavailable",
-            }
-        ):
+        # ==================================================
+        # STORE LOCATION
+        # ==================================================
+
+        store_location = None
+
+        if store_id:
 
             try:
 
-                location = get_store_location(
-                    store_id
+                store_location = (
+                    get_store_location(
+                        store_id
+                    )
                 )
 
-                if location:
+            except Exception:
 
-                    product["location"] = (
-                        location
-                    )
-
-                    # Keep Redis product cache
-                    # synchronized with the resolved
-                    # location.
-                    _cache_product(
-                        product
-                    )
-
-            except Exception as exc:
-
-                print(
-                    f"STORE LOCATION ERROR "
-                    f"for {store_id}: {exc}"
-                )
+                store_location = None
 
         # ==================================================
-        # DEFAULTS
+        # NORMALIZE PRODUCT
         # ==================================================
 
-        product.setdefault(
-            "name",
-            "Unnamed Product",
-        )
+        product_name = str(
+            product.get(
+                "name",
+                ""
+            )
+        ).strip()
 
-        product.setdefault(
-            "description",
-            "",
-        )
-
-        product.setdefault(
-            "brand",
-            "Unknown",
-        )
-
-        product.setdefault(
-            "category",
-            "Other",
-        )
-
-        product.setdefault(
-            "colour",
-            "Not specified",
-        )
-
-        product.setdefault(
-            "size",
-            "Not specified",
-        )
-
-        product.setdefault(
-            "store",
-            "Checkers",
-        )
-
-        product.setdefault(
-            "location",
-            "Location not available",
-        )
-
-        product.setdefault(
-            "deal_expiry",
-            "",
-        )
-
-        product.setdefault(
-            "url",
-            "",
-        )
-
-        product["image"] = get_product_image(
+        product_image = get_product_image(
             product
         )
 
@@ -1121,97 +1186,118 @@ def detail(request, product_id):
         # PRICE
         # ==================================================
 
-        product["price"] = to_decimal(
+        price = to_decimal(
             product.get(
                 "price",
-                0,
+                0
             )
-        ).quantize(
-            Decimal("0.01")
         )
 
-        # ==================================================
-        # REGULAR PRICE
-        # ==================================================
-
-        product["regular_price"] = to_decimal(
+        regular_price = to_decimal(
             product.get(
                 "regular_price",
-                product["price"],
+                price
             )
-        ).quantize(
-            Decimal("0.01")
         )
 
-        # ==================================================
-        # SALE PRICE
-        # ==================================================
-
-        if product.get(
+        sale_price_value = product.get(
             "sale_price"
-        ) is not None:
+        )
 
-            product["sale_price"] = (
-                to_decimal(
-                    product["sale_price"]
-                ).quantize(
-                    Decimal("0.01")
-                )
+        if sale_price_value is not None:
+
+            sale_price = to_decimal(
+                sale_price_value
             )
 
         else:
 
-            product["sale_price"] = None
+            sale_price = None
 
         # ==================================================
-        # ON SALE
+        # SALE
         # ==================================================
 
-        product["on_sale"] = bool(
+        on_sale = bool(
             product.get(
                 "on_sale",
-                False,
+                False
             )
         )
+
+        if (
+            sale_price is not None
+            and sale_price > 0
+            and regular_price > 0
+            and sale_price < regular_price
+        ):
+
+            on_sale = True
+
+        # ==================================================
+        # FINAL PRICE
+        # ==================================================
+
+        if (
+            on_sale
+            and sale_price is not None
+            and sale_price > 0
+        ):
+
+            final_price = sale_price
+
+        else:
+
+            final_price = price
 
         # ==================================================
         # DISCOUNT
         # ==================================================
 
-        product["discount_amount"] = (
-            to_decimal(
-                product.get(
-                    "discount_amount",
-                    0,
-                )
-            ).quantize(
-                Decimal("0.01")
+        discount_amount = to_decimal(
+            product.get(
+                "discount_amount",
+                0
             )
         )
 
-        product["discount_percentage"] = (
-            to_decimal(
-                product.get(
-                    "discount_percentage",
-                    0,
-                )
-            ).quantize(
-                Decimal("0.01")
+        discount_percentage = to_decimal(
+            product.get(
+                "discount_percentage",
+                0
             )
         )
+
+        if (
+            discount_amount <= 0
+            and regular_price > final_price
+        ):
+
+            discount_amount = (
+                regular_price - final_price
+            )
+
+        if (
+            discount_percentage <= 0
+            and regular_price > 0
+            and final_price < regular_price
+        ):
+
+            discount_percentage = (
+                (
+                    regular_price - final_price
+                )
+                / regular_price
+            ) * Decimal("100")
 
         # ==================================================
         # SHIPPING
         # ==================================================
 
-        product["shipping_cost"] = (
-            to_decimal(
-                product.get(
-                    "shipping_cost",
-                    0,
-                )
-            ).quantize(
-                Decimal("0.01")
+        shipping_cost = to_decimal(
+            product.get(
+                "shipping_cost",
+                0
             )
         )
 
@@ -1219,58 +1305,102 @@ def detail(request, product_id):
         # STOCK
         # ==================================================
 
+        stock = product.get(
+            "stock",
+            0
+        )
+
         try:
 
-            product["stock"] = int(
-                product.get(
-                    "stock",
-                    0,
-                )
-                or 0
+            stock = int(
+                stock
             )
 
-        except (
-            ValueError,
-            TypeError,
-        ):
+        except (ValueError, TypeError):
 
-            product["stock"] = 0
+            stock = 0
 
         # ==================================================
-        # TOTAL COST
+        # TOTAL
         # ==================================================
 
-        effective_price = (
-            product["sale_price"]
-            if (
-                product.get("on_sale")
-                and product.get("sale_price")
-                is not None
-            )
-            else product["price"]
+        total_cost = (
+            final_price
+            + shipping_cost
         )
+
+        # ==================================================
+        # UPDATE PRODUCT
+        # ==================================================
+
+        product["name"] = product_name
+
+        product["image"] = product_image
+
+        product["price"] = final_price
+
+        product["regular_price"] = regular_price
+
+        product["sale_price"] = sale_price
+
+        product["on_sale"] = on_sale
+
+        product["discount_amount"] = (
+            discount_amount
+        )
+
+        product["discount_percentage"] = (
+            discount_percentage
+        )
+
+        product["shipping_cost"] = (
+            shipping_cost
+        )
+
+        product["stock"] = stock
 
         product["total_cost"] = (
-            effective_price
-            + product["shipping_cost"]
+            total_cost
+        )
+
+        product["store_location"] = (
+            store_location
         )
 
         # ==================================================
-        # RETURN URL
+        # CACHE PRODUCT
         # ==================================================
 
-        return_url = request.GET.get(
-            "return_url",
-            "",
-        )
+        try:
+
+            _cache_product(
+                product
+            )
+
+        except Exception:
+
+            pass
+
+        # ==================================================
+        # CONTEXT
+        # ==================================================
+
+        context = {
+
+            "product": product,
+
+            "store_location": store_location,
+
+        }
+
+        # ==================================================
+        # RENDER
+        # ==================================================
 
         return render(
             request,
             "products/detail.html",
-            {
-                "product": product,
-                "return_url": return_url,
-            },
+            context
         )
 
     except StoreAPIError as exc:
@@ -1280,6 +1410,20 @@ def detail(request, product_id):
             "products/detail.html",
             {
                 "product": None,
-                "api_error": str(exc),
-            },
+                "error": str(exc),
+            }
+        )
+
+    except Exception as exc:
+
+        return render(
+            request,
+            "products/detail.html",
+            {
+                "product": None,
+                "error": (
+                    "Unable to load product. "
+                    f"{str(exc)}"
+                ),
+            }
         )

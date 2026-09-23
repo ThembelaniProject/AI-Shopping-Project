@@ -45,6 +45,21 @@ class UserProfile(models.Model):
         blank=True,
     )
 
+    # ======================================================
+    # TERMS & PRIVACY ACCEPTANCE
+    # ======================================================
+
+    terms_accepted = models.BooleanField(
+        default=False,
+        help_text="Designates whether the user has accepted Terms & Conditions and Privacy Policy.",
+    )
+
+    terms_accepted_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Timestamp when Terms & Conditions and Privacy Policy were accepted.",
+    )
+
     created_at = models.DateTimeField(
         auto_now_add=True,
     )

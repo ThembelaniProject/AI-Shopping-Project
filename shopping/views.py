@@ -10,7 +10,7 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.views.decorators.csrf import csrf_exempt
-
+from preferences.models import Preference
 from accounts.models import UserProfile
 
 from .models import Order, OrderItem
@@ -39,15 +39,36 @@ DEFAULT_PRODUCT_STOCK = 200
 # ==========================================================
 
 def home(request):
-
     if request.user.is_authenticated:
+
+        preference = Preference.objects.filter(
+            user=request.user
+        ).first()
+
+        # First-time user
+        if preference is None:
+            return redirect("preferences:edit")
+
+        # Existing preference record but nothing selected
+        has_preferences = (
+            bool(preference.styles)
+            or bool(preference.colours)
+            or bool(preference.stores)
+            or bool(preference.hobbies)
+        )
+
+        if not has_preferences:
+            return redirect("preferences:edit")
+
+        # Check Terms & Privacy Acceptance
+        profile = _get_user_profile(request)
+        if not profile.terms_accepted:
+            return redirect("accounts:accept_terms")
+
+        # Returning user
         return redirect("shopping:dashboard")
 
-    return render(
-        request,
-        "index.html",
-    )
-
+    return render(request, "index.html")
 
 # ==========================================================
 # DASHBOARD
@@ -55,6 +76,10 @@ def home(request):
 
 @login_required
 def dashboard(request):
+
+    profile = _get_user_profile(request)
+    if not profile.terms_accepted:
+        return redirect("accounts:accept_terms")
 
     return render(
         request,

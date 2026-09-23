@@ -51,12 +51,32 @@
 
         {% if preference %}
 
-            <a
-                href="{% url 'preferences:edit' %}"
-                class="btn btn-success"
-            >
-                Edit Preferences
-            </a>
+            <div class="d-flex gap-2">
+
+                {% if user.profile and not user.profile.terms_accepted %}
+                    <a
+                        href="{% url 'accounts:accept_terms' %}"
+                        class="btn btn-primary"
+                    >
+                        Accept Terms &amp; Privacy &rarr;
+                    </a>
+                {% else %}
+                    <a
+                        href="{% url 'shopping:dashboard' %}"
+                        class="btn btn-primary"
+                    >
+                        Go to Dashboard &rarr;
+                    </a>
+                {% endif %}
+
+                <a
+                    href="{% url 'preferences:edit' %}"
+                    class="btn btn-success"
+                >
+                    Edit Preferences
+                </a>
+
+            </div>
 
         {% endif %}
 
@@ -209,11 +229,27 @@
                 <hr class="border-secondary">
 
 
-                <div class="d-flex gap-2 mt-4">
+                <div class="d-flex flex-wrap gap-2 mt-4 align-items-center">
+
+                    {% if user.profile and not user.profile.terms_accepted %}
+                        <a
+                            href="{% url 'accounts:accept_terms' %}"
+                            class="btn btn-primary"
+                        >
+                            Proceed to Terms &amp; Privacy Agreement &rarr;
+                        </a>
+                    {% else %}
+                        <a
+                            href="{% url 'shopping:dashboard' %}"
+                            class="btn btn-primary"
+                        >
+                            Go to Dashboard &rarr;
+                        </a>
+                    {% endif %}
 
                     <a
                         href="{% url 'preferences:delete' %}"
-                        class="btn btn-danger"
+                        class="btn btn-outline-danger ms-auto"
                     >
                         Delete Preferences
                     </a>
