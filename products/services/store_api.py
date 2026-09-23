@@ -2,10 +2,9 @@
 Multi-provider South African retail integration for AI Shopping.
 
 Provider order:
-1. AZ Labs Grocery API - primary live catalogue for Pick n Pay + Checkers.
-2. Checkers through Parse.bot - fallback.
-3. Pick n Pay through Parse.bot - fallback.
-4. LoyaltyHub - broad South African fallback.
+1. Parse retailer APIs - primary live retailer catalogue for Checkers + Pick n Pay.
+2. AZ Labs Grocery API - fallback live catalogue for Pick n Pay + Checkers.
+3. LoyaltyHub - broad South African refreshed-price fallback.
 
 All providers are normalized into one product shape so products/views.py
 does not need to know which API supplied the result.
@@ -53,7 +52,7 @@ LOYALTYHUB_API_KEY = (
 
 API_PROVIDER = os.getenv(
     "RETAILER_API_PROVIDER",
-    "azlabs",
+    "parse",
 ).strip().lower()
 
 AZLABS_BASE_URL = "https://azlabs.ai/api/v1"
@@ -1725,11 +1724,64 @@ def search_loyaltyhub_products(
 
 
 # ============================================================
+# PARSE RETAILER API - LIVE SHOP PRICES
+# ============================================================
+
+def search_parse_retailer_products(
+    keyword: str,
+    limit: int = 20,
+    latitude: float | None = None,
+    longitude: float | None = None,
+    radius_km: float = OSM_RADIUS_KM,
+) -> list[dict]:
+    """Use Parse retailer integrations as the primary live-price source.
+
+    Checkers search returns the current Checkers catalogue price.
+    Pick n Pay uses the branch-specific endpoint when user coordinates
+    are available, so the displayed PnP price belongs to a real branch.
+    """
+    results: list[dict] = []
+    errors: list[str] = []
+
+    try:
+        results.extend(
+            search_checkers_products(
+                keyword,
+                limit=limit,
+            )
+        )
+    except StoreAPIError as exc:
+        errors.append(f"Checkers: {exc}")
+
+    try:
+        results.extend(
+            search_pnp_products(
+                keyword,
+                limit=limit,
+                latitude=latitude,
+                longitude=longitude,
+                radius_km=radius_km,
+            )
+        )
+    except StoreAPIError as exc:
+        errors.append(f"Pick n Pay: {exc}")
+
+    if results:
+        return results
+
+    if errors:
+        raise StoreAPIError(" | ".join(errors[:2]))
+
+    return []
+
+
+# ============================================================
 # PROVIDER SELECTION
 # ============================================================
 
 def _provider_order() -> list[str]:
     if API_PROVIDER in {
+        "parse",
         "azlabs",
         "checkers",
         "pnp",
@@ -1740,9 +1792,10 @@ def _provider_order() -> list[str]:
         preferred = "azlabs"
 
     default_order = [
-        "azlabs",
+        "parse",
         "checkers",
         "pnp",
+        "azlabs",
         "loyaltyhub",
     ]
 
@@ -1764,6 +1817,19 @@ def _search_provider(
     longitude: float | None = None,
     radius_km: float | None = None,
 ) -> list[dict]:
+    if provider == "parse":
+        return search_parse_retailer_products(
+            keyword,
+            limit=limit,
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=(
+                float(radius_km)
+                if radius_km is not None
+                else OSM_RADIUS_KM
+            ),
+        )
+
     if provider == "azlabs":
         return search_azlabs_products(
             keyword,
@@ -1838,10 +1904,9 @@ def search_products(
     Main function used by products/views.py.
 
     Provider flow:
-        AZ Labs
-            -> Checkers Parse fallback
-            -> Pick n Pay Parse fallback
-            -> LoyaltyHub fallback
+        Parse retailer APIs (Checkers + Pick n Pay)
+            -> AZ Labs live fallback
+            -> LoyaltyHub refreshed-price fallback
 
     Cache flow:
         live mode -> retailer API is queried on every search
@@ -1888,8 +1953,8 @@ def search_products(
             if results:
                 products.extend(results)
 
-                # AZ Labs already compares PnP + Checkers in one call.
-                # Do not spend more API credits once it returned data.
+                # Stop after the first successful provider tier. The
+                # primary Parse tier already queries both live retailers.
                 break
 
         except StoreAPIError as exc:
@@ -1910,7 +1975,7 @@ def search_products(
 
         raise StoreAPIError(
             "No retailer API is configured. "
-            "Set AZLABS_API_KEY, PARSE_API_KEY or "
+            "Set PARSE_API_KEY, AZLABS_API_KEY or "
             "LOYALTYHUB_API_KEY."
         )
 
