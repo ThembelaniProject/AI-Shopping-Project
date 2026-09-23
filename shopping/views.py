@@ -9,7 +9,7 @@ from django.utils import timezone
 from accounts.models import UserProfile
 from preferences.models import Preference
 
-from .models import PurchaseHistory
+from .models import PurchaseHistory, ShoppingListItem
 
 
 DEFAULT_SHOPPING_BUDGET = Decimal("1650.00")
@@ -246,4 +246,112 @@ def mark_purchased(request, product_id):
         ),
     )
 
+    return redirect("shopping:purchase_history")
+
+
+def _load_product(request, product_id):
+    from products.services.store_api import StoreAPIError, get_product
+    try:
+        product = get_product(product_id)
+    except StoreAPIError as exc:
+        messages.error(request, f"Could not load the product: {exc}")
+        return None
+    except Exception as exc:
+        messages.error(request, f"Could not load the product: {exc}")
+        return None
+    if not product:
+        messages.error(request, "Product could not be found.")
+    return product
+
+
+def _product_price(product):
+    value = product.get("sale_price") if product.get("on_sale") else product.get("price", "0")
+    try:
+        return Decimal(str(value).replace(",", "").replace("R", "").strip())
+    except (InvalidOperation, ValueError, TypeError):
+        return Decimal("0.00")
+
+
+def _product_snapshot(product, fallback_id=""):
+    return {
+        "product_id": str(product.get("id") or product.get("product_id") or fallback_id),
+        "product_name": str(product.get("name") or "Product").strip(),
+        "store": str(product.get("store") or "").strip(),
+        "category": str(product.get("category") or "").strip(),
+        "image_url": str(product.get("image") or "").strip() or None,
+        "product_url": str(product.get("url") or "").strip() or None,
+        "unit_price": _product_price(product),
+    }
+
+
+@login_required
+def add_to_shopping_list(request, product_id):
+    if request.method != "POST":
+        return redirect("products:detail", product_id=product_id)
+    if not _get_user_profile(request).terms_accepted:
+        return redirect("accounts:accept_terms")
+    product = _load_product(request, product_id)
+    if not product:
+        return redirect("products:search")
+    try:
+        quantity = max(1, min(int(request.POST.get("quantity", "1")), 999))
+    except (ValueError, TypeError):
+        quantity = 1
+    snapshot = _product_snapshot(product, product_id)
+    item = ShoppingListItem.objects.filter(user=request.user, product_id=snapshot["product_id"]).first()
+    if item:
+        item.quantity = min(999, item.quantity + quantity)
+        for key, value in snapshot.items():
+            setattr(item, key, value)
+        item.save()
+    else:
+        item = ShoppingListItem.objects.create(user=request.user, quantity=quantity, **snapshot)
+    messages.success(request, f"{item.product_name} was added to your shopping list.")
+    return redirect("shopping:shopping_list")
+
+
+@login_required
+def shopping_list(request):
+    profile = _get_user_profile(request)
+    if not profile.terms_accepted:
+        return redirect("accounts:accept_terms")
+    items = ShoppingListItem.objects.filter(user=request.user)
+    estimated_total = sum((item.estimated_total for item in items), Decimal("0.00"))
+    remaining_after_list = profile.available_amount - _current_month_spending(request.user) - estimated_total
+    return render(request, "shopping/shopping_list.html", {
+        "items": items,
+        "estimated_total": estimated_total,
+        "remaining_after_list": remaining_after_list,
+    })
+
+
+@login_required
+def remove_from_shopping_list(request, item_id):
+    if request.method == "POST":
+        ShoppingListItem.objects.filter(id=item_id, user=request.user).delete()
+    return redirect("shopping:shopping_list")
+
+
+@login_required
+def purchase_from_list(request, item_id):
+    if request.method != "POST":
+        return redirect("shopping:shopping_list")
+    item = ShoppingListItem.objects.filter(id=item_id, user=request.user).first()
+    if not item:
+        messages.error(request, "Shopping-list item was not found.")
+        return redirect("shopping:shopping_list")
+    purchase = PurchaseHistory.objects.create(
+        user=request.user,
+        product_id=item.product_id,
+        product_name=item.product_name,
+        store=item.store,
+        category=item.category,
+        image_url=item.image_url,
+        product_url=item.product_url,
+        unit_price=item.unit_price,
+        quantity=item.quantity,
+        amount_spent=item.estimated_total,
+    )
+    item.delete()
+    messages.success(request, f"{purchase.product_name} was added to your purchase history.")
     return redirect("shopping:purchase_history")
