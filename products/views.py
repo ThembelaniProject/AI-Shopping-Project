@@ -803,6 +803,14 @@ def search(request):
 
             "name": product_name,
 
+            # Stable ID used by shopping-list and detail URLs.
+            "external_id": str(
+                product.get("external_id")
+                or product.get("id")
+                or product.get("product_id")
+                or ""
+            ).strip(),
+
             "colour": product_colour,
 
             "size": product_size,
