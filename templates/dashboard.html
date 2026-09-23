@@ -73,6 +73,49 @@
         color: #a5b4fc;
     }
 
+    .spending-summary {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr) auto;
+        gap: 1rem;
+        align-items: stretch;
+        margin-bottom: 2rem;
+    }
+
+    .spending-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1rem 1.2rem;
+    }
+
+    .spending-card span {
+        display: block;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        margin-bottom: 0.35rem;
+    }
+
+    .spending-card strong {
+        color: var(--text);
+        font-size: 1.2rem;
+    }
+
+    .history-button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        padding: 0.9rem 1rem;
+        border-radius: 11px;
+        background: var(--primary);
+        color: white;
+        text-decoration: none;
+        font-weight: 700;
+    }
+
+    .history-button:hover {
+        background: var(--primary-hover);
+    }
+
     /* ================================
        MAIN SEARCH CARD
     ================================= */
@@ -501,6 +544,37 @@
             Find the best products, prices and stores with your
             <span class="ai-text">AI Shopping Assistant</span>.
         </p>
+
+    </section>
+
+
+    <!-- ================================
+         SPENDING SUMMARY
+    ================================= -->
+
+    <section class="spending-summary">
+
+        <div class="spending-card">
+            <span>Monthly Budget</span>
+            <strong>R{{ monthly_budget|floatformat:2 }}</strong>
+        </div>
+
+        <div class="spending-card">
+            <span>Spent This Month</span>
+            <strong>R{{ monthly_spent|floatformat:2 }}</strong>
+        </div>
+
+        <div class="spending-card">
+            <span>Budget Remaining</span>
+            <strong>R{{ remaining_budget|floatformat:2 }}</strong>
+        </div>
+
+        <a
+            href="{% url 'shopping:purchase_history' %}"
+            class="history-button"
+        >
+            View Purchase History →
+        </a>
 
     </section>
 

@@ -21,6 +21,10 @@
                 Products
             </a>
 
+            <a href="{% url 'shopping:purchase_history' %}">
+                History
+            </a>
+
             {% if user.is_authenticated %}
                 <a
                     href="{% url 'accounts:profile' %}"

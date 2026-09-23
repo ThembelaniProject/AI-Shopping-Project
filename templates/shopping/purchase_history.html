@@ -1,0 +1,268 @@
+{% extends "base.html" %}
+
+{% block title %}
+    Purchase History - SmartSpend
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .history-page {
+        width: 100%;
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 2rem 1rem 4rem;
+    }
+
+    .history-header {
+        margin-bottom: 1.5rem;
+    }
+
+    .history-header h1 {
+        margin: 0 0 0.4rem;
+        color: #f8fafc;
+    }
+
+    .history-header p {
+        margin: 0;
+        color: #94a3b8;
+    }
+
+    .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+
+    .summary-card {
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 14px;
+        padding: 1.25rem;
+    }
+
+    .summary-card span {
+        display: block;
+        color: #94a3b8;
+        font-size: 0.85rem;
+        margin-bottom: 0.4rem;
+    }
+
+    .summary-card strong {
+        color: #f8fafc;
+        font-size: 1.5rem;
+    }
+
+    .purchase-list {
+        display: grid;
+        gap: 1rem;
+    }
+
+    .purchase-card {
+        display: grid;
+        grid-template-columns: 90px 1fr auto;
+        gap: 1rem;
+        align-items: center;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 14px;
+        padding: 1rem;
+    }
+
+    .purchase-image {
+        width: 90px;
+        height: 90px;
+        border-radius: 10px;
+        object-fit: contain;
+        background: #0f172a;
+    }
+
+    .purchase-image-placeholder {
+        width: 90px;
+        height: 90px;
+        border-radius: 10px;
+        display: grid;
+        place-items: center;
+        background: #0f172a;
+        color: #64748b;
+    }
+
+    .purchase-name {
+        margin: 0 0 0.35rem;
+        color: #f8fafc;
+        font-size: 1rem;
+    }
+
+    .purchase-meta {
+        margin: 0.2rem 0;
+        color: #94a3b8;
+        font-size: 0.88rem;
+    }
+
+    .purchase-amount {
+        text-align: right;
+    }
+
+    .purchase-amount strong {
+        display: block;
+        color: #86efac;
+        font-size: 1.15rem;
+    }
+
+    .purchase-amount span {
+        color: #64748b;
+        font-size: 0.8rem;
+    }
+
+    .empty-state {
+        padding: 2rem;
+        text-align: center;
+        background: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 14px;
+        color: #94a3b8;
+    }
+
+    .search-link {
+        display: inline-block;
+        margin-top: 1rem;
+        padding: 0.7rem 1rem;
+        border-radius: 9px;
+        background: #6366f1;
+        color: white;
+        text-decoration: none;
+        font-weight: 700;
+    }
+
+    @media (max-width: 700px) {
+        .summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .purchase-card {
+            grid-template-columns: 70px 1fr;
+        }
+
+        .purchase-image,
+        .purchase-image-placeholder {
+            width: 70px;
+            height: 70px;
+        }
+
+        .purchase-amount {
+            grid-column: 2;
+            text-align: left;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<main class="history-page">
+    <section class="history-header">
+        <h1>Purchase History</h1>
+        <p>
+            Products you have personally marked as purchased after buying
+            them from an external retailer.
+        </p>
+    </section>
+
+    <section class="summary-grid">
+        <div class="summary-card">
+            <span>Monthly Budget</span>
+            <strong>R{{ monthly_budget|floatformat:2 }}</strong>
+        </div>
+
+        <div class="summary-card">
+            <span>Spent This Month</span>
+            <strong>R{{ monthly_spent|floatformat:2 }}</strong>
+        </div>
+
+        <div class="summary-card">
+            <span>Budget Remaining</span>
+            <strong>R{{ remaining_budget|floatformat:2 }}</strong>
+        </div>
+    </section>
+
+    {% if purchases %}
+        <section class="purchase-list">
+            {% for purchase in purchases %}
+                <article class="purchase-card">
+                    {% if purchase.image_url %}
+                        <img
+                            src="{{ purchase.image_url }}"
+                            alt="{{ purchase.product_name }}"
+                            class="purchase-image"
+                            loading="lazy"
+                        >
+                    {% else %}
+                        <div class="purchase-image-placeholder">
+                            🛍️
+                        </div>
+                    {% endif %}
+
+                    <div>
+                        <h2 class="purchase-name">
+                            {{ purchase.product_name }}
+                        </h2>
+
+                        {% if purchase.store %}
+                            <p class="purchase-meta">
+                                Store: {{ purchase.store }}
+                            </p>
+                        {% endif %}
+
+                        {% if purchase.category %}
+                            <p class="purchase-meta">
+                                Category: {{ purchase.category }}
+                            </p>
+                        {% endif %}
+
+                        <p class="purchase-meta">
+                            Quantity: {{ purchase.quantity }}
+                            · Unit price: R{{ purchase.unit_price|floatformat:2 }}
+                        </p>
+
+                        <p class="purchase-meta">
+                            {{ purchase.purchased_at|date:"d M Y, H:i" }}
+                        </p>
+
+                        {% if purchase.product_url %}
+                            <a
+                                href="{{ purchase.product_url }}"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="purchase-meta"
+                            >
+                                View retailer product ↗
+                            </a>
+                        {% endif %}
+                    </div>
+
+                    <div class="purchase-amount">
+                        <strong>
+                            R{{ purchase.amount_spent|floatformat:2 }}
+                        </strong>
+                        <span>recorded spent</span>
+                    </div>
+                </article>
+            {% endfor %}
+        </section>
+    {% else %}
+        <div class="empty-state">
+            <h2>No purchases recorded yet</h2>
+            <p>
+                Find a product, purchase it on the retailer's website,
+                then return and use “Mark as Purchased”.
+            </p>
+
+            <a
+                href="{% url 'products:search' %}"
+                class="search-link"
+            >
+                Find Products
+            </a>
+        </div>
+    {% endif %}
+</main>
+{% endblock %}
