@@ -1,24 +1,15 @@
 {% load static %}
 
 <nav class="navbar">
-
     <div class="navbar-container">
 
-        <a
-            href="{% url 'shopping:dashboard' %}"
-            class="navbar-brand"
-        >
-
+        <a href="{% url 'shopping:dashboard' %}" class="navbar-brand">
             <img
                 src="{% static 'images/logo-SMARTSPEND-72dpi.png' %}"
                 alt="AI Shopping Logo"
                 class="navbar-logo"
             >
-
-
-
         </a>
-
 
         <div class="navbar-links">
 
@@ -30,58 +21,14 @@
                 Products
             </a>
 
-           
-
-
-            <a
-                href="{% url 'shopping:order_history' %}"
-                class="btn btn-outline-success"
-            >
-                My Orders
-            </a>
-
-
             {% if user.is_authenticated %}
-
                 <a
                     href="{% url 'accounts:profile' %}"
                     class="profile-link"
                 >
-
-                    <span class="profile-icon">
-                        👤
-                    </span>
-
-                    <span>
-                        Profile
-                    </span>
-
+                    <span class="profile-icon">👤</span>
+                    <span>Profile</span>
                 </a>
-
-            {% endif %}
-
-
-            <a
-                href="{% url 'shopping:cart' %}"
-                class="cart-link"
-                aria-label="Shopping cart"
-            >
-
-                <span class="cart-icon">
-                    🛒
-                </span>
-
-                <span
-                    id="cart-count"
-                    class="cart-count"
-                >
-                    {{ cart_count|default:0 }}
-                </span>
-
-            </a>
-
-
-            {% if user.is_authenticated %}
 
                 <span class="navbar-user">
                     Welcome, {{ user.username }}
@@ -92,26 +39,18 @@
                     action="{% url 'accounts:logout' %}"
                     style="display: inline;"
                 >
-
                     {% csrf_token %}
-
                     <button type="submit">
                         Logout
                     </button>
-
                 </form>
-
             {% endif %}
 
         </div>
-
     </div>
-
 </nav>
 
-
 <style>
-
     .navbar {
         width: 100%;
         background: #1e293b;
@@ -120,60 +59,37 @@
         z-index: 1000;
     }
 
-
     .navbar-container {
         max-width: 1200px;
         margin: 0 auto;
         padding: 1rem 2rem;
-
         display: flex;
         align-items: center;
         justify-content: space-between;
         gap: 1rem;
     }
 
-
-    /* =========================
-       BRAND + LOGO
-    ========================= */
-
     .navbar-brand {
         display: inline-flex;
         align-items: center;
         gap: 10px;
-
         color: #a5b4fc;
-
-        font-size: 1.2rem;
-        font-weight: 700;
-
         text-decoration: none;
-
         white-space: nowrap;
     }
-
 
     .navbar-logo {
         width: 150px;
         height: 45px;
-
         object-fit: contain;
-
         display: block;
     }
-
-
-    .navbar-brand:hover {
-        color: #c7d2fe;
-    }
-
 
     .navbar-links {
         display: flex;
         align-items: center;
         gap: 1rem;
     }
-
 
     .navbar-links a {
         color: #cbd5e1;
@@ -182,180 +98,50 @@
         font-weight: 500;
     }
 
-
     .navbar-links a:hover {
         color: #a5b4fc;
     }
-
-
-    /* =========================
-       PROFILE
-    ========================= */
 
     .profile-link {
         display: inline-flex;
         align-items: center;
         gap: 0.4rem;
-
         padding: 0.45rem 0.7rem;
-
         border-radius: 8px;
-
         background: rgba(99, 102, 241, 0.10);
-
         border: 1px solid rgba(99, 102, 241, 0.25);
-
-        transition:
-            background 0.2s ease,
-            border-color 0.2s ease;
     }
-
 
     .profile-link:hover {
         background: rgba(99, 102, 241, 0.2);
         border-color: #6366f1;
     }
 
-
     .profile-icon {
         font-size: 1rem;
         line-height: 1;
     }
-
-
-    /* =========================
-       CART
-    ========================= */
-
-    .cart-link {
-        position: relative;
-
-        display: inline-flex !important;
-
-        align-items: center;
-        justify-content: center;
-
-        width: 42px;
-        height: 42px;
-
-        border-radius: 10px;
-
-        background: #0f172a;
-
-        border: 1px solid #475569;
-
-        color: white !important;
-
-        text-decoration: none;
-
-        transition:
-            background 0.2s ease,
-            border-color 0.2s ease,
-            transform 0.2s ease;
-    }
-
-
-    .cart-link:hover {
-        background: #334155;
-        border-color: #6366f1;
-        color: white !important;
-        transform: translateY(-1px);
-    }
-
-
-    .cart-icon {
-        font-size: 1.25rem;
-        line-height: 1;
-    }
-
-
-    .cart-count {
-        position: absolute;
-
-        top: -7px;
-        right: -7px;
-
-        min-width: 20px;
-        height: 20px;
-
-        padding: 0 5px;
-
-        display: flex;
-        align-items: center;
-        justify-content: center;
-
-        background: #ef4444;
-        color: white;
-
-        border-radius: 999px;
-
-        font-size: 0.7rem;
-        font-weight: 700;
-
-        line-height: 1;
-
-        border: 2px solid #1e293b;
-    }
-
 
     .navbar-user {
         color: #94a3b8;
         font-size: 0.85rem;
     }
 
-
     .navbar-links button {
         border: 1px solid #475569;
-
         background: #0f172a;
         color: #cbd5e1;
-
         padding: 0.45rem 0.75rem;
-
         border-radius: 8px;
-
         cursor: pointer;
     }
-
 
     .navbar-links button:hover {
         border-color: #6366f1;
         color: white;
     }
 
-
-    /* =========================
-       CART COUNT ANIMATION
-    ========================= */
-
-    .cart-count.bump {
-        animation: cartBump 0.35s ease;
-    }
-
-
-    @keyframes cartBump {
-
-        0% {
-            transform: scale(1);
-        }
-
-        50% {
-            transform: scale(1.35);
-        }
-
-        100% {
-            transform: scale(1);
-        }
-
-    }
-
-
-    /* =========================
-       MOBILE
-    ========================= */
-
     @media (max-width: 700px) {
-
         .navbar-container {
             padding: 0.9rem 1rem;
         }
@@ -372,12 +158,5 @@
             width: 38px;
             height: 38px;
         }
-
-        .navbar-brand {
-            font-size: 1rem;
-            gap: 7px;
-        }
-
     }
-
 </style>
