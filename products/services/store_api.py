@@ -65,6 +65,9 @@ CHECKERS_SCRAPER_ID = "a7a3a4ba-dfb7-4476-9712-8753b2fb3140"
 CHECKERS_SEARCH_URL = (
     f"{PARSE_BASE_URL}/{CHECKERS_SCRAPER_ID}/search_products"
 )
+CHECKERS_STORES_URL = (
+    f"{PARSE_BASE_URL}/{CHECKERS_SCRAPER_ID}/find_stores"
+)
 
 PNP_SCRAPER_ID = "b87810bc-903f-41b8-b38d-c5c911cab324"
 PNP_SEARCH_URL = (
@@ -94,9 +97,20 @@ PNP_MAX_BRANCHES_TO_TRY = max(
 LOYALTYHUB_BASE_URL = "https://loyaltyhub.co.za/api/v1"
 LOYALTYHUB_PRICES_URL = f"{LOYALTYHUB_BASE_URL}/prices"
 
+# Retailer search results must not be held for hours when the UI is
+# explicitly showing "live" prices. LIVE_PRICE_MODE bypasses the normal
+# product cache and queries the retailer on every search. The stale cache
+# remains available only as an outage/rate-limit fallback.
+LIVE_PRICE_MODE = (
+    os.getenv("RETAILER_LIVE_PRICE_MODE", "true")
+    .strip()
+    .lower()
+    in {"1", "true", "yes", "on"}
+)
+
 CACHE_TIMEOUT = int(
-    os.getenv("PRODUCT_CACHE_TIMEOUT", "21600")
-)  # 6 hours
+    os.getenv("PRODUCT_CACHE_TIMEOUT", "60")
+)  # 60 seconds when live mode is disabled
 
 STALE_CACHE_TIMEOUT = int(
     os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "172800")
@@ -891,7 +905,7 @@ def search_azlabs_products(
 
     cached = _cache_get(cache_key)
 
-    if cached is not None:
+    if cached is not None and not LIVE_PRICE_MODE:
         return cached
 
     payload = _request_json(
@@ -964,7 +978,7 @@ def search_checkers_products(
 
     cached = _cache_get(cache_key)
 
-    if cached is not None:
+    if cached is not None and not LIVE_PRICE_MODE:
         return cached
 
     payload = _request_json(
@@ -988,6 +1002,29 @@ def search_checkers_products(
     products = []
 
     for row in rows[:limit]:
+        row = dict(row)
+
+        # Parse's Checkers API documents priceWithoutDecimal as ZAR cents.
+        # Convert it to rand before normalisation so the UI never displays
+        # a cents value as a rand price.
+        if (
+            row.get("price") in (None, "")
+            and row.get("priceWithoutDecimal") not in (None, "")
+        ):
+            try:
+                row["price"] = (
+                    Decimal(str(row["priceWithoutDecimal"]))
+                    / Decimal("100")
+                )
+            except (InvalidOperation, ValueError, TypeError):
+                pass
+
+        if (
+            row.get("regular_price") in (None, "")
+            and row.get("oldPrice") not in (None, "")
+        ):
+            row["regular_price"] = row.get("oldPrice")
+
         product = normalize_product(
             row,
             retailer="Checkers",
@@ -1008,6 +1045,169 @@ def search_checkers_products(
         )
 
     return products
+
+
+
+# ============================================================
+# CHECKERS LIVE STORE LOCATIONS
+# ============================================================
+
+def get_checkers_stores(
+    latitude: float,
+    longitude: float,
+    radius_km: float = OSM_RADIUS_KM,
+) -> list[dict]:
+    """
+    Resolve real Checkers branches from Parse using the user's
+    coordinates. This is preferred over guessing a branch from OSM.
+    """
+    if not PARSE_API_KEY:
+        raise StoreAPIError(
+            "PARSE_API_KEY is not configured."
+        )
+
+    try:
+        latitude = float(latitude)
+        longitude = float(longitude)
+        radius_km = float(radius_km)
+    except (TypeError, ValueError):
+        return []
+
+    cache_key = (
+        f"checkers:stores:"
+        f"{round(latitude, 3)}:"
+        f"{round(longitude, 3)}:"
+        f"{round(radius_km, 1)}"
+    )
+
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    payload = _request_json(
+        "POST",
+        CHECKERS_STORES_URL,
+        headers={
+            "X-API-Key": PARSE_API_KEY,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        json={
+            "lat": latitude,
+            "lng": longitude,
+        },
+        provider="Checkers stores",
+    )
+
+    if isinstance(payload, dict):
+        stores = (
+            payload.get("stores")
+            or payload.get("data")
+            or payload.get("results")
+            or []
+        )
+    elif isinstance(payload, list):
+        stores = payload
+    else:
+        stores = []
+
+    if isinstance(stores, dict):
+        stores = stores.get("stores") or stores.get("results") or []
+
+    output = []
+
+    for raw in stores:
+        if not isinstance(raw, dict):
+            continue
+
+        location = raw.get("location")
+        if not isinstance(location, dict):
+            location = {}
+
+        lat = (
+            raw.get("latitude")
+            or raw.get("lat")
+            or location.get("latitude")
+            or location.get("lat")
+        )
+        lon = (
+            raw.get("longitude")
+            or raw.get("lng")
+            or raw.get("lon")
+            or location.get("longitude")
+            or location.get("lng")
+            or location.get("lon")
+        )
+
+        if lat is None or lon is None:
+            continue
+
+        try:
+            distance = _haversine_km(
+                latitude,
+                longitude,
+                float(lat),
+                float(lon),
+            )
+        except (TypeError, ValueError):
+            continue
+
+        if distance > radius_km:
+            continue
+
+        address = _safe_string(
+            raw.get("address")
+            or raw.get("storeAddress")
+            or location.get("address")
+        )
+
+        store = {
+            "store_id": _safe_string(
+                raw.get("storeId")
+                or raw.get("store_id")
+                or raw.get("id")
+            ),
+            "name": _safe_string(
+                raw.get("name")
+                or raw.get("storeName")
+                or raw.get("brand")
+                or "Checkers"
+            ),
+            "retailer": "Checkers",
+            "address": address,
+            "city": _safe_string(
+                raw.get("city")
+                or location.get("city")
+            ),
+            "province": _safe_string(
+                raw.get("province")
+                or raw.get("state")
+                or location.get("province")
+                or location.get("state")
+            ),
+            "latitude": float(lat),
+            "longitude": float(lon),
+            "distance_km": round(distance, 2),
+            "distance": round(distance, 2),
+            "source": "Parse Checkers",
+        }
+
+        output.append(store)
+
+        if store["store_id"]:
+            _cache_set(
+                f"store:location:{store['store_id']}",
+                store,
+                STORE_CACHE_TIMEOUT,
+            )
+
+    output.sort(key=lambda item: item["distance_km"])
+    _cache_set(
+        cache_key,
+        output,
+        STORE_CACHE_TIMEOUT if output else 60,
+    )
+    return output
 
 
 # ============================================================
@@ -1170,7 +1370,7 @@ def search_pnp_store_products(
 
     cached = _cache_get(cache_key)
 
-    if cached is not None:
+    if cached is not None and not LIVE_PRICE_MODE:
         return cached
 
     payload = _request_json(
@@ -1343,7 +1543,7 @@ def search_pnp_products(
 
     cached = _cache_get(cache_key)
 
-    if cached is not None:
+    if cached is not None and not LIVE_PRICE_MODE:
         return cached
 
     payload = _request_json(
@@ -1422,7 +1622,7 @@ def search_loyaltyhub_products(
 
     cached = _cache_get(cache_key)
 
-    if cached is not None:
+    if cached is not None and not LIVE_PRICE_MODE:
         return cached
 
     params = {
@@ -1610,10 +1810,10 @@ def search_products(
             -> LoyaltyHub fallback
 
     Cache flow:
-        live cache hit -> 0 retailer API calls
-        live cache miss -> provider API call
+        live mode -> retailer API is queried on every search
         provider failure -> stale cache if available
-        successful result -> cached for six hours
+        live mode disabled -> normal short cache is used
+        successful result -> retained as a stale/outage fallback
 
     The function keeps the same signature used by the existing
     products/views.py, so no view change is required.
@@ -2272,14 +2472,49 @@ def _attach_location(
         ):
             continue
 
-        stores_by_retailer[
-            retailer
-        ] = find_nearby_stores(
-            latitude,
-            longitude,
-            radius_km,
-            retailer=retailer,
-        )
+        # Use retailer-specific branch data first. This gives the UI
+        # an actual branch address/coordinates instead of an arbitrary
+        # supermarket found by OpenStreetMap.
+        if retailer == "Checkers":
+            try:
+                stores_by_retailer[retailer] = get_checkers_stores(
+                    latitude,
+                    longitude,
+                    radius_km,
+                )
+            except StoreAPIError:
+                stores_by_retailer[retailer] = []
+        elif retailer == "Pick n Pay":
+            try:
+                stores_by_retailer[retailer] = get_pnp_stores(
+                    latitude,
+                    longitude,
+                )
+                stores_by_retailer[retailer] = [
+                    store
+                    for store in stores_by_retailer[retailer]
+                    if store.get("distance_km") is not None
+                    and store.get("distance_km") <= radius_km
+                ]
+            except StoreAPIError:
+                stores_by_retailer[retailer] = []
+        else:
+            stores_by_retailer[retailer] = find_nearby_stores(
+                latitude,
+                longitude,
+                radius_km,
+                retailer=retailer,
+            )
+
+        # Retailer API branch lookup can fail or return no branch. Fall
+        # back to OSM rather than losing the product completely.
+        if not stores_by_retailer[retailer]:
+            stores_by_retailer[retailer] = find_nearby_stores(
+                latitude,
+                longitude,
+                radius_km,
+                retailer=retailer,
+            )
 
     for product in products:
         retailer = _normalise_retailer(
