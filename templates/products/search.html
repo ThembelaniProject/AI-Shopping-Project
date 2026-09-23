@@ -2099,12 +2099,66 @@ document.addEventListener(
         }
 
 
-        /*
+        const searchForm = locationSelect.form;
+        const maxDistanceInput =
+            document.getElementById("max_distance");
 
-            Your existing location logic can
-            be added here if required.
+        function requestLocation(callback) {
+            if (
+                latitudeInput.value &&
+                longitudeInput.value
+            ) {
+                callback();
+                return;
+            }
 
-        */
+            if (!navigator.geolocation) {
+                callback();
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                function (position) {
+                    latitudeInput.value =
+                        position.coords.latitude;
+                    longitudeInput.value =
+                        position.coords.longitude;
+                    callback();
+                },
+                function () {
+                    callback();
+                },
+                {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 300000
+                }
+            );
+        }
+
+        if (searchForm) {
+            searchForm.addEventListener(
+                "submit",
+                function (event) {
+                    if (
+                        maxDistanceInput &&
+                        maxDistanceInput.value &&
+                        (
+                            !latitudeInput.value ||
+                            !longitudeInput.value
+                        )
+                    ) {
+                        event.preventDefault();
+
+                        requestLocation(function () {
+                            searchForm.submit();
+                        });
+                    }
+                }
+            );
+        }
+
+        requestLocation(function () {});
 
 
     }
