@@ -558,11 +558,27 @@ def search(request):
             )
         ).strip()
 
+        store_location_data = product.get("location") or {}
+
+        if not isinstance(store_location_data, dict):
+            store_location_data = {}
+
         product_location = str(
-            product.get(
-                "location",
-                ""
-            )
+            store_location_data.get("address")
+            or store_location_data.get("name")
+            or store_location_data.get("city")
+            or product.get("location", "")
+        ).strip()
+
+        store_name = str(
+            store_location_data.get("name")
+            or product.get("store")
+            or ""
+        ).strip()
+
+        store_address = str(
+            store_location_data.get("address")
+            or ""
         ).strip()
 
         description = str(
@@ -757,11 +773,15 @@ def search(request):
         # DISTANCE
         # --------------------------------------------------
 
-        distance = to_decimal(
-            product.get(
-                "distance",
-                0
-            )
+        raw_distance = product.get(
+            "distance_km",
+            product.get("distance")
+        )
+
+        distance = (
+            to_decimal(raw_distance)
+            if raw_distance is not None
+            else None
         )
 
         # --------------------------------------------------
@@ -787,9 +807,15 @@ def search(request):
 
             "size": product_size,
 
-            "store": product_store,
+            "store": store_name or product_store,
 
             "location": product_location,
+
+            "store_name": store_name or product_store,
+
+            "store_address": store_address,
+
+            "store_location": store_location_data,
 
             "description": description,
 
@@ -820,6 +846,8 @@ def search(request):
             "stock": stock,
 
             "distance": distance,
+
+            "distance_km": distance,
 
             "total_cost": total_cost,
 
@@ -988,8 +1016,10 @@ def search(request):
         products = [
             product
             for product in products
-            if product["distance"]
-            <= max_distance_value
+            if (
+                product.get("distance") is not None
+                and product["distance"] <= max_distance_value
+            )
         ]
 
     # ======================================================
@@ -1038,9 +1068,10 @@ def search(request):
     elif sort == "distance_asc":
 
         products.sort(
-            key=lambda product: product.get(
-                "distance",
-                Decimal("999999")
+            key=lambda product: (
+                product.get("distance")
+                if product.get("distance") is not None
+                else Decimal("999999")
             )
         )
 
