@@ -1389,6 +1389,8 @@ def detail(request, product_id):
 
             "product": product,
 
+            "product_id": product_id,
+
             "store_location": store_location,
 
         }
