@@ -482,6 +482,21 @@ def search(request):
             products = search_products(
                 keyword=keyword,
                 limit=100,
+                latitude=(
+                    float(user_latitude)
+                    if user_latitude
+                    else None
+                ),
+                longitude=(
+                    float(user_longitude)
+                    if user_longitude
+                    else None
+                ),
+                radius_km=(
+                    float(max_distance)
+                    if max_distance
+                    else None
+                ),
             )
 
         except StoreAPIError as exc:
