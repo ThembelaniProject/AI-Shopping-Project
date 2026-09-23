@@ -1018,13 +1018,12 @@ def search_checkers_products(
     for row in rows[:limit]:
         row = dict(row)
 
-        # Parse's Checkers API documents priceWithoutDecimal as ZAR cents.
-        # Convert it to rand before normalisation so the UI never displays
-        # a cents value as a rand price.
-        if (
-            row.get("price") in (None, "")
-            and row.get("priceWithoutDecimal") not in (None, "")
-        ):
+        # Parse's Checkers API documents priceWithoutDecimal as ZAR
+        # cents. It is the authoritative numeric retailer price when
+        # present, even if the response also contains a "price" field.
+        # Always convert it before normalisation so cents can never be
+        # rendered as Rand (for example 499 -> R4.99).
+        if row.get("priceWithoutDecimal") not in (None, ""):
             try:
                 row["price"] = (
                     Decimal(str(row["priceWithoutDecimal"]))
