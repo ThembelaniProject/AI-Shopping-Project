@@ -1767,7 +1767,38 @@ def search_parse_retailer_products(
         errors.append(f"Pick n Pay: {exc}")
 
     if results:
-        return results
+        checkers = [
+            item for item in results
+            if item.get("retailer") == "Checkers"
+        ]
+        pnp = [
+            item for item in results
+            if item.get("retailer") == "Pick n Pay"
+        ]
+        other = [
+            item for item in results
+            if item.get("retailer") not in {"Checkers", "Pick n Pay"}
+        ]
+
+        # Interleave retailers so the final search limit does not
+        # accidentally return only the first provider's products.
+        merged = []
+        index = 0
+        while len(merged) < limit and (
+            index < len(checkers) or index < len(pnp)
+        ):
+            if index < len(checkers):
+                merged.append(checkers[index])
+            if len(merged) >= limit:
+                break
+            if index < len(pnp):
+                merged.append(pnp[index])
+            index += 1
+
+        if len(merged) < limit:
+            merged.extend(other[: limit - len(merged)])
+
+        return merged[:limit]
 
     if errors:
         raise StoreAPIError(" | ".join(errors[:2]))
