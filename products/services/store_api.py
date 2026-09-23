@@ -1,22 +1,21 @@
 """
-Retail product integration for the AI Shopping project.
+Multi-provider South African retail integration for AI Shopping.
 
-Primary provider:
-    LoyaltyHub SA Grocery Price API
-    - South African supermarket prices
-    - Checkers, Shoprite, Pick n Pay, Woolworths, Clicks, Makro
-    - price, stock, barcode, image and freshness metadata
-    - free beta tier: 100 calls/month, 20 requests/minute
+Provider order:
+1. AZ Labs Grocery API - primary live catalogue for Pick n Pay + Checkers.
+2. Checkers through Parse.bot - fallback.
+3. Pick n Pay through Parse.bot - fallback.
+4. LoyaltyHub - broad South African fallback.
 
-Store locations:
-    OpenStreetMap Overpass, cached for 24 hours.
+All providers are normalized into one product shape so products/views.py
+does not need to know which API supplied the result.
 
-Fallback provider:
-    PriceCheck.co.za through Parse.bot, only when LoyaltyHub is not
-    configured or unavailable.
-
-The code is deliberately cache-first so one search does not repeatedly
-consume an API call.
+Important:
+- Never put API keys in this file.
+- Configure AZLABS_API_KEY, PARSE_API_KEY and LOYALTYHUB_API_KEY as
+  environment variables.
+- Product responses are cached to reduce API usage.
+- Store distance is calculated with OpenStreetMap/Overpass and cached.
 """
 
 from __future__ import annotations
@@ -37,9 +36,9 @@ from django.core.cache import cache
 # CONFIGURATION
 # ============================================================
 
-LOYALTYHUB_API_KEY = (
-    getattr(settings, "LOYALTYHUB_API_KEY", None)
-    or os.getenv("LOYALTYHUB_API_KEY", "")
+AZLABS_API_KEY = (
+    getattr(settings, "AZLABS_API_KEY", None)
+    or os.getenv("AZLABS_API_KEY", "")
 ).strip()
 
 PARSE_API_KEY = (
@@ -47,38 +46,62 @@ PARSE_API_KEY = (
     or os.getenv("PARSE_API_KEY", "")
 ).strip()
 
-# loyaltyhub is the recommended provider.
-API_PROVIDER = os.getenv("RETAILER_API_PROVIDER", "loyaltyhub").strip().lower()
+LOYALTYHUB_API_KEY = (
+    getattr(settings, "LOYALTYHUB_API_KEY", None)
+    or os.getenv("LOYALTYHUB_API_KEY", "")
+).strip()
+
+API_PROVIDER = os.getenv(
+    "RETAILER_API_PROVIDER",
+    "azlabs",
+).strip().lower()
+
+AZLABS_BASE_URL = "https://azlabs.ai/api/v1"
+AZLABS_SEARCH_URL = f"{AZLABS_BASE_URL}/grocery/search"
+
+PARSE_BASE_URL = "https://api.parse.bot/scraper"
+
+CHECKERS_SCRAPER_ID = "a7a3a4ba-dfb7-4476-9712-8753b2fb3140"
+CHECKERS_SEARCH_URL = (
+    f"{PARSE_BASE_URL}/{CHECKERS_SCRAPER_ID}/search_products"
+)
+
+PNP_SCRAPER_ID = "b87810bc-903f-41b8-b38d-c5c911cab324"
+PNP_SEARCH_URL = (
+    f"{PARSE_BASE_URL}/{PNP_SCRAPER_ID}/search_products"
+)
 
 LOYALTYHUB_BASE_URL = "https://loyaltyhub.co.za/api/v1"
 LOYALTYHUB_PRICES_URL = f"{LOYALTYHUB_BASE_URL}/prices"
-LOYALTYHUB_PRODUCTS_URL = f"{LOYALTYHUB_BASE_URL}/products"
 
-# PriceCheck fallback.
-PRICECHECK_SCRAPER_ID = "6de3452a-00ab-44bc-b023-4f6c36b1e64e"
-PARSE_BASE_URL = "https://api.parse.bot/scraper"
-PRICECHECK_SEARCH_URL = (
-    f"{PARSE_BASE_URL}/{PRICECHECK_SCRAPER_ID}/search_products"
-)
-PRICECHECK_OFFERS_URL = (
-    f"{PARSE_BASE_URL}/{PRICECHECK_SCRAPER_ID}/get_product_offers"
-)
+CACHE_TIMEOUT = int(
+    os.getenv("PRODUCT_CACHE_TIMEOUT", "21600")
+)  # 6 hours
 
-CACHE_TIMEOUT = int(os.getenv("PRODUCT_CACHE_TIMEOUT", "21600"))       # 6 hours
 STALE_CACHE_TIMEOUT = int(
     os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "172800")
 )  # 48 hours
-STORE_CACHE_TIMEOUT = int(os.getenv("STORE_CACHE_TIMEOUT", "86400"))  # 24 hours
-REQUEST_TIMEOUT = int(os.getenv("RETAILER_REQUEST_TIMEOUT", "15"))
-OSM_RADIUS_KM = float(os.getenv("OSM_RADIUS_KM", "25"))
+
+STORE_CACHE_TIMEOUT = int(
+    os.getenv("STORE_CACHE_TIMEOUT", "86400")
+)  # 24 hours
+
+REQUEST_TIMEOUT = int(
+    os.getenv("RETAILER_REQUEST_TIMEOUT", "15")
+)
+
+OSM_RADIUS_KM = float(
+    os.getenv("OSM_RADIUS_KM", "25")
+)
 
 OVERPASS_URL = os.getenv(
     "OVERPASS_URL",
     "https://overpass-api.de/api/interpreter",
 )
+
 OSM_USER_AGENT = os.getenv(
     "OSM_USER_AGENT",
-    "AIShoppingProject/1.0 (DUT student project)",
+    "AIShoppingProject/2.0 (DUT student project)",
 )
 
 SESSION = requests.Session()
@@ -91,11 +114,11 @@ SESSION.headers.update(
 
 
 class StoreAPIError(Exception):
-    """Raised when a retailer integration fails."""
+    """Raised when retailer integration fails."""
 
 
 # ============================================================
-# CACHE HELPERS
+# CACHE
 # ============================================================
 
 def _cache_get(key: str):
@@ -105,11 +128,14 @@ def _cache_get(key: str):
         return None
 
 
-def _cache_set(key: str, value: Any, timeout: int = CACHE_TIMEOUT):
+def _cache_set(
+    key: str,
+    value: Any,
+    timeout: int = CACHE_TIMEOUT,
+):
     try:
         cache.set(key, value, timeout)
     except Exception:
-        # Product search must still work if Redis is temporarily unavailable.
         pass
 
 
@@ -122,20 +148,30 @@ def _cache_stale_get(key: str):
 
 
 def _cache_stale_set(key: str, value: Any):
-    _cache_set(_stale_key(key), value, STALE_CACHE_TIMEOUT)
+    _cache_set(
+        _stale_key(key),
+        value,
+        STALE_CACHE_TIMEOUT,
+    )
 
 
 # ============================================================
 # BASIC HELPERS
 # ============================================================
 
-def _safe_string(value: Any, default: str = "") -> str:
+def _safe_string(
+    value: Any,
+    default: str = "",
+) -> str:
     if value is None:
         return default
     return str(value).strip()
 
 
-def _to_decimal(value: Any, default: str = "0") -> Decimal:
+def _to_decimal(
+    value: Any,
+    default: str = "0",
+) -> Decimal:
     if value is None:
         return Decimal(default)
 
@@ -157,16 +193,22 @@ def _to_decimal(value: Any, default: str = "0") -> Decimal:
             "oldPrice",
         ):
             if key in value:
-                result = _to_decimal(value[key], default)
-                if result != Decimal(default):
-                    return result
+                return _to_decimal(
+                    value[key],
+                    default,
+                )
         return Decimal(default)
 
     text = str(value).strip()
+
     if not text:
         return Decimal(default)
 
-    text = re.sub(r"[^0-9,.-]", "", text)
+    text = re.sub(
+        r"[^0-9,.-]",
+        "",
+        text,
+    )
 
     if "," in text and "." not in text:
         text = text.replace(",", ".")
@@ -179,7 +221,10 @@ def _to_decimal(value: Any, default: str = "0") -> Decimal:
         return Decimal(default)
 
 
-def _safe_bool(value: Any, default: bool = False) -> bool:
+def _safe_bool(
+    value: Any,
+    default: bool = False,
+) -> bool:
     if isinstance(value, bool):
         return value
 
@@ -218,13 +263,6 @@ def _safe_bool(value: Any, default: bool = False) -> bool:
     return default
 
 
-def _number(value: Any, default: float = 0.0) -> float:
-    try:
-        return float(_to_decimal(value))
-    except Exception:
-        return default
-
-
 def _retailer_key(value: str) -> str:
     return (
         _safe_string(value, "Retailer")
@@ -234,48 +272,135 @@ def _retailer_key(value: str) -> str:
     )
 
 
-def _stable_product_id(retailer: str, product: dict) -> str:
+def _normalise_retailer(value: str) -> str:
+    text = _safe_string(value).lower()
+
+    if "pick n pay" in text or "picknpay" in text or text == "pnp":
+        return "Pick n Pay"
+
+    if "checkers" in text:
+        return "Checkers"
+
+    if "shoprite" in text:
+        return "Shoprite"
+
+    if "woolworth" in text:
+        return "Woolworths"
+
+    if "clicks" in text:
+        return "Clicks"
+
+    if "makro" in text:
+        return "Makro"
+
+    return _safe_string(
+        value,
+        "Retailer",
+    )
+
+
+def _stable_product_id(
+    retailer: str,
+    product: dict,
+) -> str:
     raw = (
         product.get("barcode")
         or product.get("product_id")
         or product.get("productId")
         or product.get("sku")
+        or product.get("code")
         or product.get("id")
     )
 
     if raw:
-        return f"{_retailer_key(retailer)}_{_safe_string(raw)}"
+        return (
+            f"{_retailer_key(retailer)}_"
+            f"{_safe_string(raw)}"
+        )
 
     seed = "|".join(
         [
             retailer,
-            _safe_string(product.get("name")).lower(),
-            _safe_string(product.get("size")).lower(),
-            _safe_string(product.get("price")),
+            _safe_string(
+                product.get("name")
+                or product.get("title")
+            ).lower(),
+            _safe_string(
+                product.get("size")
+            ).lower(),
+            _safe_string(
+                product.get("price")
+            ),
         ]
     )
 
-    digest = hashlib.sha256(seed.encode("utf-8")).hexdigest()[:20]
-    return f"{_retailer_key(retailer)}_{digest}"
+    digest = hashlib.sha256(
+        seed.encode("utf-8")
+    ).hexdigest()[:20]
+
+    return (
+        f"{_retailer_key(retailer)}_"
+        f"{digest}"
+    )
 
 
-def _normalise_retailer(value: str) -> str:
-    text = _safe_string(value).lower()
+def _first_value(
+    data: dict,
+    *keys: str,
+):
+    for key in keys:
+        if key in data and data[key] not in (
+            None,
+            "",
+        ):
+            return data[key]
+    return None
 
-    if "pick n pay" in text or text == "pnp":
-        return "Pick n Pay"
-    if "checkers" in text:
-        return "Checkers"
-    if "shoprite" in text:
-        return "Shoprite"
-    if "woolworth" in text:
-        return "Woolworths"
-    if "clicks" in text:
-        return "Clicks"
-    if "makro" in text:
-        return "Makro"
 
-    return _safe_string(value, "Retailer")
+def _extract_rows(payload: Any) -> list[dict]:
+    """
+    Handle the slightly different response envelopes used by
+    AZ Labs, Parse and LoyaltyHub.
+    """
+    if isinstance(payload, list):
+        return [
+            row for row in payload
+            if isinstance(row, dict)
+        ]
+
+    if not isinstance(payload, dict):
+        return []
+
+    candidates = [
+        payload.get("products"),
+        payload.get("results"),
+        payload.get("items"),
+        payload.get("offers"),
+        payload.get("data"),
+    ]
+
+    for candidate in candidates:
+        if isinstance(candidate, list):
+            return [
+                row for row in candidate
+                if isinstance(row, dict)
+            ]
+
+        if isinstance(candidate, dict):
+            nested = (
+                candidate.get("products")
+                or candidate.get("results")
+                or candidate.get("items")
+                or candidate.get("offers")
+            )
+
+            if isinstance(nested, list):
+                return [
+                    row for row in nested
+                    if isinstance(row, dict)
+                ]
+
+    return []
 
 
 # ============================================================
@@ -288,168 +413,303 @@ def normalize_product(
     location: dict | None = None,
 ) -> dict:
     """
-    Convert LoyaltyHub/PriceCheck records into one stable shape used
-    by the Django templates and AI recommendation code.
+    Convert AZ Labs, Checkers, PnP and LoyaltyHub records into
+    one stable shape consumed by products/views.py.
     """
 
     raw = raw if isinstance(raw, dict) else {}
 
     source_retailer = _normalise_retailer(
         retailer
-        or raw.get("retailer")
-        or raw.get("store")
-        or raw.get("merchant")
+        or _first_value(
+            raw,
+            "retailer",
+            "store",
+            "merchant",
+            "storeName",
+        )
         or "Retailer"
     )
 
     name = _safe_string(
-        raw.get("name")
-        or raw.get("title")
-        or raw.get("product_name")
+        _first_value(
+            raw,
+            "name",
+            "title",
+            "product_name",
+            "productName",
+        )
         or "Unnamed product"
     )
 
     description = _safe_string(
-        raw.get("description")
-        or raw.get("short_description")
+        _first_value(
+            raw,
+            "description",
+            "short_description",
+            "shortDescription",
+        )
     )
 
     price = _to_decimal(
-        raw.get("price")
-        or raw.get("current_price")
-        or raw.get("sale_price")
+        _first_value(
+            raw,
+            "price",
+            "current_price",
+            "currentPrice",
+            "sale_price",
+            "salePrice",
+            "best_price",
+            "bestPrice",
+        )
         or 0
     )
 
     regular_price = _to_decimal(
-        raw.get("regular_price")
-        or raw.get("original_price")
-        or raw.get("was_price")
-        or raw.get("old_price")
+        _first_value(
+            raw,
+            "regular_price",
+            "regularPrice",
+            "original_price",
+            "originalPrice",
+            "old_price",
+            "oldPrice",
+            "was_price",
+            "wasPrice",
+        )
         or 0
     )
 
-    sale_price_raw = raw.get("sale_price")
+    sale_price_raw = _first_value(
+        raw,
+        "sale_price",
+        "salePrice",
+        "current_price",
+        "currentPrice",
+    )
+
     sale_price = (
         _to_decimal(sale_price_raw)
-        if sale_price_raw not in (None, "")
+        if sale_price_raw is not None
         else Decimal("0")
     )
 
-    # Some providers only expose price + regular/old price.
-    if sale_price <= 0 and regular_price > price > 0:
-        sale_price = price
+    final_price = price
 
-    final_price = sale_price if sale_price > 0 else price
+    if final_price <= 0 and sale_price > 0:
+        final_price = sale_price
 
     if regular_price <= 0:
         regular_price = final_price
 
-    discount_amount = max(
-        Decimal("0"),
-        regular_price - final_price,
-    )
+    if (
+        regular_price > 0
+        and final_price > 0
+        and regular_price > final_price
+    ):
+        discount_amount = (
+            regular_price - final_price
+        )
+    else:
+        discount_amount = Decimal("0")
 
     discount_percentage = Decimal("0")
+
     if regular_price > 0 and discount_amount > 0:
         discount_percentage = (
-            discount_amount / regular_price
-        ) * Decimal("100")
+            discount_amount
+            / regular_price
+            * Decimal("100")
+        )
 
     promotion = _safe_string(
-        raw.get("promotion")
-        or raw.get("promotion_text")
-        or raw.get("deal")
-        or raw.get("badge")
+        _first_value(
+            raw,
+            "promotion",
+            "promotion_text",
+            "promotionText",
+            "promotion_description",
+            "promotionDescription",
+            "deal",
+            "badge",
+            "badges",
+        )
     )
 
-    on_sale = bool(
-        raw.get("on_sale")
-        or raw.get("on_special")
-        or raw.get("is_on_sale")
-        or raw.get("isOnPromotion")
+    on_sale = (
+        _safe_bool(
+            _first_value(
+                raw,
+                "on_sale",
+                "onSale",
+                "is_on_sale",
+                "isOnSale",
+                "isOnPromotion",
+                "onPromotion",
+            ),
+            False,
+        )
         or discount_amount > 0
-        or promotion
+        or bool(promotion)
     )
 
     image = _safe_string(
-        raw.get("image_url")
-        or raw.get("image")
-        or raw.get("thumbnail")
-        or raw.get("thumbnail_url")
+        _first_value(
+            raw,
+            "image_url",
+            "imageUrl",
+            "image",
+            "thumbnail",
+            "thumbnail_url",
+            "thumbnailUrl",
+        )
     )
 
-    images = raw.get("images")
-    if not isinstance(images, list):
-        images = []
+    images_raw = (
+        raw.get("images")
+        or raw.get("imageUrls")
+        or raw.get("image_urls")
+        or []
+    )
+
+    if isinstance(images_raw, str):
+        images_raw = [images_raw]
+
+    if not isinstance(images_raw, list):
+        images_raw = []
 
     clean_images = []
-    for item in images:
-        if isinstance(item, str) and item.strip():
-            clean_images.append(item.strip())
+
+    for item in images_raw:
+        if isinstance(item, str):
+            value = item.strip()
         elif isinstance(item, dict):
-            value = (
-                item.get("url")
-                or item.get("src")
-                or item.get("image")
+            value = _safe_string(
+                _first_value(
+                    item,
+                    "url",
+                    "src",
+                    "image",
+                    "imageUrl",
+                )
             )
-            if value:
-                clean_images.append(_safe_string(value))
+        else:
+            value = ""
+
+        if value and value not in clean_images:
+            clean_images.append(value)
 
     if image and image not in clean_images:
         clean_images.insert(0, image)
 
-    image = clean_images[0] if clean_images else image
-
-    in_stock = _safe_bool(
-        raw.get("in_stock")
-        if "in_stock" in raw
-        else raw.get("inStock"),
-        True,
+    image = (
+        clean_images[0]
+        if clean_images
+        else image
     )
 
-    stock_value = raw.get("stock")
-    if isinstance(stock_value, (int, float)):
-        stock = int(stock_value)
+    stock_raw = _first_value(
+        raw,
+        "stock",
+        "stockLevel",
+        "stock_level",
+    )
+
+    if isinstance(stock_raw, (int, float)):
+        stock = int(stock_raw)
         in_stock = stock > 0
     else:
+        in_stock = _safe_bool(
+            _first_value(
+                raw,
+                "in_stock",
+                "inStock",
+                "available",
+                "isStockAvailable",
+            ),
+            True,
+        )
         stock = 1 if in_stock else 0
 
     store = _normalise_retailer(
-        raw.get("store")
-        or raw.get("retailer")
+        _first_value(
+            raw,
+            "store",
+            "retailer",
+            "merchant",
+            "storeName",
+        )
         or source_retailer
     )
 
-    product_location = location or raw.get("location") or {}
-    if not isinstance(product_location, dict):
+    product_location = (
+        location
+        or raw.get("location")
+        or {}
+    )
+
+    if not isinstance(
+        product_location,
+        dict,
+    ):
         product_location = {}
 
     store_id = _safe_string(
-        raw.get("store_id")
-        or raw.get("storeId")
-        or product_location.get("store_id")
+        _first_value(
+            raw,
+            "store_id",
+            "storeId",
+            "storeID",
+        )
+        or product_location.get(
+            "store_id"
+        )
+        or product_location.get("storeId")
         or product_location.get("id")
     )
 
-    product_id = _stable_product_id(source_retailer, raw)
+    product_id = _stable_product_id(
+        source_retailer,
+        raw,
+    )
 
-    # PriceCheck's product URL and LoyaltyHub barcode are both useful.
     url = _safe_string(
-        raw.get("url")
-        or raw.get("product_url")
-        or raw.get("productUrl")
+        _first_value(
+            raw,
+            "url",
+            "product_url",
+            "productUrl",
+            "link",
+        )
     )
 
     barcode = _safe_string(
-        raw.get("barcode")
-        or raw.get("ean")
-        or raw.get("gtin")
+        _first_value(
+            raw,
+            "barcode",
+            "ean",
+            "gtin",
+            "ean13",
+        )
+    )
+
+    size = _safe_string(
+        _first_value(
+            raw,
+            "size",
+            "pack_size",
+            "packSize",
+        )
     )
 
     updated_at = _safe_string(
-        raw.get("updated_at")
-        or raw.get("updatedAt")
+        _first_value(
+            raw,
+            "updated_at",
+            "updatedAt",
+            "last_updated",
+            "lastUpdated",
+        )
     )
 
     return {
@@ -460,18 +720,25 @@ def normalize_product(
         "name": name,
         "title": name,
         "description": description,
-        "brand": _safe_string(raw.get("brand")),
-        "category": _safe_string(raw.get("category")),
+        "brand": _safe_string(
+            raw.get("brand")
+        ),
+        "category": _safe_string(
+            raw.get("category")
+        ),
         "colour": _safe_string(
-            raw.get("colour") or raw.get("color")
+            raw.get("colour")
+            or raw.get("color")
         ),
-        "size": _safe_string(
-            raw.get("size") or raw.get("pack_size")
-        ),
+        "size": size,
         "barcode": barcode,
         "price": final_price,
         "regular_price": regular_price,
-        "sale_price": sale_price if sale_price > 0 else None,
+        "sale_price": (
+            final_price
+            if on_sale and final_price > 0
+            else None
+        ),
         "on_sale": on_sale,
         "promotion": promotion,
         "discount_amount": discount_amount,
@@ -484,405 +751,64 @@ def normalize_product(
         "total_cost": final_price,
         "stock": stock,
         "in_stock": in_stock,
-        "rating": _to_decimal(raw.get("rating"), "0"),
+        "rating": _to_decimal(
+            raw.get("rating"),
+            "0",
+        ),
         "store": store,
         "store_id": store_id,
         "location": product_location,
         "image": image,
         "thumbnail": image,
-        "images": list(dict.fromkeys(clean_images)),
+        "images": clean_images,
         "url": url,
         "updated_at": updated_at,
-        "distance_km": None,
-        "distance": None,
         "recommendation_score": Decimal("0"),
         "matched_preferences": [],
+        "distance_km": None,
+        "distance": None,
     }
 
 
 # ============================================================
-# LOCATION / DISTANCE
+# HTTP HELPERS
 # ============================================================
 
-def _haversine_km(
-    latitude1: float,
-    longitude1: float,
-    latitude2: float,
-    longitude2: float,
-) -> float:
-    radius = 6371.0088
-
-    lat1 = math.radians(latitude1)
-    lat2 = math.radians(latitude2)
-    delta_lat = math.radians(latitude2 - latitude1)
-    delta_lon = math.radians(longitude2 - longitude1)
-
-    a = (
-        math.sin(delta_lat / 2) ** 2
-        + math.cos(lat1)
-        * math.cos(lat2)
-        * math.sin(delta_lon / 2) ** 2
-    )
-
-    return radius * 2 * math.asin(math.sqrt(a))
-
-
-def _add_distance(
-    product: dict,
-    latitude: float | None,
-    longitude: float | None,
-):
-    location = product.get("location") or {}
-
-    if not isinstance(location, dict):
-        location = {}
-
-    store_lat = location.get("latitude")
-    store_lon = location.get("longitude")
-
-    if (
-        latitude is not None
-        and longitude is not None
-        and store_lat is not None
-        and store_lon is not None
-    ):
-        try:
-            distance = round(
-                _haversine_km(
-                    float(latitude),
-                    float(longitude),
-                    float(store_lat),
-                    float(store_lon),
-                ),
-                2,
-            )
-            product["distance_km"] = distance
-            product["distance"] = distance
-            return
-        except Exception:
-            pass
-
-    product["distance_km"] = None
-    product["distance"] = None
-
-
-def _osm_query(
-    latitude: float,
-    longitude: float,
-    radius_km: float,
-):
-    radius_m = int(
-        max(
-            500,
-            min(radius_km * 1000, 50000),
-        )
-    )
-
-    return f"""
-[out:json][timeout:12];
-(
-  nwr["shop"="supermarket"](around:{radius_m},{latitude},{longitude});
-  nwr["shop"="convenience"](around:{radius_m},{latitude},{longitude});
-);
-out center tags;
-"""
-
-
-def find_nearby_stores(
-    latitude: float,
-    longitude: float,
-    radius_km: float = OSM_RADIUS_KM,
-    retailer: str = "",
-):
+def _request_json(
+    method: str,
+    url: str,
+    *,
+    headers: dict | None = None,
+    params: dict | None = None,
+    json: dict | None = None,
+    provider: str,
+) -> Any:
     try:
-        latitude = float(latitude)
-        longitude = float(longitude)
-        radius_km = float(radius_km)
-    except (TypeError, ValueError):
-        return []
-
-    retailer_filter = _safe_string(retailer).lower()
-
-    cache_key = (
-        f"osm:stores:{round(latitude, 3)}:"
-        f"{round(longitude, 3)}:{round(radius_km, 1)}:"
-        f"{retailer_filter}"
-    )
-
-    cached = _cache_get(cache_key)
-    if cached is not None:
-        return cached
-
-    try:
-        response = SESSION.post(
-            OVERPASS_URL,
-            data=_osm_query(
-                latitude,
-                longitude,
-                radius_km,
-            ),
-            headers={
-                "User-Agent": OSM_USER_AGENT,
-            },
-            timeout=REQUEST_TIMEOUT,
-        )
-
-        response.raise_for_status()
-        payload = response.json()
-    except (requests.RequestException, ValueError):
-        return []
-
-    stores = []
-
-    for element in payload.get("elements", []):
-        tags = element.get("tags") or {}
-        center = element.get("center") or {}
-
-        lat = element.get("lat") or center.get("lat")
-        lon = element.get("lon") or center.get("lon")
-
-        if lat is None or lon is None:
-            continue
-
-        name = _safe_string(
-            tags.get("name")
-            or tags.get("brand")
-            or tags.get("operator")
-        )
-
-        if not name:
-            continue
-
-        name_lower = name.lower()
-
-        if retailer_filter:
-            if retailer_filter == "checkers" and "checkers" not in name_lower:
-                continue
-
-            if retailer_filter in {"pick n pay", "pnp"} and not (
-                "pick n pay" in name_lower
-                or "pnp" in name_lower
-            ):
-                continue
-
-            if retailer_filter == "shoprite" and "shoprite" not in name_lower:
-                continue
-
-            if retailer_filter == "woolworths" and "woolworth" not in name_lower:
-                continue
-
-            if retailer_filter == "clicks" and "clicks" not in name_lower:
-                continue
-
-            if retailer_filter == "makro" and "makro" not in name_lower:
-                continue
-
-        try:
-            distance = _haversine_km(
-                latitude,
-                longitude,
-                float(lat),
-                float(lon),
-            )
-        except Exception:
-            continue
-
-        if distance > radius_km:
-            continue
-
-        address_parts = [
-            tags.get("addr:housenumber"),
-            tags.get("addr:street"),
-            tags.get("addr:suburb"),
-            tags.get("addr:city"),
-        ]
-
-        stores.append(
-            {
-                "store_id": _safe_string(element.get("id")),
-                "name": name,
-                "retailer": _normalise_retailer(name),
-                "address": ", ".join(
-                    _safe_string(x)
-                    for x in address_parts
-                    if x
-                ),
-                "city": _safe_string(tags.get("addr:city")),
-                "province": _safe_string(
-                    tags.get("addr:state")
-                ),
-                "latitude": float(lat),
-                "longitude": float(lon),
-                "distance_km": round(distance, 2),
-                "distance": round(distance, 2),
-                "source": "OpenStreetMap",
-            }
-        )
-
-    stores.sort(
-        key=lambda item: item["distance_km"]
-    )
-
-    _cache_set(
-        cache_key,
-        stores,
-        STORE_CACHE_TIMEOUT if stores else 60,
-    )
-
-    return stores
-
-
-def _nearest_store(
-    stores: list[dict],
-    latitude: float | None,
-    longitude: float | None,
-):
-    if (
-        latitude is None
-        or longitude is None
-        or not stores
-    ):
-        return None
-
-    valid = []
-
-    for store in stores:
-        try:
-            lat = float(store["latitude"])
-            lon = float(store["longitude"])
-            distance = _haversine_km(
-                latitude,
-                longitude,
-                lat,
-                lon,
-            )
-            item = dict(store)
-            item["distance_km"] = round(distance, 2)
-            item["distance"] = round(distance, 2)
-            valid.append(item)
-        except Exception:
-            continue
-
-    if not valid:
-        return None
-
-    return min(
-        valid,
-        key=lambda item: item["distance_km"],
-    )
-
-
-def _attach_location(
-    products: list[dict],
-    latitude: float | None,
-    longitude: float | None,
-    radius_km: float,
-):
-    # One cached OSM request per retailer/area, not one request per product.
-    retailer_names = sorted(
-        {
-            _safe_string(
-                product.get("retailer")
-                or product.get("store")
-            )
-            for product in products
-            if product.get("retailer") or product.get("store")
-        }
-    )
-
-    stores_by_retailer = {}
-
-    for retailer in retailer_names:
-        if latitude is None or longitude is None:
-            continue
-
-        stores_by_retailer[retailer] = find_nearby_stores(
-            latitude,
-            longitude,
-            radius_km,
-            retailer=retailer,
-        )
-
-    for product in products:
-        retailer = _normalise_retailer(
-            product.get("retailer")
-            or product.get("store")
-            or ""
-        )
-
-        location = product.get("location") or {}
-
-        if not location:
-            nearby = stores_by_retailer.get(
-                retailer,
-                [],
-            )
-            nearest = _nearest_store(
-                nearby,
-                latitude,
-                longitude,
-            )
-
-            if nearest:
-                product["location"] = nearest
-                product["store_id"] = (
-                    product.get("store_id")
-                    or nearest.get("store_id")
-                )
-
-        _add_distance(
-            product,
-            latitude,
-            longitude,
-        )
-
-    return products
-
-
-# ============================================================
-# LOYALTYHUB API
-# ============================================================
-
-def _loyaltyhub_headers():
-    if not LOYALTYHUB_API_KEY:
-        raise StoreAPIError(
-            "LOYALTYHUB_API_KEY is not configured."
-        )
-
-    return {
-        "Authorization": f"Bearer {LOYALTYHUB_API_KEY}",
-        "Accept": "application/json",
-        "User-Agent": OSM_USER_AGENT,
-    }
-
-
-def _loyaltyhub_request(
-    params: dict,
-):
-    try:
-        response = SESSION.get(
-            LOYALTYHUB_PRICES_URL,
-            headers=_loyaltyhub_headers(),
+        response = SESSION.request(
+            method,
+            url,
+            headers=headers,
             params=params,
+            json=json,
             timeout=REQUEST_TIMEOUT,
         )
     except requests.Timeout as exc:
         raise StoreAPIError(
-            "LoyaltyHub API request timed out."
+            f"{provider} request timed out."
         ) from exc
     except requests.RequestException as exc:
         raise StoreAPIError(
-            f"LoyaltyHub connection failed: {exc}"
+            f"{provider} connection failed: {exc}"
         ) from exc
 
     if response.status_code == 401:
         raise StoreAPIError(
-            "LoyaltyHub API key is invalid."
+            f"{provider} API key is invalid."
         )
 
     if response.status_code == 403:
         raise StoreAPIError(
-            "LoyaltyHub API key is inactive or access is denied."
+            f"{provider} access is denied or inactive."
         )
 
     if response.status_code == 429:
@@ -891,45 +817,53 @@ def _loyaltyhub_request(
             "later",
         )
         raise StoreAPIError(
-            "LoyaltyHub rate/quota limit reached. "
+            f"{provider} rate limit reached. "
             f"Retry after {retry_after}."
         )
 
     if response.status_code >= 400:
+        text = response.text[:300]
         raise StoreAPIError(
-            "LoyaltyHub returned HTTP "
-            f"{response.status_code}: "
-            f"{response.text[:250]}"
+            f"{provider} returned HTTP "
+            f"{response.status_code}: {text}"
         )
 
     try:
         return response.json()
     except ValueError as exc:
         raise StoreAPIError(
-            "LoyaltyHub returned invalid JSON."
+            f"{provider} returned invalid JSON."
         ) from exc
 
 
-def search_loyaltyhub_products(
+# ============================================================
+# AZ LABS
+# ============================================================
+
+def search_azlabs_products(
     keyword: str,
     limit: int = 20,
-    retailer: str = "",
-):
+    store: str = "all",
+) -> list[dict]:
+    if not AZLABS_API_KEY:
+        raise StoreAPIError(
+            "AZLABS_API_KEY is not configured."
+        )
+
     keyword = _safe_string(keyword)
 
     if not keyword:
         return []
 
-    # The free tier caps pages at 10 rows.
     limit = max(
         1,
-        min(int(limit), 10),
+        min(int(limit), 20),
     )
 
     cache_key = (
-        f"loyaltyhub:prices:"
-        f"{keyword.lower()}:{limit}:"
-        f"{_retailer_key(retailer) if retailer else 'all'}"
+        f"azlabs:search:"
+        f"{keyword.lower()}:"
+        f"{store}:{limit}"
     )
 
     cached = _cache_get(cache_key)
@@ -937,37 +871,29 @@ def search_loyaltyhub_products(
     if cached is not None:
         return cached
 
-    params = {
-        "search": keyword,
-        "limit": limit,
-        "offset": 0,
-    }
+    payload = _request_json(
+        "GET",
+        AZLABS_SEARCH_URL,
+        headers={
+            "Authorization": (
+                f"Bearer {AZLABS_API_KEY}"
+            ),
+            "Accept": "application/json",
+        },
+        params={
+            "q": keyword,
+            "store": store,
+        },
+        provider="AZ Labs",
+    )
 
-    if retailer:
-        params["retailer"] = retailer
-
-    try:
-        payload = _loyaltyhub_request(params)
-    except StoreAPIError:
-        stale = _cache_stale_get(cache_key)
-        if stale is not None:
-            return stale
-        raise
-
-    rows = payload.get("data", [])
-
-    if not isinstance(rows, list):
-        rows = []
+    rows = _extract_rows(payload)
 
     products = []
 
-    for row in rows:
-        if not isinstance(row, dict):
-            continue
-
+    for row in rows[:limit]:
         product = normalize_product(row)
         products.append(product)
-
         _cache_product(product)
 
     _cache_set(
@@ -986,65 +912,30 @@ def search_loyaltyhub_products(
 
 
 # ============================================================
-# PRICECHECK FALLBACK
+# CHECKERS THROUGH PARSE
 # ============================================================
 
-def _pricecheck_request(
-    url: str,
-    params: dict,
-):
+def search_checkers_products(
+    keyword: str,
+    limit: int = 20,
+) -> list[dict]:
     if not PARSE_API_KEY:
         raise StoreAPIError(
-            "PARSE_API_KEY is not configured for fallback."
+            "PARSE_API_KEY is not configured."
         )
 
-    try:
-        response = SESSION.get(
-            url,
-            headers={
-                "X-API-Key": PARSE_API_KEY,
-                "Accept": "application/json",
-            },
-            params=params,
-            timeout=REQUEST_TIMEOUT,
-        )
-    except requests.RequestException as exc:
-        raise StoreAPIError(
-            f"PriceCheck fallback connection failed: {exc}"
-        ) from exc
-
-    if response.status_code == 429:
-        raise StoreAPIError(
-            "PriceCheck fallback is rate-limited."
-        )
-
-    if response.status_code >= 400:
-        raise StoreAPIError(
-            f"PriceCheck fallback returned HTTP "
-            f"{response.status_code}."
-        )
-
-    try:
-        return response.json()
-    except ValueError as exc:
-        raise StoreAPIError(
-            "PriceCheck fallback returned invalid JSON."
-        ) from exc
-
-
-def search_pricecheck_products(
-    keyword: str,
-    limit: int = 10,
-):
     keyword = _safe_string(keyword)
 
     if not keyword:
         return []
 
-    limit = max(1, min(int(limit), 18))
+    limit = max(
+        1,
+        min(int(limit), 20),
+    )
 
     cache_key = (
-        f"pricecheck:search:"
+        f"checkers:search:"
         f"{keyword.lower()}:{limit}"
     )
 
@@ -1053,39 +944,33 @@ def search_pricecheck_products(
     if cached is not None:
         return cached
 
-    try:
-        payload = _pricecheck_request(
-            PRICECHECK_SEARCH_URL,
-            {
-                "query": keyword,
-                "page": 1,
-            },
-        )
-    except StoreAPIError:
-        stale = _cache_stale_get(cache_key)
-        if stale is not None:
-            return stale
-        raise
+    payload = _request_json(
+        "POST",
+        CHECKERS_SEARCH_URL,
+        headers={
+            "X-API-Key": PARSE_API_KEY,
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        },
+        json={
+            "query": keyword,
+            "page": 0,
+            "limit": limit,
+        },
+        provider="Checkers",
+    )
 
-    data = payload.get("data", payload)
-    rows = []
-
-    if isinstance(data, dict):
-        rows = (
-            data.get("results")
-            or data.get("products")
-            or []
-        )
-    elif isinstance(data, list):
-        rows = data
+    rows = _extract_rows(payload)
 
     products = []
 
     for row in rows[:limit]:
-        if isinstance(row, dict):
-            product = normalize_product(row)
-            products.append(product)
-            _cache_product(product)
+        product = normalize_product(
+            row,
+            retailer="Checkers",
+        )
+        products.append(product)
+        _cache_product(product)
 
     _cache_set(
         cache_key,
@@ -1103,7 +988,273 @@ def search_pricecheck_products(
 
 
 # ============================================================
-# PUBLIC SEARCH FUNCTION
+# PICK N PAY THROUGH PARSE
+# ============================================================
+
+def search_pnp_products(
+    keyword: str,
+    limit: int = 20,
+) -> list[dict]:
+    if not PARSE_API_KEY:
+        raise StoreAPIError(
+            "PARSE_API_KEY is not configured."
+        )
+
+    keyword = _safe_string(keyword)
+
+    if not keyword:
+        return []
+
+    limit = max(
+        1,
+        min(int(limit), 20),
+    )
+
+    cache_key = (
+        f"pnp:search:"
+        f"{keyword.lower()}:{limit}"
+    )
+
+    cached = _cache_get(cache_key)
+
+    if cached is not None:
+        return cached
+
+    payload = _request_json(
+        "GET",
+        PNP_SEARCH_URL,
+        headers={
+            "X-API-Key": PARSE_API_KEY,
+            "Accept": "application/json",
+        },
+        params={
+            "page": 0,
+            "sort": "relevance",
+            "query": keyword,
+            "page_size": limit,
+        },
+        provider="Pick n Pay",
+    )
+
+    rows = _extract_rows(payload)
+
+    products = []
+
+    for row in rows[:limit]:
+        product = normalize_product(
+            row,
+            retailer="Pick n Pay",
+        )
+        products.append(product)
+        _cache_product(product)
+
+    _cache_set(
+        cache_key,
+        products,
+        CACHE_TIMEOUT if products else 60,
+    )
+
+    if products:
+        _cache_stale_set(
+            cache_key,
+            products,
+        )
+
+    return products
+
+
+# ============================================================
+# LOYALTYHUB
+# ============================================================
+
+def search_loyaltyhub_products(
+    keyword: str,
+    limit: int = 20,
+    retailer: str = "",
+) -> list[dict]:
+    if not LOYALTYHUB_API_KEY:
+        raise StoreAPIError(
+            "LOYALTYHUB_API_KEY is not configured."
+        )
+
+    keyword = _safe_string(keyword)
+
+    if not keyword:
+        return []
+
+    limit = max(
+        1,
+        min(int(limit), 20),
+    )
+
+    cache_key = (
+        f"loyaltyhub:prices:"
+        f"{keyword.lower()}:"
+        f"{_retailer_key(retailer) if retailer else 'all'}:"
+        f"{limit}"
+    )
+
+    cached = _cache_get(cache_key)
+
+    if cached is not None:
+        return cached
+
+    params = {
+        "search": keyword,
+        "limit": limit,
+        "offset": 0,
+    }
+
+    if retailer:
+        params["retailer"] = retailer
+
+    try:
+        payload = _request_json(
+            "GET",
+            LOYALTYHUB_PRICES_URL,
+            headers={
+                "Authorization": (
+                    f"Bearer {LOYALTYHUB_API_KEY}"
+                ),
+                "Accept": "application/json",
+            },
+            params=params,
+            provider="LoyaltyHub",
+        )
+    except StoreAPIError:
+        stale = _cache_stale_get(cache_key)
+        if stale is not None:
+            return stale
+        raise
+
+    rows = _extract_rows(payload)
+
+    freshness = ""
+    if isinstance(payload, dict):
+        meta = payload.get("meta") or {}
+        if isinstance(meta, dict):
+            freshness = _safe_string(
+                meta.get("updated_at")
+                or meta.get("updatedAt")
+            )
+
+    products = []
+
+    for row in rows[:limit]:
+        if freshness and not row.get("updated_at"):
+            row = dict(row)
+            row["updated_at"] = freshness
+
+        product = normalize_product(row)
+        products.append(product)
+        _cache_product(product)
+
+    _cache_set(
+        cache_key,
+        products,
+        CACHE_TIMEOUT if products else 60,
+    )
+
+    if products:
+        _cache_stale_set(
+            cache_key,
+            products,
+        )
+
+    return products
+
+
+# ============================================================
+# PROVIDER SELECTION
+# ============================================================
+
+def _provider_order() -> list[str]:
+    if API_PROVIDER in {
+        "azlabs",
+        "checkers",
+        "pnp",
+        "loyaltyhub",
+    }:
+        preferred = API_PROVIDER
+    else:
+        preferred = "azlabs"
+
+    default_order = [
+        "azlabs",
+        "checkers",
+        "pnp",
+        "loyaltyhub",
+    ]
+
+    return [
+        preferred,
+        *[
+            provider
+            for provider in default_order
+            if provider != preferred
+        ],
+    ]
+
+
+def _search_provider(
+    provider: str,
+    keyword: str,
+    limit: int,
+) -> list[dict]:
+    if provider == "azlabs":
+        return search_azlabs_products(
+            keyword,
+            limit=limit,
+            store="all",
+        )
+
+    if provider == "checkers":
+        return search_checkers_products(
+            keyword,
+            limit=limit,
+        )
+
+    if provider == "pnp":
+        return search_pnp_products(
+            keyword,
+            limit=limit,
+        )
+
+    if provider == "loyaltyhub":
+        return search_loyaltyhub_products(
+            keyword,
+            limit=limit,
+        )
+
+    return []
+
+
+def _deduplicate_products(
+    products: list[dict],
+) -> list[dict]:
+    seen = set()
+    output = []
+
+    for product in products:
+        key = (
+            product.get("retailer"),
+            product.get("barcode")
+            or product.get("product_id"),
+            product.get("name"),
+            str(product.get("price")),
+        )
+
+        if key in seen:
+            continue
+
+        seen.add(key)
+        output.append(product)
+
+    return output
+
+
+# ============================================================
+# PUBLIC SEARCH
 # ============================================================
 
 def search_products(
@@ -1116,11 +1267,20 @@ def search_products(
     """
     Main function used by products/views.py.
 
-    API call behaviour:
-        - 1 retailer API request on a cache miss.
-        - 0 retailer requests on a cache hit.
-        - nearby store locations use cached OSM data.
-        - stale data is used when the live API is unavailable.
+    Provider flow:
+        AZ Labs
+            -> Checkers Parse fallback
+            -> Pick n Pay Parse fallback
+            -> LoyaltyHub fallback
+
+    Cache flow:
+        live cache hit -> 0 retailer API calls
+        live cache miss -> provider API call
+        provider failure -> stale cache if available
+        successful result -> cached for six hours
+
+    The function keeps the same signature used by the existing
+    products/views.py, so no view change is required.
     """
 
     keyword = _safe_string(keyword)
@@ -1128,46 +1288,35 @@ def search_products(
     if not keyword:
         return []
 
-    radius = (
-        float(radius_km)
-        if radius_km is not None
-        else OSM_RADIUS_KM
+    try:
+        requested_limit = max(
+            1,
+            int(limit),
+        )
+    except (TypeError, ValueError):
+        requested_limit = 20
+
+    provider_limit = min(
+        requested_limit,
+        20,
     )
 
     errors = []
-
-    providers = []
-
-    if API_PROVIDER == "pricecheck":
-        providers = ["pricecheck"]
-    elif API_PROVIDER == "loyaltyhub":
-        providers = ["loyaltyhub", "pricecheck"]
-    else:
-        providers = ["loyaltyhub", "pricecheck"]
-
     products = []
 
-    for provider in providers:
+    for provider in _provider_order():
         try:
-            if provider == "loyaltyhub":
-                if not LOYALTYHUB_API_KEY:
-                    continue
+            results = _search_provider(
+                provider,
+                keyword,
+                provider_limit,
+            )
 
-                products = search_loyaltyhub_products(
-                    keyword,
-                    limit=min(limit, 10),
-                )
+            if results:
+                products.extend(results)
 
-            elif provider == "pricecheck":
-                if not PARSE_API_KEY:
-                    continue
-
-                products = search_pricecheck_products(
-                    keyword,
-                    limit=min(limit, 18),
-                )
-
-            if products:
+                # AZ Labs already compares PnP + Checkers in one call.
+                # Do not spend more API credits once it returned data.
                 break
 
         except StoreAPIError as exc:
@@ -1175,22 +1324,35 @@ def search_products(
                 f"{provider.title()}: {exc}"
             )
 
+    products = _deduplicate_products(
+        products
+    )
+
     if not products:
         if errors:
             raise StoreAPIError(
                 "No retailer results were available. "
-                + " | ".join(errors[:2])
+                + " | ".join(errors[:3])
             )
 
         raise StoreAPIError(
             "No retailer API is configured. "
-            "Add LOYALTYHUB_API_KEY to use the recommended "
-            "free South African grocery API."
+            "Set AZLABS_API_KEY, PARSE_API_KEY or "
+            "LOYALTYHUB_API_KEY."
         )
 
-    products = products[: max(1, int(limit))]
+    products = products[:requested_limit]
 
-    if latitude is not None and longitude is not None:
+    if (
+        latitude is not None
+        and longitude is not None
+    ):
+        radius = (
+            float(radius_km)
+            if radius_km is not None
+            else OSM_RADIUS_KM
+        )
+
         _attach_location(
             products,
             float(latitude),
@@ -1248,7 +1410,9 @@ def _cache_product(product: dict):
 
 
 def get_product(product_id: str):
-    product_id = _safe_string(product_id)
+    product_id = _safe_string(
+        product_id
+    )
 
     if not product_id:
         return None
@@ -1260,49 +1424,534 @@ def get_product(product_id: str):
     if cached is not None:
         return cached
 
-    stale = _cache_stale_get(
+    return _cache_stale_get(
         f"product:{product_id}"
     )
 
-    return stale
 
-
-def _extract_store_id(product: dict) -> str:
+def _extract_store_id(
+    product: dict,
+) -> str:
     if not isinstance(product, dict):
         return ""
+
+    location = product.get(
+        "location"
+    ) or {}
+
+    if not isinstance(location, dict):
+        location = {}
 
     return _safe_string(
         product.get("store_id")
         or product.get("storeId")
-        or (product.get("location") or {}).get("store_id")
+        or location.get("store_id")
+        or location.get("storeId")
     )
 
 
-def get_store_location(store_id: str):
+def get_store_location(
+    store_id: str,
+):
     """
-    Return a cached location when available.
-
-    Product locations are populated by OSM during search.
-    This avoids another retailer API call.
+    Product locations are normally attached during search from
+    OpenStreetMap and cached. This avoids spending a Parse credit
+    for every product detail page.
     """
 
-    store_id = _safe_string(store_id)
+    store_id = _safe_string(
+        store_id
+    )
 
     if not store_id:
         return None
 
-    cached = _cache_get(
+    return _cache_get(
         f"store:location:{store_id}"
     )
 
-    return cached
+
+# ============================================================
+# OPENSTREETMAP / DISTANCE
+# ============================================================
+
+def _haversine_km(
+    latitude1: float,
+    longitude1: float,
+    latitude2: float,
+    longitude2: float,
+) -> float:
+    radius = 6371.0088
+
+    lat1 = math.radians(latitude1)
+    lat2 = math.radians(latitude2)
+
+    delta_lat = math.radians(
+        latitude2 - latitude1
+    )
+    delta_lon = math.radians(
+        longitude2 - longitude1
+    )
+
+    a = (
+        math.sin(delta_lat / 2) ** 2
+        + math.cos(lat1)
+        * math.cos(lat2)
+        * math.sin(delta_lon / 2) ** 2
+    )
+
+    return (
+        radius
+        * 2
+        * math.asin(math.sqrt(a))
+    )
+
+
+def _osm_query(
+    latitude: float,
+    longitude: float,
+    radius_km: float,
+) -> str:
+    radius_m = int(
+        max(
+            500,
+            min(
+                radius_km * 1000,
+                50000,
+            ),
+        )
+    )
+
+    return f"""
+[out:json][timeout:12];
+(
+  nwr["shop"="supermarket"](around:{radius_m},{latitude},{longitude});
+  nwr["shop"="convenience"](around:{radius_m},{latitude},{longitude});
+);
+out center tags;
+"""
+
+
+def find_nearby_stores(
+    latitude: float,
+    longitude: float,
+    radius_km: float = OSM_RADIUS_KM,
+    retailer: str = "",
+):
+    try:
+        latitude = float(latitude)
+        longitude = float(longitude)
+        radius_km = float(radius_km)
+    except (TypeError, ValueError):
+        return []
+
+    retailer_filter = (
+        _safe_string(retailer)
+        .lower()
+    )
+
+    cache_key = (
+        f"osm:stores:"
+        f"{round(latitude, 3)}:"
+        f"{round(longitude, 3)}:"
+        f"{round(radius_km, 1)}:"
+        f"{retailer_filter}"
+    )
+
+    cached = _cache_get(
+        cache_key
+    )
+
+    if cached is not None:
+        return cached
+
+    try:
+        response = SESSION.post(
+            OVERPASS_URL,
+            data=_osm_query(
+                latitude,
+                longitude,
+                radius_km,
+            ),
+            headers={
+                "User-Agent": OSM_USER_AGENT,
+            },
+            timeout=REQUEST_TIMEOUT,
+        )
+
+        response.raise_for_status()
+        payload = response.json()
+
+    except (
+        requests.RequestException,
+        ValueError,
+    ):
+        return []
+
+    stores = []
+
+    for element in payload.get(
+        "elements",
+        [],
+    ):
+        tags = (
+            element.get("tags")
+            or {}
+        )
+        center = (
+            element.get("center")
+            or {}
+        )
+
+        lat = (
+            element.get("lat")
+            or center.get("lat")
+        )
+        lon = (
+            element.get("lon")
+            or center.get("lon")
+        )
+
+        if lat is None or lon is None:
+            continue
+
+        name = _safe_string(
+            tags.get("name")
+            or tags.get("brand")
+            or tags.get("operator")
+        )
+
+        if not name:
+            continue
+
+        name_lower = name.lower()
+
+        if retailer_filter:
+            if (
+                retailer_filter == "checkers"
+                and "checkers" not in name_lower
+            ):
+                continue
+
+            if (
+                retailer_filter
+                in {"pick n pay", "pnp"}
+                and not (
+                    "pick n pay" in name_lower
+                    or "pnp" in name_lower
+                )
+            ):
+                continue
+
+            if (
+                retailer_filter == "shoprite"
+                and "shoprite" not in name_lower
+            ):
+                continue
+
+            if (
+                retailer_filter == "woolworths"
+                and "woolworth" not in name_lower
+            ):
+                continue
+
+            if (
+                retailer_filter == "clicks"
+                and "clicks" not in name_lower
+            ):
+                continue
+
+            if (
+                retailer_filter == "makro"
+                and "makro" not in name_lower
+            ):
+                continue
+
+        try:
+            distance = _haversine_km(
+                latitude,
+                longitude,
+                float(lat),
+                float(lon),
+            )
+        except Exception:
+            continue
+
+        if distance > radius_km:
+            continue
+
+        address_parts = [
+            tags.get(
+                "addr:housenumber"
+            ),
+            tags.get(
+                "addr:street"
+            ),
+            tags.get(
+                "addr:suburb"
+            ),
+            tags.get(
+                "addr:city"
+            ),
+        ]
+
+        store = {
+            "store_id": _safe_string(
+                element.get("id")
+            ),
+            "name": name,
+            "retailer": _normalise_retailer(
+                name
+            ),
+            "address": ", ".join(
+                _safe_string(value)
+                for value in address_parts
+                if value
+            ),
+            "city": _safe_string(
+                tags.get("addr:city")
+            ),
+            "province": _safe_string(
+                tags.get("addr:state")
+            ),
+            "latitude": float(lat),
+            "longitude": float(lon),
+            "distance_km": round(
+                distance,
+                2,
+            ),
+            "distance": round(
+                distance,
+                2,
+            ),
+            "source": "OpenStreetMap",
+        }
+
+        stores.append(store)
+
+        _cache_set(
+            f"store:location:{store['store_id']}",
+            store,
+            STORE_CACHE_TIMEOUT,
+        )
+
+    stores.sort(
+        key=lambda item: item[
+            "distance_km"
+        ]
+    )
+
+    _cache_set(
+        cache_key,
+        stores,
+        STORE_CACHE_TIMEOUT
+        if stores
+        else 60,
+    )
+
+    return stores
+
+
+def _nearest_store(
+    stores: list[dict],
+    latitude: float | None,
+    longitude: float | None,
+):
+    if (
+        latitude is None
+        or longitude is None
+        or not stores
+    ):
+        return None
+
+    valid = []
+
+    for store in stores:
+        try:
+            distance = _haversine_km(
+                latitude,
+                longitude,
+                float(
+                    store["latitude"]
+                ),
+                float(
+                    store["longitude"]
+                ),
+            )
+
+            item = dict(store)
+
+            item["distance_km"] = round(
+                distance,
+                2,
+            )
+            item["distance"] = round(
+                distance,
+                2,
+            )
+
+            valid.append(item)
+
+        except Exception:
+            continue
+
+    if not valid:
+        return None
+
+    return min(
+        valid,
+        key=lambda item: item[
+            "distance_km"
+        ],
+    )
+
+
+def _add_distance(
+    product: dict,
+    latitude: float | None,
+    longitude: float | None,
+):
+    location = (
+        product.get("location")
+        or {}
+    )
+
+    if not isinstance(
+        location,
+        dict,
+    ):
+        location = {}
+
+    store_lat = (
+        location.get("latitude")
+        or location.get("lat")
+    )
+    store_lon = (
+        location.get("longitude")
+        or location.get("lon")
+        or location.get("lng")
+    )
+
+    if (
+        latitude is None
+        or longitude is None
+        or store_lat is None
+        or store_lon is None
+    ):
+        product["distance_km"] = None
+        product["distance"] = None
+        return
+
+    try:
+        distance = round(
+            _haversine_km(
+                float(latitude),
+                float(longitude),
+                float(store_lat),
+                float(store_lon),
+            ),
+            2,
+        )
+
+        product["distance_km"] = distance
+        product["distance"] = distance
+
+    except Exception:
+        product["distance_km"] = None
+        product["distance"] = None
+
+
+def _attach_location(
+    products: list[dict],
+    latitude: float | None,
+    longitude: float | None,
+    radius_km: float,
+):
+    """
+    One cached OSM query per retailer/area, not one request per product.
+    """
+
+    retailer_names = sorted(
+        {
+            _safe_string(
+                product.get("retailer")
+                or product.get("store")
+            )
+            for product in products
+            if (
+                product.get("retailer")
+                or product.get("store")
+            )
+        }
+    )
+
+    stores_by_retailer = {}
+
+    for retailer in retailer_names:
+        if (
+            latitude is None
+            or longitude is None
+        ):
+            continue
+
+        stores_by_retailer[
+            retailer
+        ] = find_nearby_stores(
+            latitude,
+            longitude,
+            radius_km,
+            retailer=retailer,
+        )
+
+    for product in products:
+        retailer = _normalise_retailer(
+            product.get("retailer")
+            or product.get("store")
+            or ""
+        )
+
+        location = (
+            product.get("location")
+            or {}
+        )
+
+        if not location:
+            nearest = _nearest_store(
+                stores_by_retailer.get(
+                    retailer,
+                    [],
+                ),
+                latitude,
+                longitude,
+            )
+
+            if nearest:
+                product["location"] = nearest
+                product["store_id"] = (
+                    product.get(
+                        "store_id"
+                    )
+                    or nearest.get(
+                        "store_id"
+                    )
+                )
+
+        _add_distance(
+            product,
+            latitude,
+            longitude,
+        )
+
+    return products
 
 
 # ============================================================
-# PRICE COMPARISON HELPERS
+# PRICE COMPARISON
 # ============================================================
 
-def _normalized_match_key(product: dict) -> str:
+def _normalized_match_key(
+    product: dict,
+) -> str:
     name = _safe_string(
         product.get("name")
         or product.get("title")
@@ -1329,10 +1978,14 @@ def _normalized_match_key(product: dict) -> str:
         product.get("size")
     ).lower()
 
-    return f"{brand}|{name}|{size}"
+    return (
+        f"{brand}|{name}|{size}"
+    )
 
 
-def compare_products(products: list[dict]):
+def compare_products(
+    products: list[dict],
+):
     if not products:
         return {
             "products": [],
@@ -1357,8 +2010,12 @@ def compare_products(products: list[dict]):
         "cheapest": cheapest,
         "most_expensive": expensive,
         "saving": (
-            _to_decimal(expensive.get("price"))
-            - _to_decimal(cheapest.get("price"))
+            _to_decimal(
+                expensive.get("price")
+            )
+            - _to_decimal(
+                cheapest.get("price")
+            )
         ),
     }
 
@@ -1369,8 +2026,13 @@ def compare_equivalent_products(
     groups = {}
 
     for product in products or []:
-        key = _normalized_match_key(product)
-        groups.setdefault(key, []).append(product)
+        key = _normalized_match_key(
+            product
+        )
+        groups.setdefault(
+            key,
+            [],
+        ).append(product)
 
     output = []
 
@@ -1378,14 +2040,18 @@ def compare_equivalent_products(
         if len(group) < 2:
             continue
 
-        comparison = compare_products(group)
+        comparison = compare_products(
+            group
+        )
         comparison["match_key"] = key
         output.append(comparison)
 
     return output
 
 
-def get_cheapest_product(products):
+def get_cheapest_product(
+    products,
+):
     if not products:
         return None
 
@@ -1398,14 +2064,16 @@ def get_cheapest_product(products):
     )
 
 
-def get_most_expensive_product(products):
+def get_most_expensive_product(
+    products,
+):
     if not products:
         return None
 
     return max(
         products,
         key=lambda item: _to_decimal(
-            item.get("price"),
+            item.get("price")
         ),
     )
 
@@ -1414,8 +2082,13 @@ def get_most_expensive_product(products):
 # COMPATIBILITY HELPERS
 # ============================================================
 
-def extract_store_locations(payload):
-    if not isinstance(payload, dict):
+def extract_store_locations(
+    payload,
+):
+    if not isinstance(
+        payload,
+        dict,
+    ):
         return []
 
     data = (
@@ -1425,57 +2098,75 @@ def extract_store_locations(payload):
         or []
     )
 
-    if not isinstance(data, list):
+    if not isinstance(
+        data,
+        list,
+    ):
         return []
 
     return [
         item
         for item in data
-        if isinstance(item, dict)
+        if isinstance(
+            item,
+            dict,
+        )
     ]
 
 
-def extract_pnp_products(payload):
-    if not isinstance(payload, dict):
-        return []
-
-    data = payload.get("data", payload)
-
-    if isinstance(data, dict):
-        data = (
-            data.get("products")
-            or data.get("results")
-            or []
-        )
-
-    if not isinstance(data, list):
-        return []
+def extract_pnp_products(
+    payload,
+):
+    rows = _extract_rows(
+        payload
+    )
 
     return [
         normalize_product(
             item,
             retailer="Pick n Pay",
         )
-        for item in data
-        if isinstance(item, dict)
+        for item in rows
     ]
 
 
-def extract_price_comparisons(payload):
-    if isinstance(payload, dict):
-        data = payload.get("data", payload)
+def extract_price_comparisons(
+    payload,
+):
+    if isinstance(
+        payload,
+        dict,
+    ):
+        data = payload.get(
+            "data",
+            payload,
+        )
 
-        if isinstance(data, dict):
+        if isinstance(
+            data,
+            dict,
+        ):
             return (
                 data.get("offers")
-                or data.get("comparison")
+                or data.get(
+                    "comparison"
+                )
+                or data.get(
+                    "matches"
+                )
                 or []
             )
 
-        if isinstance(data, list):
+        if isinstance(
+            data,
+            list,
+        ):
             return data
 
-    if isinstance(payload, list):
+    if isinstance(
+        payload,
+        list,
+    ):
         return payload
 
     return []
