@@ -1,23 +1,10 @@
-from .views import CART_SESSION_KEY
+"""Template context processors for the shopping application."""
 
 
-def cart_count(request):
+def shopping_context(request):
+    """Return shopping-wide template context.
 
-    cart = request.session.get(
-        CART_SESSION_KEY,
-        {},
-    )
-
-    count = 0
-
-    for quantity in cart.values():
-
-        try:
-            count += int(quantity)
-
-        except (ValueError, TypeError):
-            continue
-
-    return {
-        "cart_count": count,
-    }
+    Cart/order context was removed because the application does not
+    implement cart, checkout, order or payment processing.
+    """
+    return {}
