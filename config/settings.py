@@ -181,4 +181,6 @@ LOGIN_REDIRECT_URL = "shopping:dashboard"
 LOGOUT_REDIRECT_URL = "accounts:login"
 
 
-PARSE_API_KEY = os.getenv("PARSE_API_KEY")\nLOYALTYHUB_API_KEY = os.getenv("LOYALTYHUB_API_KEY", "")\nRETAILER_API_PROVIDER = os.getenv("RETAILER_API_PROVIDER", "loyaltyhub")
+PARSE_API_KEY = os.getenv("PARSE_API_KEY")
+LOYALTYHUB_API_KEY = os.getenv("LOYALTYHUB_API_KEY", "")
+RETAILER_API_PROVIDER = os.getenv("RETAILER_API_PROVIDER", "loyaltyhub")
