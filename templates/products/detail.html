@@ -355,7 +355,7 @@
 
                     <form
                         method="post"
-                        action="{% url 'shopping:mark_purchased' product_id=request.resolver_match.kwargs.product_id %}"
+                        action="{% url 'shopping:mark_purchased' product_id=product_id %}"
                         class="purchase-form"
                     >
                         {% csrf_token %}
