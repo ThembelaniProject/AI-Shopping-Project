@@ -430,7 +430,7 @@ def analytics(request):
 
 @login_required
 def analytics_pdf(request):
-    """Download a PDF statement for 1, 2 or 3 months."""
+    """Download a professional bank-statement-style SmartSpend analysis PDF."""
     try:
         months = int(request.GET.get("months", "1"))
     except (TypeError, ValueError):
@@ -438,52 +438,320 @@ def analytics_pdf(request):
     months = months if months in (1, 2, 3) else 1
 
     try:
+        from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
         from reportlab.pdfgen import canvas
     except ImportError:
-        return HttpResponse("PDF support is not installed. Run: pip install reportlab", status=500)
+        return HttpResponse(
+            "PDF support is not installed. Run: pip install reportlab",
+            status=500,
+        )
 
     now = timezone.localtime()
     cursor = now.replace(day=1)
     for _ in range(months - 1):
-        cursor = (cursor - timezone.timedelta(days=1)).replace(day=1)
+        cursor = (cursor - timedelta(days=1)).replace(day=1)
+
     purchases = PurchaseHistory.objects.filter(
-        user=request.user, purchased_at__gte=cursor, purchased_at__lte=now
+        user=request.user,
+        purchased_at__gte=cursor,
+        purchased_at__lte=now,
     )
+    additions = ShoppingListAddition.objects.filter(
+        user=request.user,
+        added_at__gte=cursor,
+        added_at__lte=now,
+    )
+
     total = purchases.aggregate(total=Sum("amount_spent"))["total"] or Decimal("0.00")
     items = purchases.aggregate(total=Sum("quantity"))["total"] or 0
-    stores = purchases.values("store").annotate(total=Sum("amount_spent"), items=Sum("quantity")).order_by("-total")
+    total_added = additions.aggregate(total=Sum("quantity"))["total"] or 0
+
+    profile = _get_user_profile(request)
+    monthly_budget = profile.available_amount or Decimal("0.00")
+    period_budget = monthly_budget * months
+    remaining = period_budget - total
+
+    stores = list(
+        purchases.values("store")
+        .annotate(total=Sum("amount_spent"), items=Sum("quantity"))
+        .order_by("-total")
+    )
+    products = list(
+        purchases.values("product_name")
+        .annotate(total=Sum("amount_spent"), items=Sum("quantity"))
+        .order_by("-items", "-total")[:10]
+    )
 
     response = HttpResponse(content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="smartspend-statement-{months}-months.pdf"'
+    response["Content-Disposition"] = (
+        f'attachment; filename="smartspend-statement-{months}-months.pdf"'
+    )
+
     pdf = canvas.Canvas(response, pagesize=A4)
     width, height = A4
-    y = height - 50
-    pdf.setFont("Helvetica-Bold", 18)
-    pdf.drawString(45, y, "SmartSpend Shopping Statement")
-    y -= 30
-    pdf.setFont("Helvetica", 10)
-    pdf.drawString(45, y, f"Period: {cursor:%d %B %Y} - {now:%d %B %Y}")
+
+    # SmartSpend's own clean bank-statement-inspired visual language.
+    # It is intentionally not an exact Capitec reproduction.
+    dark = colors.HexColor("#111111")
+    accent = colors.HexColor("#D71920")
+    light = colors.HexColor("#F4F4F4")
+    border = colors.HexColor("#D8D8D8")
+    muted = colors.HexColor("#666666")
+    green = colors.HexColor("#16803A")
+    red = colors.HexColor("#B42318")
+
+    margin = 42
+    content_width = width - (margin * 2)
+
+    def money(value):
+        return f"R{Decimal(value or 0):,.2f}"
+
+    def draw_header(y):
+        pdf.setFillColor(dark)
+        pdf.rect(0, height - 74, width, 74, fill=1, stroke=0)
+
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica-Bold", 21)
+        pdf.drawString(margin, height - 39, "SmartSpend")
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin, height - 55, "AI Shopping & Budget Statement")
+
+        pdf.setFillColor(accent)
+        pdf.rect(width - margin - 82, height - 58, 82, 20, fill=1, stroke=0)
+        pdf.setFillColor(colors.white)
+        pdf.setFont("Helvetica-Bold", 8)
+        pdf.drawCentredString(width - margin - 41, height - 51, "STATEMENT")
+
+    def new_page():
+        pdf.showPage()
+        draw_header(height - 92)
+        return height - 100
+
+    def draw_section_title(title, y):
+        pdf.setFillColor(dark)
+        pdf.setFont("Helvetica-Bold", 12)
+        pdf.drawString(margin, y, title)
+        pdf.setStrokeColor(border)
+        pdf.line(margin, y - 5, width - margin, y - 5)
+        return y - 22
+
+    def draw_pie(cx, cy, radius, rows):
+        total_value = sum(float(row["total"] or 0) for row in rows)
+        if total_value <= 0:
+            pdf.setFillColor(colors.HexColor("#DDDDDD"))
+            pdf.circle(cx, cy, radius, fill=1, stroke=0)
+            pdf.setFillColor(muted)
+            pdf.setFont("Helvetica", 8)
+            pdf.drawCentredString(cx, cy - 4, "No data")
+            return
+
+        palette = [
+            colors.HexColor("#D71920"),
+            colors.HexColor("#333333"),
+            colors.HexColor("#777777"),
+            colors.HexColor("#AAAAAA"),
+            colors.HexColor("#555555"),
+            colors.HexColor("#C7C7C7"),
+            colors.HexColor("#E85D63"),
+            colors.HexColor("#222222"),
+        ]
+
+        angle = 90
+        legend_x = cx + radius + 24
+        legend_y = cy + radius - 4
+
+        for index, row in enumerate(rows):
+            value = float(row["total"] or 0)
+            extent = 360 * value / total_value
+            pdf.setFillColor(palette[index % len(palette)])
+            pdf.wedge(
+                cx - radius,
+                cy - radius,
+                cx + radius,
+                cy + radius,
+                angle,
+                extent,
+                fill=1,
+                stroke=0,
+            )
+
+            label = (row.get("store") or "Unknown store").strip()
+            if len(label) > 22:
+                label = label[:20] + "..."
+            percentage = (value / total_value) * 100
+
+            pdf.setFillColor(palette[index % len(palette)])
+            pdf.rect(legend_x, legend_y - 2, 7, 7, fill=1, stroke=0)
+            pdf.setFillColor(dark)
+            pdf.setFont("Helvetica", 7.5)
+            pdf.drawString(
+                legend_x + 11,
+                legend_y,
+                f"{label}  {percentage:.1f}%  {money(value)}",
+            )
+            legend_y -= 14
+            angle += extent
+
+    draw_header(height - 92)
+    y = height - 98
+
+    # Statement identity block.
+    pdf.setFillColor(dark)
+    pdf.setFont("Helvetica-Bold", 16)
+    pdf.drawString(margin, y, "Shopping Account Statement")
     y -= 18
-    pdf.drawString(45, y, f"Total items purchased: {items}")
-    y -= 18
-    pdf.drawString(45, y, f"Total spending: R{total:.2f}")
+
+    user_name = request.user.get_full_name().strip() or request.user.username
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 9)
+    pdf.drawString(margin, y, f"Account holder: {user_name}")
+    pdf.drawRightString(
+        width - margin,
+        y,
+        f"Statement date: {now:%d %B %Y}",
+    )
+    y -= 15
+    pdf.drawString(
+        margin,
+        y,
+        f"Statement period: {cursor:%d %B %Y} - {now:%d %B %Y}",
+    )
+    pdf.drawRightString(
+        width - margin,
+        y,
+        f"Period: {months} month{'s' if months != 1 else ''}",
+    )
     y -= 28
-    pdf.setFont("Helvetica-Bold", 12)
-    pdf.drawString(45, y, "Spending by store")
-    y -= 20
-    pdf.setFont("Helvetica", 10)
-    for row in stores:
-        store = row["store"] or "Unknown store"
-        pdf.drawString(55, y, f"{store}: R{row['total']:.2f} ({row['items']} items)")
+
+    # Summary cards.
+    card_width = (content_width - 18) / 3
+    summary = [
+        ("TOTAL SPENT", money(total), dark),
+        ("BUDGET", money(period_budget), dark),
+        ("AVAILABLE", money(remaining), green if remaining >= 0 else red),
+    ]
+    for index, (label, value, value_color) in enumerate(summary):
+        x = margin + index * (card_width + 9)
+        pdf.setFillColor(light)
+        pdf.roundRect(x, y - 52, card_width, 52, 5, fill=1, stroke=0)
+        pdf.setFillColor(muted)
+        pdf.setFont("Helvetica-Bold", 7)
+        pdf.drawString(x + 10, y - 16, label)
+        pdf.setFillColor(value_color)
+        pdf.setFont("Helvetica-Bold", 14)
+        pdf.drawString(x + 10, y - 37, value)
+    y -= 76
+
+    # Account activity summary.
+    y = draw_section_title("Account activity", y)
+    activity = [
+        ("Purchases recorded", str(items)),
+        ("Shopping-list items added", str(total_added)),
+        ("Budget used", f"{(float(total) / float(period_budget) * 100):.1f}%" if period_budget else "0.0%"),
+    ]
+    for label, value in activity:
+        pdf.setFillColor(muted)
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin, y, label)
+        pdf.setFillColor(dark)
+        pdf.setFont("Helvetica-Bold", 9)
+        pdf.drawRightString(width - margin, y, value)
+        y -= 17
+    y -= 8
+
+    # Pie chart analysis.
+    if y < 360:
+        y = new_page()
+
+    y = draw_section_title("Spending analysis", y)
+    if stores:
+        draw_pie(margin + 105, y - 78, 72, stores[:8])
+        pdf.setFillColor(muted)
+        pdf.setFont("Helvetica", 8)
+        pdf.drawString(margin, y - 172, "Pie chart: spending distribution by store.")
+        y -= 200
+    else:
+        pdf.setFillColor(muted)
+        pdf.setFont("Helvetica", 9)
+        pdf.drawString(margin, y - 10, "No recorded purchases were found for this period.")
+        y -= 35
+
+    # Transaction statement table.
+    if y < 250:
+        y = new_page()
+
+    y = draw_section_title("Transaction statement", y)
+
+    headers = ["DATE", "DESCRIPTION", "STORE", "QTY", "AMOUNT"]
+    xs = [margin, margin + 67, margin + 255, margin + 360, width - margin]
+    pdf.setFillColor(dark)
+    pdf.setFont("Helvetica-Bold", 7)
+    for label, x in zip(headers, xs):
+        if label == "AMOUNT":
+            pdf.drawRightString(x, y, label)
+        else:
+            pdf.drawString(x, y, label)
+    y -= 8
+    pdf.setStrokeColor(border)
+    pdf.line(margin, y, width - margin, y)
+    y -= 15
+
+    transactions = purchases.order_by("-purchased_at")[:40]
+    pdf.setFont("Helvetica", 7.5)
+    for purchase in transactions:
+        if y < 55:
+            y = new_page()
+            y = draw_section_title("Transaction statement (continued)", y)
+
+        date_text = timezone.localtime(purchase.purchased_at).strftime("%d/%m/%Y")
+        description = purchase.product_name[:30]
+        store = (purchase.store or "Unknown")[:17]
+
+        pdf.setFillColor(dark)
+        pdf.drawString(xs[0], y, date_text)
+        pdf.drawString(xs[1], y, description)
+        pdf.drawString(xs[2], y, store)
+        pdf.drawRightString(xs[3] + 18, y, str(purchase.quantity))
+        pdf.drawRightString(xs[4], y, money(purchase.amount_spent))
+        pdf.setStrokeColor(colors.HexColor("#EEEEEE"))
+        pdf.line(margin, y - 5, width - margin, y - 5)
+        y -= 17
+
+    # Top products analysis.
+    if y < 220:
+        y = new_page()
+
+    y = draw_section_title("Top purchased products", y)
+    pdf.setFont("Helvetica-Bold", 7)
+    pdf.setFillColor(muted)
+    pdf.drawString(margin, y, "PRODUCT")
+    pdf.drawString(margin + 285, y, "QTY")
+    pdf.drawRightString(width - margin, y, "SPENT")
+    y -= 16
+
+    pdf.setFont("Helvetica", 7.5)
+    for row in products:
+        if y < 55:
+            y = new_page()
+            y = draw_section_title("Top purchased products (continued)", y)
+
+        name = (row["product_name"] or "Product")[:42]
+        pdf.setFillColor(dark)
+        pdf.drawString(margin, y, name)
+        pdf.drawString(margin + 285, y, str(row["items"] or 0))
+        pdf.drawRightString(width - margin, y, money(row["total"]))
         y -= 16
-        if y < 60:
-            pdf.showPage()
-            y = height - 50
-            pdf.setFont("Helvetica", 10)
-    y -= 10
-    pdf.setFont("Helvetica-Oblique", 9)
-    pdf.drawString(45, y, "Generated by SmartSpend. Figures are based on recorded purchases.")
+
+    # Footer on final page.
+    pdf.setFillColor(muted)
+    pdf.setFont("Helvetica", 7)
+    pdf.drawString(
+        margin,
+        28,
+        "SmartSpend statement • Generated from recorded shopping activity • No payment processing is performed.",
+    )
+    pdf.drawRightString(width - margin, 28, f"Page period: {months}M")
     pdf.save()
     return response
 
