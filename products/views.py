@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+import re
 
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render
@@ -1023,10 +1024,23 @@ def search(request):
         # Sort highest AI score first
         # --------------------------------------------------
 
+        # Highest preference match count wins first, then the weighted
+        # recommendation score. Price is only a final tie-breaker.
         products.sort(
-            key=lambda product: product.get(
-                "recommendation_score",
-                Decimal("0")
+            key=lambda product: (
+                product.get(
+                    "preference_match_count",
+                    0
+                ),
+                product.get(
+                    "recommendation_score",
+                    Decimal("0")
+                ),
+                Decimal("1") if product.get("on_sale") else Decimal("0"),
+                -product.get(
+                    "total_cost",
+                    Decimal("999999999")
+                ),
             ),
             reverse=True,
         )
