@@ -99,11 +99,16 @@ LIVE_PRICE_MODE = (
 
 CACHE_TIMEOUT = int(
     os.getenv("PRODUCT_CACHE_TIMEOUT", "60")
-)  # 60 seconds when live mode is disabled
+)  # Fresh Redis cache window for retailer search results
 
 STALE_CACHE_TIMEOUT = int(
     os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "172800")
 )  # 48 hours
+
+SEARCH_CACHE_VERSION = "v3"
+COOLDOWN_CACHE_TIMEOUT = int(
+    os.getenv("RETAILER_COOLDOWN_CACHE_TIMEOUT", "300")
+)
 
 STORE_CACHE_TIMEOUT = int(
     os.getenv("STORE_CACHE_TIMEOUT", "86400")
@@ -164,6 +169,45 @@ def _cache_set(
 
 def _stale_key(key: str) -> str:
     return f"{key}:stale"
+
+
+def _search_cache_key(
+    keyword: str,
+    limit: int,
+    latitude: float | None,
+    longitude: float | None,
+    radius_km: float | None,
+) -> str:
+    """Build one deterministic Redis key for the complete search response."""
+    raw = "|".join(
+        [
+            SEARCH_CACHE_VERSION,
+            _safe_string(keyword).lower(),
+            str(int(limit)),
+            "" if latitude is None else f"{float(latitude):.5f}",
+            "" if longitude is None else f"{float(longitude):.5f}",
+            "" if radius_km is None else f"{float(radius_km):.2f}",
+        ]
+    )
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:32]
+    return f"retailer:search:{digest}"
+
+
+def _mark_cached_products(
+    products: list[dict],
+    freshness: str,
+    is_live: bool,
+) -> list[dict]:
+    """Return copies with an honest cache freshness indicator."""
+    output = []
+    for product in products or []:
+        if not isinstance(product, dict):
+            continue
+        item = dict(product)
+        item["price_freshness"] = freshness
+        item["price_is_live"] = is_live
+        output.append(item)
+    return output
 
 
 def _cache_stale_get(key: str):
@@ -464,7 +508,7 @@ def _fallback_product_image(
 def _extract_rows(payload: Any) -> list[dict]:
     """
     Handle the slightly different response envelopes used by
-    AZ Labs, Parse and LoyaltyHub.
+    , Parse and LoyaltyHub.
     """
     if isinstance(payload, list):
         return [
@@ -517,7 +561,7 @@ def normalize_product(
     location: dict | None = None,
 ) -> dict:
     """
-    Convert AZ Labs, Checkers, PnP and LoyaltyHub records into
+    Convert , Checkers, PnP and LoyaltyHub records into
     one stable shape consumed by products/views.py.
     """
 
@@ -1046,6 +1090,20 @@ def _request_json(
             "Retry-After",
             "later",
         )
+        try:
+            cooldown = max(
+                30,
+                min(int(retry_after), 86400),
+            )
+        except (TypeError, ValueError):
+            cooldown = COOLDOWN_CACHE_TIMEOUT
+
+        _cache_set(
+            f"retailer:cooldown:{_retailer_key(provider)}",
+            True,
+            cooldown,
+        )
+
         raise StoreAPIError(
             f"{provider} rate limit reached. "
             f"Retry after {retry_after}."
@@ -1221,12 +1279,13 @@ def search_checkers_products(
 
     cached = _cache_get(cache_key)
 
-    if cached is not None and not LIVE_PRICE_MODE:
-        return cached
+    if cached is not None:
+        return _mark_cached_products(cached, "live", True)
 
-    payload = _request_json(
-        "POST",
-        CHECKERS_SEARCH_URL,
+    try:
+        payload = _request_json(
+            "POST",
+            CHECKERS_SEARCH_URL,
         headers={
             "X-API-Key": PARSE_API_KEY,
             "Accept": "application/json",
@@ -1237,8 +1296,13 @@ def search_checkers_products(
             "page": 0,
             "limit": limit,
         },
-        provider="Checkers",
-    )
+            provider="Checkers",
+        )
+    except StoreAPIError:
+        stale = _cache_stale_get(cache_key)
+        if stale is not None:
+            return _mark_cached_products(stale, "stale", False)
+        raise
 
     rows = _extract_rows(payload)
 
@@ -1635,12 +1699,13 @@ def search_pnp_store_products(
 
     cached = _cache_get(cache_key)
 
-    if cached is not None and not LIVE_PRICE_MODE:
-        return cached
+    if cached is not None:
+        return _mark_cached_products(cached, "live", True)
 
-    payload = _request_json(
-        "GET",
-        PNP_STORE_SEARCH_URL,
+    try:
+        payload = _request_json(
+            "GET",
+            PNP_STORE_SEARCH_URL,
         headers={
             "X-API-Key": PARSE_API_KEY,
             "Accept": "application/json",
@@ -1651,8 +1716,13 @@ def search_pnp_store_products(
             "page": 0,
             "page_size": limit,
         },
-        provider="Pick n Pay branch",
-    )
+            provider="Pick n Pay branch",
+        )
+    except StoreAPIError:
+        stale = _cache_stale_get(cache_key)
+        if stale is not None:
+            return _mark_cached_products(stale, "stale", False)
+        raise
 
     rows = _extract_rows(payload)
 
@@ -1811,12 +1881,13 @@ def search_pnp_products(
 
     cached = _cache_get(cache_key)
 
-    if cached is not None and not LIVE_PRICE_MODE:
-        return cached
+    if cached is not None:
+        return _mark_cached_products(cached, "live", True)
 
-    payload = _request_json(
-        "GET",
-        PNP_SEARCH_URL,
+    try:
+        payload = _request_json(
+            "GET",
+            PNP_SEARCH_URL,
         headers={
             "X-API-Key": PARSE_API_KEY,
             "Accept": "application/json",
@@ -1827,8 +1898,13 @@ def search_pnp_products(
             "query": keyword,
             "page_size": limit,
         },
-        provider="Pick n Pay",
-    )
+            provider="Pick n Pay",
+        )
+    except StoreAPIError:
+        stale = _cache_stale_get(cache_key)
+        if stale is not None:
+            return _mark_cached_products(stale, "stale", False)
+        raise
 
     rows = _extract_rows(payload)
 
@@ -2225,10 +2301,11 @@ def search_products(
             -> optional LoyaltyHub refreshed-price fallback
 
     Cache flow:
-        live mode -> retailer API is queried on every search
-        provider failure -> stale cache if available
-        live mode disabled -> normal short cache is used
-        successful result -> retained as a stale/outage fallback
+        fresh Redis cache -> return the same live result without another API call
+        cache miss -> query the retailer API
+        provider failure/rate limit -> use stale Redis data when available
+        successful result -> store both fresh and 48-hour stale copies
+        final search response -> cached with location data included
 
     The function keeps the same signature used by the existing
     products/views.py, so no view change is required.
@@ -2251,6 +2328,25 @@ def search_products(
         requested_limit,
         20,
     )
+
+    # One short-lived Redis entry covers the complete search, including
+    # branch pricing and distance/location data. This is the main protection
+    # against repeated Parse.bot calls from page refreshes or repeated searches.
+    final_cache_key = _search_cache_key(
+        keyword,
+        requested_limit,
+        latitude,
+        longitude,
+        radius_km,
+    )
+
+    cached_results = _cache_get(final_cache_key)
+    if cached_results is not None:
+        return _mark_cached_products(
+            cached_results,
+            "live",
+            True,
+        )
 
     errors = []
     products = []
@@ -2283,6 +2379,14 @@ def search_products(
     )
 
     if not products:
+        stale_results = _cache_stale_get(final_cache_key)
+        if stale_results is not None:
+            return _mark_cached_products(
+                stale_results,
+                "stale",
+                False,
+            )
+
         if errors:
             raise StoreAPIError(
                 "No retailer results were available. "
@@ -2291,7 +2395,7 @@ def search_products(
 
         raise StoreAPIError(
             "No retailer API is configured. "
-            "Set PARSE_API_KEY, AZLABS_API_KEY or "
+            "Set PARSE_API_KEY, or "
             "LOYALTYHUB_API_KEY."
         )
 
@@ -2353,7 +2457,23 @@ def search_products(
             radius,
         )
 
-    return products
+    # Cache the complete response after branch pricing and location have
+    # been attached. The stale copy is retained for API outages/rate limits.
+    _cache_set(
+        final_cache_key,
+        products,
+        CACHE_TIMEOUT,
+    )
+    _cache_stale_set(
+        final_cache_key,
+        products,
+    )
+
+    return _mark_cached_products(
+        products,
+        "live",
+        True,
+    )
 
 
 def search_all_retailers(
