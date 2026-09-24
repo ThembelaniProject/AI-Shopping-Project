@@ -565,6 +565,16 @@ def normalize_product(
         )
     )
 
+    barcode = _safe_string(
+        _first_value(
+            raw,
+            "barcode",
+            "ean",
+            "gtin",
+            "ean13",
+        )
+    )
+
     price = _to_decimal(
         _first_value(
             raw,
@@ -826,16 +836,6 @@ def normalize_product(
             "product_url",
             "productUrl",
             "link",
-        )
-    )
-
-    barcode = _safe_string(
-        _first_value(
-            raw,
-            "barcode",
-            "ean",
-            "gtin",
-            "ean13",
         )
     )
 
