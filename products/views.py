@@ -297,8 +297,7 @@ def search(request):
 
     try:
 
-        preferences = Preference.objects.get(
-            user=request.user
+        preferences = Preference.objects.get(            user=request.user
         )
 
     except Preference.DoesNotExist:
@@ -363,6 +362,32 @@ def search(request):
         "user_longitude",
         ""
     ).strip()
+
+    # ======================================================
+    # SAVE LATEST SEARCH LOCATION
+    # ======================================================
+
+    # Product Search is the source of truth for the user's
+    # current shopping location. Only valid coordinates are stored.
+    if user_latitude and user_longitude:
+        try:
+            latitude_value = float(user_latitude)
+            longitude_value = float(user_longitude)
+
+            if (
+                -90 <= latitude_value <= 90
+                and -180 <= longitude_value <= 180
+            ):
+                request.session["user_latitude"] = str(latitude_value)
+                request.session["user_longitude"] = str(longitude_value)
+
+                # Do not let an older address override the new
+                # coordinates captured during product search.
+                request.session.pop("user_address", None)
+                request.session.modified = True
+
+        except (ValueError, TypeError):
+            pass
 
     # The browser normally supplies precise coordinates. If the user
     # has entered a location but denied browser geolocation, do not
@@ -598,7 +623,6 @@ def search(request):
             and sale_price is not None
             and sale_price > 0
         ):
-
             final_price = sale_price
 
         else:
@@ -898,7 +922,6 @@ def search(request):
     max_shipping_value = None
 
     if max_shipping:
-
         try:
 
             max_shipping_value = Decimal(
@@ -1197,7 +1220,6 @@ def detail(request, product_id):
         else:
 
             sale_price = None
-
         # ==================================================
         # SALE
         # ==================================================
