@@ -594,60 +594,73 @@ def normalize_product(
         or bool(promotion)
     )
 
-    image = _safe_string(
-        _first_value(
-            raw,
-            "image_url",
-            "imageUrl",
-            "image",
-            "thumbnail",
-            "thumbnail_url",
-            "thumbnailUrl",
-        )
-    )
+    # --------------------------------------------------------
+    # PRODUCT IMAGES
+    # --------------------------------------------------------
+    # Retailer APIs do not always use one consistent image field.
+    # Some return a URL, some return a list, and some return
+    # objects such as {"url": "..."} or {"src": "..."}.
+    # Normalize all of those formats into real browser URLs.
+    def _image_url(value):
+        if isinstance(value, str):
+            value = value.strip()
+            if value.startswith("//"):
+                return "https:" + value
+            if value.startswith("http://"):
+                return "https://" + value[7:]
+            if value.startswith("https://"):
+                return value
+            return value
 
-    images_raw = (
-        raw.get("images")
-        or raw.get("imageUrls")
-        or raw.get("image_urls")
-        or []
-    )
+        if isinstance(value, dict):
+            nested = _first_value(
+                value,
+                "url",
+                "src",
+                "image",
+                "imageUrl",
+                "image_url",
+                "thumbnail",
+                "thumbnailUrl",
+            )
+            return _image_url(nested)
 
-    if isinstance(images_raw, str):
-        images_raw = [images_raw]
+        return ""
 
-    if not isinstance(images_raw, list):
-        images_raw = []
+    image_candidates = [
+        raw.get("image_url"),
+        raw.get("imageUrl"),
+        raw.get("image"),
+        raw.get("thumbnail"),
+        raw.get("thumbnail_url"),
+        raw.get("thumbnailUrl"),
+        raw.get("productImage"),
+        raw.get("product_image"),
+        raw.get("primaryImage"),
+        raw.get("primary_image"),
+        raw.get("media"),
+        raw.get("images"),
+        raw.get("imageUrls"),
+        raw.get("image_urls"),
+    ]
 
     clean_images = []
 
-    for item in images_raw:
-        if isinstance(item, str):
-            value = item.strip()
-        elif isinstance(item, dict):
-            value = _safe_string(
-                _first_value(
-                    item,
-                    "url",
-                    "src",
-                    "image",
-                    "imageUrl",
-                )
-            )
-        else:
-            value = ""
+    def _collect_images(value):
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                _collect_images(item)
+            return
 
-        if value and value not in clean_images:
-            clean_images.append(value)
+        url = _image_url(value)
 
-    if image and image not in clean_images:
-        clean_images.insert(0, image)
+        if url and url not in clean_images:
+            clean_images.append(url)
 
-    image = (
-        clean_images[0]
-        if clean_images
-        else image
-    )
+    for candidate in image_candidates:
+        _collect_images(candidate)
+
+    image = clean_images[0] if clean_images else ""
 
     stock_raw = _first_value(
         raw,
