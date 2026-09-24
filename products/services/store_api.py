@@ -390,6 +390,87 @@ def _first_value(
     return None
 
 
+
+def _fallback_product_image(
+    name: str,
+    brand: str = "",
+    barcode: str = "",
+) -> str:
+    """
+    Find a public product image when a retailer feed omits one.
+
+    Retailer images always take priority. Open Food Facts is used only
+    when the retailer response has no usable image URL.
+    """
+    name = _safe_string(name)
+    brand = _safe_string(brand)
+    barcode = _safe_string(barcode)
+
+    if not name and not barcode:
+        return ""
+
+    cache_key = (
+        "product:image:fallback:"
+        + hashlib.sha256(
+            f"{barcode}|{brand}|{name}".lower().encode("utf-8")
+        ).hexdigest()
+    )
+
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
+
+    queries = []
+    if barcode:
+        queries.append(barcode)
+
+    text_query = " ".join(
+        part for part in (brand, name) if part
+    ).strip()
+
+    if text_query:
+        queries.append(text_query)
+
+    for query in queries:
+        try:
+            response = SESSION.get(
+                "https://world.openfoodfacts.org/cgi/search.pl",
+                params={
+                    "search_terms": query,
+                    "search_simple": 1,
+                    "action": "process",
+                    "json": 1,
+                    "page_size": 1,
+                },
+                headers={"Accept": "application/json"},
+                timeout=5,
+            )
+            response.raise_for_status()
+            payload = response.json()
+
+            products = payload.get("products", [])
+            if not isinstance(products, list):
+                continue
+
+            for item in products:
+                if not isinstance(item, dict):
+                    continue
+
+                image = (
+                    item.get("image_front_url")
+                    or item.get("image_url")
+                    or item.get("image_small_url")
+                )
+
+                if isinstance(image, str) and image.startswith("http"):
+                    _cache_set(cache_key, image, 86400)
+                    return image
+
+        except (requests.RequestException, ValueError):
+            continue
+
+    return ""
+
 def _extract_rows(payload: Any) -> list[dict]:
     """
     Handle the slightly different response envelopes used by
@@ -661,6 +742,17 @@ def normalize_product(
         _collect_images(candidate)
 
     image = clean_images[0] if clean_images else ""
+
+    # Keep retailer images when available. If a retailer omitted the
+    # image, use a public product-image fallback.
+    if not image:
+        image = _fallback_product_image(
+            name=name,
+            brand=_safe_string(raw.get("brand")),
+            barcode=barcode,
+        )
+        if image and image not in clean_images:
+            clean_images.append(image)
 
     stock_raw = _first_value(
         raw,
@@ -1746,76 +1838,124 @@ def search_parse_retailer_products(
     longitude: float | None = None,
     radius_km: float = OSM_RADIUS_KM,
 ) -> list[dict]:
-    """Use Parse retailer integrations as the primary live-price source.
-
-    Checkers search returns the current Checkers catalogue price.
-    Pick n Pay uses the branch-specific endpoint when user coordinates
-    are available, so the displayed PnP price belongs to a real branch.
     """
-    results: list[dict] = []
+    Search every live Parse retailer independently.
+
+    A failure or empty response from one retailer must never hide the
+    products returned by another retailer. Search variants are tried
+    because retailer indexes can treat spaces and hyphens differently.
+    """
+    keyword = _safe_string(keyword)
+
+    if not keyword:
+        return []
+
+    limit = max(1, min(int(limit), 20))
     errors: list[str] = []
 
-    try:
-        results.extend(
-            search_checkers_products(
-                keyword,
-                limit=limit,
-            )
+    def query_variants(value: str) -> list[str]:
+        variants = [value]
+        normalised = re.sub(r"[-_]+", " ", value).strip()
+
+        if normalised and normalised.lower() not in {
+            item.lower() for item in variants
+        }:
+            variants.append(normalised)
+
+        hyphenated = re.sub(r"\s+", "-", normalised).strip()
+
+        if hyphenated and hyphenated.lower() not in {
+            item.lower() for item in variants
+        }:
+            variants.append(hyphenated)
+
+        return variants[:3]
+
+    def search_retailer(search_fn, retailer_name: str) -> list[dict]:
+        collected: list[dict] = []
+        seen = set()
+
+        for query in query_variants(keyword):
+            try:
+                rows = search_fn(query)
+            except StoreAPIError as exc:
+                errors.append(f"{retailer_name}: {exc}")
+                continue
+
+            for product in rows:
+                if not isinstance(product, dict):
+                    continue
+
+                product_key = (
+                    product.get("barcode")
+                    or product.get("product_id")
+                    or (
+                        product.get("retailer"),
+                        product.get("name"),
+                        product.get("price"),
+                    )
+                )
+
+                if product_key in seen:
+                    continue
+
+                seen.add(product_key)
+                collected.append(product)
+
+                if len(collected) >= limit:
+                    return collected[:limit]
+
+        return collected[:limit]
+
+    # Both retailers are always queried.
+    checkers = search_retailer(
+        lambda query: search_checkers_products(
+            query,
+            limit=limit,
+        ),
+        "Checkers",
+    )
+
+    pnp = search_retailer(
+        lambda query: search_pnp_products(
+            query,
+            limit=limit,
+            latitude=latitude,
+            longitude=longitude,
+            radius_km=radius_km,
+        ),
+        "Pick n Pay",
+    )
+
+    # Interleave retailers so one store does not fill the whole page.
+    merged: list[dict] = []
+    index = 0
+
+    while (
+        len(merged) < limit
+        and (
+            index < len(checkers)
+            or index < len(pnp)
         )
-    except StoreAPIError as exc:
-        errors.append(f"Checkers: {exc}")
+    ):
+        if index < len(checkers):
+            merged.append(checkers[index])
 
-    try:
-        results.extend(
-            search_pnp_products(
-                keyword,
-                limit=limit,
-                latitude=latitude,
-                longitude=longitude,
-                radius_km=radius_km,
-            )
+        if len(merged) >= limit:
+            break
+
+        if index < len(pnp):
+            merged.append(pnp[index])
+
+        index += 1
+
+    if not merged and errors:
+        raise StoreAPIError(
+            "No retailer results were available. "
+            + " | ".join(errors[:4])
         )
-    except StoreAPIError as exc:
-        errors.append(f"Pick n Pay: {exc}")
 
-    if results:
-        checkers = [
-            item for item in results
-            if item.get("retailer") == "Checkers"
-        ]
-        pnp = [
-            item for item in results
-            if item.get("retailer") == "Pick n Pay"
-        ]
-        other = [
-            item for item in results
-            if item.get("retailer") not in {"Checkers", "Pick n Pay"}
-        ]
-
-        # Interleave retailers so the final search limit does not
-        # accidentally return only the first provider's products.
-        merged = []
-        index = 0
-        while len(merged) < limit and (
-            index < len(checkers) or index < len(pnp)
-        ):
-            if index < len(checkers):
-                merged.append(checkers[index])
-            if len(merged) >= limit:
-                break
-            if index < len(pnp):
-                merged.append(pnp[index])
-            index += 1
-
-        if len(merged) < limit:
-            merged.extend(other[: limit - len(merged)])
-
-        return merged[:limit]
-
-    if errors:
-        raise StoreAPIError(" | ".join(errors[:2]))
-
-    return []
+    return _deduplicate_products(merged)[:limit]
 
 
 # ============================================================
