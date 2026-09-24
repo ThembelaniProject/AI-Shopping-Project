@@ -21,6 +21,10 @@
                 Products
             </a>
 
+            <a href="{% url 'shopping:analytics' %}">
+                📊 Analysis
+            </a>
+
             <a href="{% url 'shopping:shopping_list' %}" class="shopping-list-link">
                 <span>🛒 Shopping List</span>
                 {% if shopping_list_count > 0 %}
