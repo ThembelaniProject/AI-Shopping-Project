@@ -798,6 +798,55 @@ def normalize_product(
         or source_retailer
     )
 
+    # Retailer feeds use several different names for colour.
+    # Keep the value when it exists instead of always returning blank.
+    colour = _safe_string(
+        _first_value(
+            raw,
+            "colour",
+            "color",
+            "colourName",
+            "colorName",
+            "variant_colour",
+            "variantColor",
+        )
+    )
+
+    # Some feeds put colour inside a variant/attributes object.
+    if not colour:
+        attributes = raw.get("attributes") or raw.get("variant") or {}
+        if isinstance(attributes, dict):
+            colour = _safe_string(
+                _first_value(
+                    attributes,
+                    "colour",
+                    "color",
+                    "colourName",
+                    "colorName",
+                )
+            )
+
+    # A product feed may include its branch directly.
+    raw_location = raw.get("location")
+    if not isinstance(raw_location, dict):
+        raw_location = {}
+
+    raw_lat = (
+        raw.get("latitude")
+        or raw.get("lat")
+        or raw_location.get("latitude")
+        or raw_location.get("lat")
+    )
+    raw_lon = (
+        raw.get("longitude")
+        or raw.get("longitude")
+        or raw.get("lng")
+        or raw.get("lon")
+        or raw_location.get("longitude")
+        or raw_location.get("lng")
+        or raw_location.get("lon")
+    )
+
     product_location = (
         location
         or raw.get("location")
@@ -809,6 +858,30 @@ def normalize_product(
         dict,
     ):
         product_location = {}
+
+    # Preserve branch coordinates/address supplied directly by a retailer.
+    if raw_lat is not None and raw_lon is not None:
+        product_location = {
+            **product_location,
+            "latitude": raw_lat,
+            "longitude": raw_lon,
+        }
+
+    raw_address = _safe_string(
+        raw.get("address")
+        or raw.get("storeAddress")
+        or product_location.get("address")
+    )
+    if raw_address and not product_location.get("address"):
+        product_location["address"] = raw_address
+
+    raw_store_name = _safe_string(
+        raw.get("storeName")
+        or raw.get("store_name")
+        or product_location.get("name")
+    )
+    if raw_store_name and not product_location.get("name"):
+        product_location["name"] = raw_store_name
 
     store_id = _safe_string(
         _first_value(
@@ -872,10 +945,7 @@ def normalize_product(
         "category": _safe_string(
             raw.get("category")
         ),
-        "colour": _safe_string(
-            raw.get("colour")
-            or raw.get("color")
-        ),
+        "colour": colour,
         "size": size,
         "barcode": barcode,
         "price": final_price,
