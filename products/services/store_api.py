@@ -1215,18 +1215,30 @@ def _resolve_checkers_image(image_id: str) -> str:
     if cached:
         return cached
 
-    try:
-        payload = _request_json(
-            "GET",
-            f"{PARSE_BASE_URL}/{CHECKERS_SCRAPER_ID}/get_image_url",
-            headers={
-                "X-API-Key": PARSE_API_KEY,
-                "Accept": "application/json",
-            },
-            params={"imageId": image_id},
-            provider="Checkers image",
-        )
-    except StoreAPIError:
+    # Parse's endpoint accepts the Checkers image reference. Different
+    # generated API revisions have exposed the query key as imageId or
+    # image_id, so try both forms before giving up.
+    payload = None
+
+    for query_key in ("imageId", "image_id"):
+        try:
+            payload = _request_json(
+                "GET",
+                f"{PARSE_BASE_URL}/{CHECKERS_SCRAPER_ID}/get_image_url",
+                headers={
+                    "X-API-Key": PARSE_API_KEY,
+                    "Accept": "application/json",
+                },
+                params={query_key: image_id},
+                provider="Checkers image",
+            )
+        except StoreAPIError:
+            continue
+
+        if payload:
+            break
+
+    if payload is None:
         return ""
 
     candidates = []
@@ -1237,12 +1249,25 @@ def _resolve_checkers_image(image_id: str) -> str:
             if value.startswith(("http://", "https://", "//")):
                 candidates.append(value)
         elif isinstance(value, dict):
-            for key in ("url", "imageUrl", "image_url", "cdnUrl", "cdn_url"):
+            for key in (
+                "url",
+                "imageUrl",
+                "image_url",
+                "cdnUrl",
+                "cdn_url",
+                "href",
+                "src",
+            ):
                 item = value.get(key)
                 if isinstance(item, str):
                     collect(item)
+                elif isinstance(item, (dict, list, tuple)):
+                    collect(item)
             collect(value.get("data"))
             collect(value.get("result"))
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                collect(item)
 
     collect(payload)
 
@@ -1312,13 +1337,16 @@ def search_checkers_products(
 
         # Checkers can return an image ID/reference rather than a browser URL.
         # Resolve it through Parse's dedicated get_image_url endpoint.
-        if not row.get("image_url") and not row.get("imageUrl"):
-            for image_id in _extract_checkers_image_ids(row):
-                resolved = _resolve_checkers_image(image_id)
-                if resolved:
-                    row["image_url"] = resolved
-                    row["imageUrl"] = resolved
-                    break
+        # The Checkers search API documents a singular "image" reference,
+        # while richer responses may expose imageId/imageIds. Resolve every
+        # supported reference before normalize_product sees it.
+        for image_id in _extract_checkers_image_ids(row):
+            resolved = _resolve_checkers_image(image_id)
+            if resolved:
+                row["image_url"] = resolved
+                row["imageUrl"] = resolved
+                row["image"] = resolved
+                break
 
         # Parse's Checkers API documents priceWithoutDecimal as ZAR
         # cents. It is the authoritative numeric retailer price when
