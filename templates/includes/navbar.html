@@ -1,200 +1,46 @@
 {% load static %}
-
 <nav class="navbar">
     <div class="navbar-container">
-
         <a href="{% url 'shopping:dashboard' %}" class="navbar-brand">
-            <img
-                src="{% static 'images/logo-SMARTSPEND-72dpi.png' %}"
-                alt="AI Shopping Logo"
-                class="navbar-logo"
-            >
+            <img src="{% static 'images/logo-SMARTSPEND-72dpi.png' %}" alt="AI Shopping Logo" class="navbar-logo">
         </a>
-
         <div class="navbar-links">
-
-            <a href="{% url 'shopping:dashboard' %}">
-                Dashboard
-            </a>
-
-            <a href="{% url 'products:search' %}">
-                Products
-            </a>
-
-            <a href="{% url 'shopping:analytics' %}">
-                📊 Analysis
-            </a>
-
+            <a href="{% url 'shopping:dashboard' %}">Dashboard</a>
+            <a href="{% url 'products:search' %}">Products</a>
+            <a href="{% url 'shopping:analytics' %}">📊 Analysis</a>
             <a href="{% url 'shopping:shopping_list' %}" class="shopping-list-link">
                 <span>🛒 Shopping List</span>
-                {% if shopping_list_count > 0 %}
-                    <span class="shopping-list-badge" aria-label="{{ shopping_list_count }} items in shopping list">
-                        {{ shopping_list_count }}
-                    </span>
-                {% endif %}
+                {% if shopping_list_count > 0 %}<span class="shopping-list-badge" aria-label="{{ shopping_list_count }} items in shopping list">{{ shopping_list_count }}</span>{% endif %}
             </a>
-
-            <a href="{% url 'shopping:purchase_history' %}">
-                History
-            </a>
-
+            <a href="{% url 'shopping:purchase_history' %}">History</a>
             {% if user.is_authenticated %}
-                <a
-                    href="{% url 'accounts:profile' %}"
-                    class="profile-link"
-                >
-                    <span class="profile-icon">👤</span>
-                    <span>Profile</span>
-                </a>
-
-                <span class="navbar-user">
-                    Welcome, {{ user.username }}
-                </span>
-
-                <form
-                    method="post"
-                    action="{% url 'accounts:logout' %}"
-                    style="display: inline;"
-                >
-                    {% csrf_token %}
-                    <button type="submit">
-                        Logout
-                    </button>
+                <a href="{% url 'accounts:profile' %}" class="profile-link"><span class="profile-icon">👤</span><span>Profile</span></a>
+                <span class="navbar-user">Welcome, {{ user.username }}</span>
+                <form method="post" action="{% url 'accounts:logout' %}" class="navbar-logout-form">
+                    {% csrf_token %}<button type="submit">Logout</button>
                 </form>
             {% endif %}
-
         </div>
     </div>
 </nav>
-
 <style>
-    .navbar {
-        width: 100%;
-        background: #1e293b;
-        border-bottom: 1px solid #334155;
-        position: relative;
-        z-index: 1000;
-    }
-
-    .navbar-container {
-        max-width: 1200px;
-        margin: 0 auto;
-        padding: 1rem 2rem;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 1rem;
-    }
-
-    .navbar-brand {
-        display: inline-flex;
-        align-items: center;
-        gap: 10px;
-        color: #a5b4fc;
-        text-decoration: none;
-        white-space: nowrap;
-    }
-
-    .navbar-logo {
-        width: 150px;
-        height: 45px;
-        object-fit: contain;
-        display: block;
-    }
-
-    .navbar-links {
-        display: flex;
-        align-items: center;
-        gap: 1rem;
-    }
-
-    .navbar-links a {
-        color: #cbd5e1;
-        text-decoration: none;
-        font-size: 0.9rem;
-        font-weight: 500;
-    }
-
-    .navbar-links a:hover {
-        color: #a5b4fc;
-    }
-
-    .shopping-list-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.45rem;
-    }
-
-    .shopping-list-badge {
-        min-width: 22px;
-        height: 22px;
-        padding: 0 6px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 999px;
-        background: #6366f1;
-        color: #ffffff;
-        font-size: 0.72rem;
-        font-weight: 700;
-        line-height: 1;
-    }
-
-    .profile-link {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.4rem;
-        padding: 0.45rem 0.7rem;
-        border-radius: 8px;
-        background: rgba(99, 102, 241, 0.10);
-        border: 1px solid rgba(99, 102, 241, 0.25);
-    }
-
-    .profile-link:hover {
-        background: rgba(99, 102, 241, 0.2);
-        border-color: #6366f1;
-    }
-
-    .profile-icon {
-        font-size: 1rem;
-        line-height: 1;
-    }
-
-    .navbar-user {
-        color: #94a3b8;
-        font-size: 0.85rem;
-    }
-
-    .navbar-links button {
-        border: 1px solid #475569;
-        background: #0f172a;
-        color: #cbd5e1;
-        padding: 0.45rem 0.75rem;
-        border-radius: 8px;
-        cursor: pointer;
-    }
-
-    .navbar-links button:hover {
-        border-color: #6366f1;
-        color: white;
-    }
-
-    @media (max-width: 700px) {
-        .navbar-container {
-            padding: 0.9rem 1rem;
-        }
-
-        .navbar-links {
-            gap: 0.6rem;
-        }
-
-        .navbar-user {
-            display: none;
-        }
-
-        .navbar-logo {
-            width: 38px;
-            height: 38px;
-        }
-    }
+.navbar{width:100%;background:#1e293b;border-bottom:1px solid #334155;position:relative;z-index:1000}
+.navbar-container{width:min(100%,1440px);max-width:1440px;margin:0 auto;padding:1rem 1.25rem;display:flex;align-items:center;justify-content:space-between;gap:1rem;min-width:0}
+.navbar-brand{display:inline-flex;align-items:center;flex:0 0 auto;color:#a5b4fc;text-decoration:none;white-space:nowrap}
+.navbar-logo{width:150px;height:45px;max-width:100%;object-fit:contain;display:block}
+.navbar-links{display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:.65rem 1rem;min-width:0}
+.navbar-links a{color:#cbd5e1;text-decoration:none;font-size:.9rem;font-weight:500;white-space:normal}
+.navbar-links a:hover{color:#a5b4fc}
+.shopping-list-link{display:inline-flex;align-items:center;gap:.45rem}
+.shopping-list-badge{min-width:22px;height:22px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;border-radius:999px;background:#6366f1;color:#fff;font-size:.72rem;font-weight:700;line-height:1}
+.profile-link{display:inline-flex;align-items:center;gap:.4rem;padding:.45rem .7rem;border-radius:8px;background:rgba(99,102,241,.1);border:1px solid rgba(99,102,241,.25)}
+.profile-link:hover{background:rgba(99,102,241,.2);border-color:#6366f1}
+.profile-icon{font-size:1rem;line-height:1}
+.navbar-user{color:#94a3b8;font-size:.85rem}
+.navbar-logout-form{display:inline-flex;margin:0}
+.navbar-links button{border:1px solid #475569;background:#0f172a;color:#cbd5e1;padding:.45rem .75rem;border-radius:8px;cursor:pointer;min-height:40px}
+.navbar-links button:hover{border-color:#6366f1;color:#fff}
+@media(max-width:900px){.navbar-container{flex-direction:column;justify-content:center;padding:.75rem}.navbar-brand{margin-inline:auto}.navbar-links{width:100%;justify-content:center;gap:.45rem .75rem}.navbar-user{display:none}}
+@media(max-width:540px){.navbar-container{padding:.6rem .4rem;gap:.4rem}.navbar-logo{width:112px;height:36px}.navbar-links{gap:.25rem .4rem}.navbar-links a,.navbar-links button{font-size:.78rem;padding:.35rem .4rem;min-height:36px}.navbar-links .profile-link{padding:.35rem .45rem}}
+@media(max-width:360px){.navbar-logo{width:96px}.navbar-links a,.navbar-links button{font-size:.72rem;padding:.3rem}}
 </style>
