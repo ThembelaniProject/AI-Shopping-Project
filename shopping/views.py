@@ -307,6 +307,16 @@ def add_to_shopping_list(request, product_id):
         item.save()
     else:
         item = ShoppingListItem.objects.create(user=request.user, quantity=quantity, **snapshot)
+
+    ShoppingListAddition.objects.create(
+        user=request.user,
+        product_id=snapshot["product_id"],
+        product_name=snapshot["product_name"],
+        store=snapshot["store"],
+        unit_price=snapshot["unit_price"],
+        quantity=quantity,
+    )
+
     messages.success(request, f"{item.product_name} was added to your shopping list.")
     return redirect("shopping:shopping_list")
 
