@@ -119,268 +119,168 @@ def preference_values(value):
 # AI RECOMMENDATION SCORE
 # ==========================================================
 
+def _normalise_match_text(value):
+    """Normalize text so retailer/product fields match user preferences reliably."""
+    text = str(value or "").strip().lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\\s+", " ", text).strip()
+
+
+def _preference_matches(preference, product_text, aliases=None):
+    """Return the first matching preference and its display value."""
+    aliases = aliases or {}
+
+    for value in preference or []:
+        normalized = _normalise_match_text(value)
+        if not normalized:
+            continue
+
+        terms = aliases.get(normalized, [normalized])
+        for term in terms:
+            if _normalise_match_text(term) in product_text:
+                return value
+    return None
+
+
 def recommendation_score(item, preferences=None, keyword=""):
     """
-    Calculate a personalized recommendation score.
+    Rank products using the user's saved preferences.
 
-    The score is based primarily on the user's saved
-    preferences:
-
-        Colour  = 25 points
-        Store   = 25 points
-        Style   = 20 points
-        Hobby   = 15 points
-
-    Additional signals:
-
-        Keyword match = up to 10 points
-        Rating        = up to 5 points
-        In stock      = 2 points
-        On sale       = 3 points
-
-    Maximum score = 100.
+    Preference signals are deliberately stronger than generic product
+    signals. The recommendation is a ranking, so products that do not
+    match a preference can still appear, but matching products are moved
+    to the top.
     """
-
     score = Decimal("0")
-
     matched_preferences = []
 
-    # ------------------------------------------------------
-    # PRODUCT INFORMATION
-    # ------------------------------------------------------
+    name = _normalise_match_text(item.get("name"))
+    description = _normalise_match_text(item.get("description"))
+    category = _normalise_match_text(item.get("category"))
+    brand = _normalise_match_text(item.get("brand"))
+    colour = _normalise_match_text(item.get("colour") or item.get("color"))
+    store = _normalise_match_text(
+        item.get("store") or item.get("retailer") or item.get("store_name")
+    )
+    size = _normalise_match_text(item.get("size"))
 
-    name = str(
-        item.get("name", "")
-    ).lower()
-
-    description = str(
-        item.get("description", "")
-    ).lower()
-
-    category = str(
-        item.get("category", "")
-    ).lower()
-
-    brand = str(
-        item.get("brand", "")
-    ).lower()
-
-    product_colour = str(
-        item.get("colour", "")
-    ).lower()
-
-    product_store = str(
-        item.get("store", "")
-    ).lower()
-
-    product_size = str(
-        item.get("size", "")
-    ).lower()
-
-    # Everything searchable about the product
     product_text = " ".join(
-        [
-            name,
-            description,
-            category,
-            brand,
-            product_colour,
-            product_store,
-            product_size,
-        ]
+        part for part in [name, description, category, brand, colour, store, size]
+        if part
     )
 
-    # ------------------------------------------------------
-    # USER PREFERENCES
-    # ------------------------------------------------------
+    preferred_colours = []
+    preferred_stores = []
+    preferred_styles = []
+    preferred_hobbies = []
 
     if preferences:
+        preferred_colours = preference_values(getattr(preferences, "colours", []))
+        preferred_stores = preference_values(getattr(preferences, "stores", []))
+        preferred_styles = preference_values(getattr(preferences, "styles", []))
+        preferred_hobbies = preference_values(getattr(preferences, "hobbies", []))
 
-        preferred_colours = preference_values(
-            getattr(
-                preferences,
-                "colours",
-                []
-            )
-        )
+    # Retailer names/aliases supported by the current system.
+    store_aliases = {
+        "checkers": ["checkers"],
+        "pick n pay": ["pick n pay", "pnp", "picknpay"],
+    }
 
-        preferred_stores = preference_values(
-            getattr(
-                preferences,
-                "stores",
-                []
-            )
-        )
+    # Product feeds often do not contain an explicit "style" or "hobby".
+    # Use meaningful category/name/description terms as a semantic fallback.
+    style_aliases = {
+        "casual": ["casual", "everyday", "basic", "relaxed"],
+        "formal": ["formal", "office", "business", "dress", "suit", "smart"],
+        "sporty": ["sport", "sports", "training", "running", "gym", "athletic"],
+        "streetwear": ["streetwear", "street", "hoodie", "sneaker", "jogger"],
+        "smart casual": ["smart casual", "casual shirt", "chino", "blazer", "polo"],
+    }
 
-        preferred_styles = preference_values(
-            getattr(
-                preferences,
-                "styles",
-                []
-            )
-        )
+    hobby_aliases = {
+        "football": ["football", "soccer", "soccer ball", "football boot", "jersey"],
+        "gaming": ["gaming", "gamer", "playstation", "xbox", "controller", "pc gaming"],
+        "music": ["music", "headphone", "earphone", "speaker", "microphone", "guitar"],
+        "fitness": ["fitness", "gym", "training", "workout", "running", "sports"],
+        "travel": ["travel", "luggage", "suitcase", "backpack", "travel bag"],
+        "photography": ["camera", "photography", "tripod", "lens", "photo"],
+    }
 
-        preferred_hobbies = preference_values(
-            getattr(
-                preferences,
-                "hobbies",
-                []
-            )
-        )
-
-        # --------------------------------------------------
-        # COLOUR MATCH
-        # --------------------------------------------------
-
-        for preferred_colour in preferred_colours:
-
-            if preferred_colour in product_colour:
-
-                score += Decimal("25")
-
-                matched_preferences.append(
-                    f"Colour: {preferred_colour.title()}"
-                )
-
-                break
-
-        # --------------------------------------------------
-        # STORE MATCH
-        # --------------------------------------------------
-
-        for preferred_store in preferred_stores:
-
-            if (
-                preferred_store in product_store
-                or product_store in preferred_store
-            ):
-
-                score += Decimal("25")
-
-                matched_preferences.append(
-                    f"Store: {preferred_store.title()}"
-                )
-
-                break
-
-        # --------------------------------------------------
-        # STYLE MATCH
-        # --------------------------------------------------
-
-        for preferred_style in preferred_styles:
-
-            if preferred_style in product_text:
-
-                score += Decimal("20")
-
-                matched_preferences.append(
-                    f"Style: {preferred_style.title()}"
-                )
-
-                break
-
-        # --------------------------------------------------
-        # HOBBY MATCH
-        # --------------------------------------------------
-
-        for hobby in preferred_hobbies:
-
-            if hobby in product_text:
-
-                score += Decimal("15")
-
-                matched_preferences.append(
-                    f"Hobby: {hobby.title()}"
-                )
-
-                break
-
-    # ------------------------------------------------------
-    # SEARCH KEYWORD MATCH
-    # ------------------------------------------------------
-
-    if keyword:
-
-        search_term = str(
-            keyword
-        ).strip().lower()
-
-        if search_term:
-
-            if search_term in name:
-
-                score += Decimal("5")
-
-            elif search_term in category:
-
-                score += Decimal("3")
-
-            elif search_term in brand:
-
-                score += Decimal("2")
-
-    # ------------------------------------------------------
-    # PRODUCT RATING
-    # ------------------------------------------------------
-
-    rating = to_decimal(
-        item.get("rating", 0)
+    # Colour: explicit colour fields get the strongest match.
+    matched = _preference_matches(
+        preferred_colours,
+        " ".join(part for part in [colour, name, description] if part),
     )
+    if matched:
+        score += Decimal("25")
+        matched_preferences.append(f"Colour: {str(matched).title()}")
 
-    # Limit rating contribution to 5 points
-    if rating > Decimal("5"):
-        rating = Decimal("5")
+    # Store: match the actual normalized retailer, not a loose substring.
+    matched_store = None
+    for preferred in preferred_stores:
+        preferred_key = _normalise_match_text(preferred)
+        aliases = store_aliases.get(preferred_key, [preferred_key])
+        if any(_normalise_match_text(alias) == store for alias in aliases):
+            matched_store = preferred
+            break
 
-    if rating < Decimal("0"):
-        rating = Decimal("0")
+    if matched_store:
+        score += Decimal("25")
+        matched_preferences.append(f"Store: {str(matched_store).title()}")
 
-    score += rating
+    matched_style = _preference_matches(
+        preferred_styles,
+        product_text,
+        style_aliases,
+    )
+    if matched_style:
+        score += Decimal("20")
+        matched_preferences.append(f"Style: {str(matched_style).title()}")
 
-    # ------------------------------------------------------
-    # STOCK
-    # ------------------------------------------------------
+    matched_hobby = _preference_matches(
+        preferred_hobbies,
+        product_text,
+        hobby_aliases,
+    )
+    if matched_hobby:
+        score += Decimal("15")
+        matched_preferences.append(f"Hobby: {str(matched_hobby).title()}")
+
+    # Search term is a supporting signal, never stronger than a saved preference.
+    search_term = _normalise_match_text(keyword)
+    if search_term:
+        if search_term in name:
+            score += Decimal("5")
+        elif search_term in category or search_term in description:
+            score += Decimal("3")
+        elif search_term in brand:
+            score += Decimal("2")
+
+    rating = to_decimal(item.get("rating", 0))
+    score += min(max(rating, Decimal("0")), Decimal("5"))
 
     try:
-
-        stock = int(
-            item.get("stock", 0) or 0
-        )
-
+        stock = int(item.get("stock", 0) or 0)
     except (ValueError, TypeError):
-
         stock = 0
 
     if stock > 0:
-
         score += Decimal("2")
 
-    # ------------------------------------------------------
-    # SALE
-    # ------------------------------------------------------
-
     if item.get("on_sale"):
-
         score += Decimal("3")
 
-    # ------------------------------------------------------
-    # SAVE MATCH INFORMATION
-    # ------------------------------------------------------
+    # Small affordability signal: when a budget is already applied, cheaper
+    # products are naturally preferred without overriding preference matches.
+    price = to_decimal(item.get("total_cost", item.get("price", 0)))
+    if price > 0:
+        score += Decimal("1")
 
     item["matched_preferences"] = matched_preferences
+    item["preference_match_count"] = len(matched_preferences)
 
-    # ------------------------------------------------------
-    # KEEP SCORE BETWEEN 0 AND 100
-    # ------------------------------------------------------
+    return max(Decimal("0"), min(score, Decimal("100")))
 
-    score = max(
-        Decimal("0"),
-        min(
-            score,
-            Decimal("100")
-        )
-    )
 
-    return score
 
 
 # ==========================================================
