@@ -21,8 +21,13 @@
                 Products
             </a>
 
-            <a href="{% url 'shopping:shopping_list' %}">
-                🛒 Shopping List
+            <a href="{% url 'shopping:shopping_list' %}" class="shopping-list-link">
+                <span>🛒 Shopping List</span>
+                {% if shopping_list_count > 0 %}
+                    <span class="shopping-list-badge" aria-label="{{ shopping_list_count }} items in shopping list">
+                        {{ shopping_list_count }}
+                    </span>
+                {% endif %}
             </a>
 
             <a href="{% url 'shopping:purchase_history' %}">
@@ -108,6 +113,27 @@
 
     .navbar-links a:hover {
         color: #a5b4fc;
+    }
+
+    .shopping-list-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+    }
+
+    .shopping-list-badge {
+        min-width: 22px;
+        height: 22px;
+        padding: 0 6px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        background: #6366f1;
+        color: #ffffff;
+        font-size: 0.72rem;
+        font-weight: 700;
+        line-height: 1;
     }
 
     .profile-link {
