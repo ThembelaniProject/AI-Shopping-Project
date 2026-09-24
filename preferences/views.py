@@ -43,13 +43,12 @@ def edit_preferences(request):
         "Pink",
     ]
 
+    # Only show retailers that are actually supported by the shopping
+    # system. Keep this list aligned with products/services/store_api.py.
+    # Do not show unrelated stores that cannot provide products/prices.
     stores_options = [
-        "Mr Price",
-        "Woolworths",
-        "H&M",
-        "Zara",
-        "Cotton On",
-        "Truworths",
+        "Checkers",
+        "Pick n Pay",
     ]
 
     hobbies_options = [
