@@ -1,6 +1,7 @@
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.db.models import Count, Sum
@@ -441,6 +442,7 @@ def analytics_pdf(request):
         from reportlab.lib import colors
         from reportlab.lib.pagesizes import A4
         from reportlab.pdfgen import canvas
+        from reportlab.lib.utils import ImageReader
     except ImportError:
         return HttpResponse(
             "PDF support is not installed. Run: pip install reportlab",
@@ -511,11 +513,42 @@ def analytics_pdf(request):
         pdf.setFillColor(dark)
         pdf.rect(0, height - 74, width, 74, fill=1, stroke=0)
 
+        # Use the same SmartSpend logo used by the web application.
+        # If the image is unavailable, the PDF keeps the text brand fallback.
+        logo_path = None
+        for static_dir in getattr(settings, "STATICFILES_DIRS", []):
+            candidate = static_dir / "images" / "logo-SMARTSPEND-72dpi.png"
+            if candidate.exists():
+                logo_path = candidate
+                break
+
+        if logo_path:
+            try:
+                logo = ImageReader(str(logo_path))
+                logo_width = 105
+                logo_height = 40
+                pdf.drawImage(
+                    logo,
+                    margin,
+                    height - 58,
+                    width=logo_width,
+                    height=logo_height,
+                    preserveAspectRatio=True,
+                    mask="auto",
+                    anchor="sw",
+                )
+            except Exception:
+                pdf.setFillColor(colors.white)
+                pdf.setFont("Helvetica-Bold", 21)
+                pdf.drawString(margin, height - 39, "SmartSpend")
+        else:
+            pdf.setFillColor(colors.white)
+            pdf.setFont("Helvetica-Bold", 21)
+            pdf.drawString(margin, height - 39, "SmartSpend")
+
         pdf.setFillColor(colors.white)
-        pdf.setFont("Helvetica-Bold", 21)
-        pdf.drawString(margin, height - 39, "SmartSpend")
         pdf.setFont("Helvetica", 9)
-        pdf.drawString(margin, height - 55, "AI Shopping & Budget Statement")
+        pdf.drawString(margin + 112, height - 55, "AI Shopping & Budget Statement")
 
         pdf.setFillColor(accent)
         pdf.rect(width - margin - 82, height - 58, 82, 20, fill=1, stroke=0)
