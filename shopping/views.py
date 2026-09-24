@@ -2,14 +2,15 @@ from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
-from django.db.models import Sum
+from django.db.models import Count, Sum
 from django.shortcuts import redirect, render
 from django.utils import timezone
+from django.http import HttpResponse
 
 from accounts.models import UserProfile
 from preferences.models import Preference
 
-from .models import PurchaseHistory, ShoppingListItem
+from .models import PurchaseHistory, ShoppingListAddition, ShoppingListItem
 
 
 DEFAULT_SHOPPING_BUDGET = Decimal("1650.00")
@@ -330,6 +331,150 @@ def remove_from_shopping_list(request, item_id):
     if request.method == "POST":
         ShoppingListItem.objects.filter(id=item_id, user=request.user).delete()
     return redirect("shopping:shopping_list")
+
+
+
+@login_required
+def analytics(request):
+    """Show monthly shopping, store, product and budget analytics."""
+    profile = _get_user_profile(request)
+    if not profile.terms_accepted:
+        return redirect("accounts:accept_terms")
+
+    try:
+        months = int(request.GET.get("months", "1"))
+    except (TypeError, ValueError):
+        months = 1
+    months = months if months in (1, 2, 3) else 1
+
+    now = timezone.localtime()
+    start_month = (now.replace(day=1) - timezone.timedelta(days=1)).replace(day=1)
+    if months == 1:
+        start_date = now.replace(day=1)
+    else:
+        cursor = now.replace(day=1)
+        for _ in range(months - 1):
+            cursor = (cursor - timezone.timedelta(days=1)).replace(day=1)
+        start_date = cursor
+
+    purchases = PurchaseHistory.objects.filter(
+        user=request.user,
+        purchased_at__gte=start_date,
+        purchased_at__lte=now,
+    )
+    additions = ShoppingListAddition.objects.filter(
+        user=request.user,
+        added_at__gte=start_date,
+        added_at__lte=now,
+    )
+
+    store_rows = list(
+        purchases.values("store").annotate(
+            total=Sum("amount_spent"), items=Sum("quantity")
+        ).order_by("-total")
+    )
+    product_rows = list(
+        purchases.values("product_name").annotate(
+            total=Sum("amount_spent"), items=Sum("quantity")
+        ).order_by("-items")[:10]
+    )
+
+    monthly_rows = []
+    for offset in range(months - 1, -1, -1):
+        cursor = now.replace(day=1)
+        for _ in range(offset):
+            cursor = (cursor - timezone.timedelta(days=1)).replace(day=1)
+        next_month = (cursor.replace(day=28) + timezone.timedelta(days=4)).replace(day=1)
+        row_purchases = purchases.filter(purchased_at__gte=cursor, purchased_at__lt=next_month)
+        row_additions = additions.filter(added_at__gte=cursor, added_at__lt=next_month)
+        spent = row_purchases.aggregate(total=Sum("amount_spent"))["total"] or Decimal("0.00")
+        added_items = row_additions.aggregate(total=Sum("quantity"))["total"] or 0
+        monthly_rows.append({
+            "label": cursor.strftime("%B %Y"),
+            "spent": spent,
+            "budget": profile.available_amount,
+            "remaining": profile.available_amount - spent,
+            "added_items": added_items,
+        })
+
+    shopping_list_items = ShoppingListItem.objects.filter(user=request.user)
+    recent_additions = additions[:20]
+
+    context = {
+        "profile": profile,
+        "months": months,
+        "monthly_rows": monthly_rows,
+        "store_rows": store_rows,
+        "product_rows": product_rows,
+        "recent_additions": recent_additions,
+        "shopping_list_items": shopping_list_items,
+        "date_from": start_date,
+        "date_to": now,
+        "total_spent": purchases.aggregate(total=Sum("amount_spent"))["total"] or Decimal("0.00"),
+        "total_items": purchases.aggregate(total=Sum("quantity"))["total"] or 0,
+        "total_added": additions.aggregate(total=Sum("quantity"))["total"] or 0,
+    }
+    return render(request, "shopping/analytics.html", context)
+
+
+@login_required
+def analytics_pdf(request):
+    """Download a PDF statement for 1, 2 or 3 months."""
+    try:
+        months = int(request.GET.get("months", "1"))
+    except (TypeError, ValueError):
+        months = 1
+    months = months if months in (1, 2, 3) else 1
+
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.pdfgen import canvas
+    except ImportError:
+        return HttpResponse("PDF support is not installed. Run: pip install reportlab", status=500)
+
+    now = timezone.localtime()
+    cursor = now.replace(day=1)
+    for _ in range(months - 1):
+        cursor = (cursor - timezone.timedelta(days=1)).replace(day=1)
+    purchases = PurchaseHistory.objects.filter(
+        user=request.user, purchased_at__gte=cursor, purchased_at__lte=now
+    )
+    total = purchases.aggregate(total=Sum("amount_spent"))["total"] or Decimal("0.00")
+    items = purchases.aggregate(total=Sum("quantity"))["total"] or 0
+    stores = purchases.values("store").annotate(total=Sum("amount_spent"), items=Sum("quantity")).order_by("-total")
+
+    response = HttpResponse(content_type="application/pdf")
+    response["Content-Disposition"] = f'attachment; filename="smartspend-statement-{months}-months.pdf"'
+    pdf = canvas.Canvas(response, pagesize=A4)
+    width, height = A4
+    y = height - 50
+    pdf.setFont("Helvetica-Bold", 18)
+    pdf.drawString(45, y, "SmartSpend Shopping Statement")
+    y -= 30
+    pdf.setFont("Helvetica", 10)
+    pdf.drawString(45, y, f"Period: {cursor:%d %B %Y} - {now:%d %B %Y}")
+    y -= 18
+    pdf.drawString(45, y, f"Total items purchased: {items}")
+    y -= 18
+    pdf.drawString(45, y, f"Total spending: R{total:.2f}")
+    y -= 28
+    pdf.setFont("Helvetica-Bold", 12)
+    pdf.drawString(45, y, "Spending by store")
+    y -= 20
+    pdf.setFont("Helvetica", 10)
+    for row in stores:
+        store = row["store"] or "Unknown store"
+        pdf.drawString(55, y, f"{store}: R{row['total']:.2f} ({row['items']} items)")
+        y -= 16
+        if y < 60:
+            pdf.showPage()
+            y = height - 50
+            pdf.setFont("Helvetica", 10)
+    y -= 10
+    pdf.setFont("Helvetica-Oblique", 9)
+    pdf.drawString(45, y, "Generated by SmartSpend. Figures are based on recorded purchases.")
+    pdf.save()
+    return response
 
 
 @login_required
