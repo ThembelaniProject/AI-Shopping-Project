@@ -713,6 +713,8 @@ def normalize_product(
                 "image_url",
                 "thumbnail",
                 "thumbnailUrl",
+                "imageId",
+                "image_id",
             )
             return _image_url(nested)
 
@@ -727,12 +729,27 @@ def normalize_product(
         raw.get("thumbnailUrl"),
         raw.get("productImage"),
         raw.get("product_image"),
+        raw.get("productImageUrl"),
+        raw.get("product_image_url"),
         raw.get("primaryImage"),
         raw.get("primary_image"),
+        raw.get("heroImage"),
+        raw.get("hero_image"),
+        raw.get("imageSrc"),
+        raw.get("image_src"),
+        raw.get("imageLink"),
+        raw.get("image_link"),
+        raw.get("photo"),
+        raw.get("photoUrl"),
+        raw.get("picture"),
         raw.get("media"),
         raw.get("images"),
         raw.get("imageUrls"),
         raw.get("image_urls"),
+        raw.get("imageId"),
+        raw.get("image_id"),
+        raw.get("imageIds"),
+        raw.get("image_ids"),
     ]
 
     clean_images = []
@@ -1138,6 +1155,106 @@ def search_azlabs_products(
 
 
 # ============================================================
+# CHECKERS IMAGE RESOLUTION
+# ============================================================
+
+def _extract_checkers_image_ids(raw: dict) -> list[str]:
+    """Return Checkers image IDs from the many shapes used by Parse."""
+    if not isinstance(raw, dict):
+        return []
+
+    found = []
+
+    def add(value):
+        if isinstance(value, str):
+            value = value.strip()
+            if value and value not in found:
+                found.append(value)
+        elif isinstance(value, dict):
+            for key in ("imageId", "image_id"):
+                item = value.get(key)
+                if isinstance(item, str) and item.strip() and item.strip() not in found:
+                    found.append(item.strip())
+        elif isinstance(value, (list, tuple)):
+            for item in value:
+                add(item)
+
+    for key in (
+        "imageId", "image_id", "imageIds", "image_ids",
+        "image", "images", "productImage", "product_image", "media",
+    ):
+        add(raw.get(key))
+
+    return found
+
+
+def _image_to_https(value: str) -> str:
+    value = _safe_string(value)
+    if value.startswith("//"):
+        return "https:" + value
+    if value.startswith("http://"):
+        return "https://" + value[7:]
+    return value
+
+
+def _resolve_checkers_image(image_id: str) -> str:
+    """Resolve a Checkers image ID/reference to its real CDN URL."""
+    image_id = _safe_string(image_id)
+    if not image_id or not PARSE_API_KEY:
+        return ""
+
+    if image_id.startswith(("http://", "https://", "//")):
+        return _image_to_https(image_id)
+
+    cache_key = (
+        "checkers:image-url:"
+        + hashlib.sha256(image_id.encode("utf-8")).hexdigest()
+    )
+
+    cached = _cache_get(cache_key)
+    if cached:
+        return cached
+
+    try:
+        payload = _request_json(
+            "GET",
+            f"{PARSE_BASE_URL}/{CHECKERS_SCRAPER_ID}/get_image_url",
+            headers={
+                "X-API-Key": PARSE_API_KEY,
+                "Accept": "application/json",
+            },
+            params={"imageId": image_id},
+            provider="Checkers image",
+        )
+    except StoreAPIError:
+        return ""
+
+    candidates = []
+
+    def collect(value):
+        if isinstance(value, str):
+            value = value.strip()
+            if value.startswith(("http://", "https://", "//")):
+                candidates.append(value)
+        elif isinstance(value, dict):
+            for key in ("url", "imageUrl", "image_url", "cdnUrl", "cdn_url"):
+                item = value.get(key)
+                if isinstance(item, str):
+                    collect(item)
+            collect(value.get("data"))
+            collect(value.get("result"))
+
+    collect(payload)
+
+    if not candidates:
+        return ""
+
+    url = _image_to_https(candidates[0])
+    _cache_set(cache_key, url, 86400)
+    return url
+
+
+# ============================================================
 # CHECKERS THROUGH PARSE
 # ============================================================
 
@@ -1192,6 +1309,16 @@ def search_checkers_products(
 
     for row in rows[:limit]:
         row = dict(row)
+
+        # Checkers can return an image ID/reference rather than a browser URL.
+        # Resolve it through Parse's dedicated get_image_url endpoint.
+        if not row.get("image_url") and not row.get("imageUrl"):
+            for image_id in _extract_checkers_image_ids(row):
+                resolved = _resolve_checkers_image(image_id)
+                if resolved:
+                    row["image_url"] = resolved
+                    row["imageUrl"] = resolved
+                    break
 
         # Parse's Checkers API documents priceWithoutDecimal as ZAR
         # cents. It is the authoritative numeric retailer price when
