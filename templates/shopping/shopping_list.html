@@ -2,11 +2,8 @@
 {% block title %}Shopping List - SmartSpend{% endblock %}
 {% block content %}
 <main style="max-width:1100px;margin:0 auto;padding:2rem 1rem 4rem;color:#f8fafc;">
-<h1>🛒 Shopping List</h1>
-<form method="get" action="{% url 'products:search' %}" style="display:flex;gap:.6rem;margin:1rem 0;">
-<input name="keyword" placeholder="Search for a product to add..." style="flex:1;padding:.8rem;border-radius:8px;border:1px solid #475569;background:#0f172a;color:#f8fafc;">
-<button type="submit" style="border:0;border-radius:8px;padding:.8rem 1rem;background:#6366f1;color:white;font-weight:700;">Search Products</button>
-</form>
+<h1 style="color:blue">🛒 Shopping List</h1>
+
 <p style="color:#94a3b8;">Products you plan to buy. Each addition is recorded so Analysis can show which month it was added.</p>
 <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin:1.5rem 0;">
 <div style="background:#1e293b;border:1px solid #334155;padding:1.25rem;border-radius:14px;">Estimated list total<br><strong style="font-size:1.5rem;">R{{ estimated_total|floatformat:2 }}</strong></div>
