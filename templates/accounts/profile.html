@@ -612,11 +612,16 @@
             <div class="amount-display">
 
                 <div class="amount-label">
-                    Available amount
+                    Remaining amount this month
                 </div>
 
                 <div class="amount">
-                    R{{ profile.available_amount|floatformat:2 }}
+                    R{{ remaining_amount|floatformat:2 }}
+                </div>
+
+                <div style="margin-top:0.75rem; color:#94a3b8; font-size:0.85rem; line-height:1.6;">
+                    Monthly budget: <strong style="color:#f1f5f9;">R{{ monthly_budget|floatformat:2 }}</strong><br>
+                    Spent this month: <strong style="color:#fca5a5;">R{{ monthly_spent|floatformat:2 }}</strong>
                 </div>
 
                 
