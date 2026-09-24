@@ -1,10 +1,21 @@
 """Template context processors for the shopping application."""
 
+from django.db.models import Sum
+
+from .models import ShoppingListItem
+
 
 def shopping_context(request):
-    """Return shopping-wide template context.
+    """Expose the current user's shopping-list item count to the navbar."""
+    if not request.user.is_authenticated:
+        return {"shopping_list_count": 0}
 
-    Cart/order context was removed because the application does not
-    implement cart, checkout, order or payment processing.
-    """
-    return {}
+    count = (
+        ShoppingListItem.objects
+        .filter(user=request.user)
+        .aggregate(total=Sum("quantity"))
+        .get("total")
+        or 0
+    )
+
+    return {"shopping_list_count": count}
