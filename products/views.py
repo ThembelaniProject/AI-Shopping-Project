@@ -463,6 +463,11 @@ def search(request):
         ""
     ).strip()
 
+    # The browser normally supplies precise coordinates. If the user
+    # has entered a location but denied browser geolocation, do not
+    # invent a distance; the retailer/store can still be displayed.
+    # Coordinates are only used when they were actually supplied.
+
     # ======================================================
     # START WITH EMPTY PRODUCTS
     # ======================================================
@@ -539,10 +544,21 @@ def search(request):
 
         product_colour = str(
             product.get(
-                "colour",
+                "colour"
+                or "color",
                 ""
             )
         ).strip()
+
+        # Keep colour from common retailer fields if the normalized
+        # value is empty.
+        if not product_colour:
+            product_colour = str(
+                product.get("color")
+                or product.get("colourName")
+                or product.get("colorName")
+                or ""
+            ).strip()
 
         product_size = str(
             product.get(
