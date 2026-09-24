@@ -2135,8 +2135,6 @@ document.addEventListener(
 
 
         const searchForm = locationSelect.form;
-        const maxDistanceInput =
-            document.getElementById("max_distance");
 
         function requestLocation(callback) {
             if (
@@ -2176,12 +2174,8 @@ document.addEventListener(
                 "submit",
                 function (event) {
                     if (
-                        maxDistanceInput &&
-                        maxDistanceInput.value &&
-                        (
-                            !latitudeInput.value ||
-                            !longitudeInput.value
-                        )
+                        !latitudeInput.value ||
+                        !longitudeInput.value
                     ) {
                         event.preventDefault();
 
