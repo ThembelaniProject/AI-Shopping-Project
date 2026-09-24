@@ -28,3 +28,5 @@ whitenoise==6.12.0
 msal
 django-redis
 redis
+
+reportlab
