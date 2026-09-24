@@ -3,16 +3,14 @@ Multi-provider South African retail integration for AI Shopping.
 
 Provider order:
 1. Parse retailer APIs - primary live retailer catalogue for Checkers + Pick n Pay.
-2. AZ Labs Grocery API - fallback live catalogue for Pick n Pay + Checkers.
-3. LoyaltyHub - broad South African refreshed-price fallback.
+2. LoyaltyHub - optional broader South African refreshed-price fallback.
 
 All providers are normalized into one product shape so products/views.py
 does not need to know which API supplied the result.
 
 Important:
 - Never put API keys in this file.
-- Configure AZLABS_API_KEY, PARSE_API_KEY and LOYALTYHUB_API_KEY as
-  environment variables.
+- Configure PARSE_API_KEY and LOYALTYHUB_API_KEY as environment variables.
 - Product responses are cached to reduce API usage.
 - Store distance is calculated with OpenStreetMap/Overpass and cached.
 """
@@ -35,11 +33,6 @@ from django.core.cache import cache
 # CONFIGURATION
 # ============================================================
 
-AZLABS_API_KEY = (
-    getattr(settings, "AZLABS_API_KEY", None)
-    or os.getenv("AZLABS_API_KEY", "")
-).strip()
-
 PARSE_API_KEY = (
     getattr(settings, "PARSE_API_KEY", None)
     or os.getenv("PARSE_API_KEY", "")
@@ -52,12 +45,8 @@ LOYALTYHUB_API_KEY = (
 
 API_PROVIDER = os.getenv(
     "RETAILER_API_PROVIDER",
-    "azlabs",
+    "parse",
 ).strip().lower()
-
-AZLABS_BASE_URL = "https://azlabs.ai/api/v1"
-AZLABS_SEARCH_URL = f"{AZLABS_BASE_URL}/grocery/search"
-AZLABS_COMPARE_URL = f"{AZLABS_BASE_URL}/grocery/compare"
 
 PARSE_BASE_URL = "https://api.parse.bot/scraper"
 
@@ -1075,217 +1064,6 @@ def _request_json(
         raise StoreAPIError(
             f"{provider} returned invalid JSON."
         ) from exc
-
-
-# ============================================================
-# AZ LABS
-# ============================================================
-
-def search_azlabs_products(
-    keyword: str,
-    limit: int = 20,
-    store: str = "all",
-) -> list[dict]:
-    """
-    Retrieve current Pick n Pay + Checkers catalogue prices from AZ Labs.
-
-    AZ Labs explicitly documents its grocery API as live catalogue data
-    with current prices, promotions and pre-promotion reference prices.
-    The compare endpoint returns both retailers in one response, so it is
-    preferred here over a generic aggregator/fallback feed.
-    """
-    if not AZLABS_API_KEY:
-        raise StoreAPIError(
-            "AZLABS_API_KEY is not configured."
-        )
-
-    keyword = _safe_string(keyword)
-
-    if not keyword:
-        return []
-
-    limit = max(
-        1,
-        min(int(limit), 20),
-    )
-
-    cache_key = (
-        f"azlabs:compare:"
-        f"{keyword.lower()}:"
-        f"{limit}"
-    )
-
-    cached = _cache_get(cache_key)
-
-    if cached is not None and not LIVE_PRICE_MODE:
-        return cached
-
-    # The compare endpoint is designed for side-by-side live PnP/Checkers
-    # pricing and returns one offer per supported retailer.
-    payload = _request_json(
-        "GET",
-        AZLABS_COMPARE_URL,
-        headers={
-            "Authorization": (
-                f"Bearer {AZLABS_API_KEY}"
-            ),
-            "Accept": "application/json",
-        },
-        params={
-            "q": keyword,
-            "limit": limit,
-        },
-        provider="AZ Labs",
-    )
-
-    matches = []
-    if isinstance(payload, dict):
-        matches = payload.get("matches") or []
-
-    products = []
-
-    if isinstance(matches, list):
-        for match in matches:
-            if not isinstance(match, dict):
-                continue
-
-            offers = match.get("offers") or []
-
-            if not isinstance(offers, list):
-                continue
-
-            for offer in offers:
-                if not isinstance(offer, dict):
-                    continue
-
-                row = dict(offer)
-
-                # Carry comparison-level product information into each
-                # retailer offer so the normalizer has a stable record.
-                row.setdefault(
-                    "name",
-                    match.get("name"),
-                )
-                row.setdefault(
-                    "size",
-                    match.get("size"),
-                )
-
-                if match.get("barcode") and not row.get("barcode"):
-                    row["barcode"] = match.get("barcode")
-
-                # AZ Labs uses current price as the amount to pay. Preserve
-                # every documented/common reference-price field so a sale
-                # can be rendered as current price + previous price.
-                for target, source in (
-                    ("oldPrice", "oldPrice"),
-                    ("oldPrice", "wasPrice"),
-                    ("regularPrice", "regularPrice"),
-                    ("regular_price", "regular_price"),
-                    ("promotion", "promotion"),
-                    ("promotion", "promotionText"),
-                    ("promotionText", "promotionText"),
-                    ("onPromotion", "onPromotion"),
-                    ("isOnPromotion", "isOnPromotion"),
-                ):
-                    if not row.get(target) and match.get(source) not in (None, ""):
-                        row[target] = match.get(source)
-
-                retailer_name = _normalise_retailer(
-                    row.get("store")
-                    or row.get("retailer")
-                    or row.get("merchant")
-                    or ""
-                )
-
-                if retailer_name not in {
-                    "Pick n Pay",
-                    "Checkers",
-                }:
-                    continue
-
-                product = normalize_product(
-                    row,
-                    retailer=retailer_name,
-                )
-                product["price_source"] = (
-                    f"{retailer_name} live catalogue (AZ Labs)"
-                )
-                product["price_is_live"] = True
-                product["price_freshness"] = "live"
-                products.append(product)
-
-                _cache_product(product)
-
-                if len(products) >= limit:
-                    break
-
-            if len(products) >= limit:
-                break
-
-    # If the compare endpoint returned no matches, fall back to the live
-    # search endpoint rather than switching to LoyaltyHub's refreshed feed.
-    if not products:
-        params = {
-            "q": keyword,
-            "store": store,
-        }
-
-        search_payload = _request_json(
-            "GET",
-            AZLABS_SEARCH_URL,
-            headers={
-                "Authorization": (
-                    f"Bearer {AZLABS_API_KEY}"
-                ),
-                "Accept": "application/json",
-            },
-            params=params,
-            provider="AZ Labs",
-        )
-
-        rows = _extract_rows(search_payload)
-
-        for row in rows[:limit]:
-            product = normalize_product(
-                row,
-                retailer=_normalise_retailer(
-                    row.get("store")
-                    or row.get("retailer")
-                    or row.get("merchant")
-                    or ""
-                ),
-            )
-
-            if product["retailer"] not in {
-                "Pick n Pay",
-                "Checkers",
-            }:
-                continue
-
-            product["price_source"] = (
-                f"{product['retailer']} live catalogue (AZ Labs)"
-            )
-            product["price_is_live"] = True
-            product["price_freshness"] = "live"
-            products.append(product)
-            _cache_product(product)
-
-    products = _deduplicate_products(products)
-
-    _cache_set(
-        cache_key,
-        products,
-        CACHE_TIMEOUT if products else 30,
-    )
-
-    if products:
-        _cache_stale_set(
-            cache_key,
-            products,
-        )
-
-    return products
 
 
 # ============================================================
@@ -2323,7 +2101,6 @@ def search_parse_retailer_products(
 
 def _provider_order() -> list[str]:
     if API_PROVIDER in {
-        "azlabs",
         "parse",
         "checkers",
         "pnp",
@@ -2331,14 +2108,13 @@ def _provider_order() -> list[str]:
     }:
         preferred = API_PROVIDER
     else:
-        preferred = "azlabs"
+        preferred = "parse"
 
     # LoyaltyHub is intentionally NOT part of the automatic fallback chain.
     # Its public developer documentation says its prices are refreshed twice
     # a week and may lag actual shelf prices. That is not acceptable when
     # this application is in live-price mode.
     default_order = [
-        "azlabs",
         "parse",
         "checkers",
         "pnp",
@@ -2376,13 +2152,6 @@ def _search_provider(
                 if radius_km is not None
                 else OSM_RADIUS_KM
             ),
-        )
-
-    if provider == "azlabs":
-        return search_azlabs_products(
-            keyword,
-            limit=limit,
-            store="all",
         )
 
     if provider == "checkers":
@@ -2453,8 +2222,7 @@ def search_products(
 
     Provider flow:
         Parse retailer APIs (Checkers + Pick n Pay)
-            -> AZ Labs live fallback
-            -> LoyaltyHub refreshed-price fallback
+            -> optional LoyaltyHub refreshed-price fallback
 
     Cache flow:
         live mode -> retailer API is queried on every search
@@ -2529,7 +2297,7 @@ def search_products(
 
     products = products[:requested_limit]
 
-    # If AZ Labs or another provider returned PnP products, upgrade
+    # If a provider returned PnP products, upgrade
     # those PnP rows to branch-specific PnP pricing when possible.
     if (
         latitude is not None
@@ -2564,7 +2332,7 @@ def search_products(
                 products = products[:requested_limit]
 
         except StoreAPIError:
-            # Do not break a successful AZ Labs/Checkers search just
+            # Do not break a successful retailer search just
             # because branch-level PnP lookup is unavailable.
             pass
 
