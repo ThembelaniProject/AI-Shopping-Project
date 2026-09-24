@@ -1057,6 +1057,13 @@ def _request_json(
     json: dict | None = None,
     provider: str,
 ) -> Any:
+    cooldown_key = f"retailer:cooldown:{_retailer_key(provider)}"
+    if _cache_get(cooldown_key):
+        raise StoreAPIError(
+            f"{provider} is temporarily rate-limited. "
+            "Using cached data when available."
+        )
+
     try:
         response = SESSION.request(
             method,
@@ -1286,16 +1293,16 @@ def search_checkers_products(
         payload = _request_json(
             "POST",
             CHECKERS_SEARCH_URL,
-        headers={
-            "X-API-Key": PARSE_API_KEY,
-            "Accept": "application/json",
-            "Content-Type": "application/json",
-        },
-        json={
-            "query": keyword,
-            "page": 0,
-            "limit": limit,
-        },
+            headers={
+                "X-API-Key": PARSE_API_KEY,
+                "Accept": "application/json",
+                "Content-Type": "application/json",
+            },
+            json={
+                "query": keyword,
+                "page": 0,
+                "limit": limit,
+            },
             provider="Checkers",
         )
     except StoreAPIError:
@@ -1706,16 +1713,16 @@ def search_pnp_store_products(
         payload = _request_json(
             "GET",
             PNP_STORE_SEARCH_URL,
-        headers={
-            "X-API-Key": PARSE_API_KEY,
-            "Accept": "application/json",
-        },
-        params={
-            "store_id": store_id,
-            "query": keyword,
-            "page": 0,
-            "page_size": limit,
-        },
+            headers={
+                "X-API-Key": PARSE_API_KEY,
+                "Accept": "application/json",
+            },
+            params={
+                "store_id": store_id,
+                "query": keyword,
+                "page": 0,
+                "page_size": limit,
+            },
             provider="Pick n Pay branch",
         )
     except StoreAPIError:
@@ -1888,16 +1895,16 @@ def search_pnp_products(
         payload = _request_json(
             "GET",
             PNP_SEARCH_URL,
-        headers={
-            "X-API-Key": PARSE_API_KEY,
-            "Accept": "application/json",
-        },
-        params={
-            "page": 0,
-            "sort": "relevance",
-            "query": keyword,
-            "page_size": limit,
-        },
+            headers={
+                "X-API-Key": PARSE_API_KEY,
+                "Accept": "application/json",
+            },
+            params={
+                "page": 0,
+                "sort": "relevance",
+                "query": keyword,
+                "page_size": limit,
+            },
             provider="Pick n Pay",
         )
     except StoreAPIError:
