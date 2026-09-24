@@ -1,4 +1,5 @@
 from decimal import Decimal, InvalidOperation
+from datetime import timedelta
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
@@ -358,7 +359,7 @@ def analytics(request):
     months = months if months in (1, 2, 3) else 1
 
     now = timezone.localtime()
-    start_month = (now.replace(day=1) - timezone.timedelta(days=1)).replace(day=1)
+    start_month = (now.replace(day=1) - timedelta(days=1)).replace(day=1)
     if months == 1:
         start_date = now.replace(day=1)
     else:
@@ -394,7 +395,7 @@ def analytics(request):
         cursor = now.replace(day=1)
         for _ in range(offset):
             cursor = (cursor - timezone.timedelta(days=1)).replace(day=1)
-        next_month = (cursor.replace(day=28) + timezone.timedelta(days=4)).replace(day=1)
+        next_month = (cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
         row_purchases = purchases.filter(purchased_at__gte=cursor, purchased_at__lt=next_month)
         row_additions = additions.filter(added_at__gte=cursor, added_at__lt=next_month)
         spent = row_purchases.aggregate(total=Sum("amount_spent"))["total"] or Decimal("0.00")
