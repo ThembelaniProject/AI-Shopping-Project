@@ -11,5 +11,7 @@ urlpatterns = [
     path("remove-from-list/<int:item_id>/", views.remove_from_shopping_list, name="remove_from_shopping_list"),
     path("purchase-from-list/<int:item_id>/", views.purchase_from_list, name="purchase_from_list"),
     path("purchase-history/", views.purchase_history, name="purchase_history"),
+    path("analytics/", views.analytics, name="analytics"),
+    path("analytics/download/", views.analytics_pdf, name="analytics_pdf"),
     path("mark-purchased/<str:product_id>/", views.mark_purchased, name="mark_purchased"),
 ]
