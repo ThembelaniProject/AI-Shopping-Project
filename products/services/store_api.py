@@ -1345,18 +1345,55 @@ def search_checkers_products(
             except (InvalidOperation, ValueError, TypeError):
                 pass
 
-        if (
-            row.get("regular_price") in (None, "")
-            and row.get("oldPrice") not in (None, "")
-        ):
-            old_price = row.get("oldPrice")
-            # Checkers can expose oldPrice as cents as well.
+        # Checkers uses "priceWithoutDecimal" for the live price in
+        # cents. The corresponding "oldPrice"/"oldPriceWithoutDecimal"
+        # fields are also retailer values and must be converted using the
+        # same cents -> Rand rule. Never let the raw cents value become a
+        # bogus regular price such as R4,999.00.
+        if row.get("priceWithoutDecimal") not in (None, ""):
+            live_price = (
+                Decimal(str(row["priceWithoutDecimal"]))
+                / Decimal("100")
+            )
+            row["price"] = live_price
+
+            regular_candidate = None
+
             if row.get("oldPriceWithoutDecimal") not in (None, ""):
-                old_price = (
-                    Decimal(str(row["oldPriceWithoutDecimal"]))
-                    / Decimal("100")
-                )
-            row["regular_price"] = old_price
+                try:
+                    regular_candidate = (
+                        Decimal(str(row["oldPriceWithoutDecimal"]))
+                        / Decimal("100")
+                    )
+                except (InvalidOperation, ValueError, TypeError):
+                    regular_candidate = None
+
+            elif row.get("oldPrice") not in (None, ""):
+                try:
+                    raw_old = Decimal(str(row["oldPrice"]))
+                    # Parse's Checkers oldPrice is normally cents when the
+                    # cents field is present/represented as an integer.
+                    # If it already contains a decimal Rand amount, keep it.
+                    if (
+                        raw_old == raw_old.to_integral_value()
+                        and raw_old >= Decimal("100")
+                    ):
+                        regular_candidate = raw_old / Decimal("100")
+                    else:
+                        regular_candidate = raw_old
+                except (InvalidOperation, ValueError, TypeError):
+                    regular_candidate = None
+
+            if (
+                regular_candidate is not None
+                and regular_candidate > live_price
+            ):
+                row["regular_price"] = regular_candidate
+            else:
+                # No genuine "was" price means this is not a sale.
+                row["regular_price"] = live_price
+                row.pop("oldPrice", None)
+                row.pop("oldPriceWithoutDecimal", None)
 
         product = normalize_product(
             row,
