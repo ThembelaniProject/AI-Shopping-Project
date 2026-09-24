@@ -10,11 +10,13 @@ from django.contrib import messages
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.models import User
 from django.contrib.auth.decorators import login_required
+from django.db.models import Sum
 from django.http import JsonResponse
 from django.shortcuts import render, redirect
 from django.utils import timezone
 from .models import UserProfile
 from preferences.models import Preference
+from shopping.models import PurchaseHistory
 
 
 # ==========================================================
@@ -1346,10 +1348,25 @@ def profile(request):
     )
 
     # ------------------------------------------------------
-    # Shopping budget
+    # Shopping budget / remaining amount
     # ------------------------------------------------------
+    # Keep the profile amount aligned with the dashboard:
+    # remaining = monthly budget - current month's spending.
+    current_month = timezone.localtime()
 
-    amount = user_profile.available_amount
+    monthly_spent = (
+        PurchaseHistory.objects.filter(
+            user=user,
+            purchased_at__year=current_month.year,
+            purchased_at__month=current_month.month,
+        )
+        .aggregate(total=Sum("amount_spent"))
+        ["total"]
+        or Decimal("0.00")
+    )
+
+    monthly_budget = user_profile.available_amount or Decimal("0.00")
+    remaining_amount = monthly_budget - monthly_spent
 
     return render(
         request,
@@ -1361,7 +1378,10 @@ def profile(request):
             "user_latitude": latitude,
             "user_longitude": longitude,
             "user_address": address,
-            "shopping_budget": amount,
+            "shopping_budget": monthly_budget,
+            "monthly_budget": monthly_budget,
+            "monthly_spent": monthly_spent,
+            "remaining_amount": remaining_amount,
         },
     )
 
