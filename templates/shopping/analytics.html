@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Shopping Analysis - SmartSpend{% endblock %}
+{% block extra_css %}
+<style>
+.analytics-page{max-width:1200px;margin:0 auto;padding:2rem 1rem 4rem;color:#f8fafc}
+.analytics-page h1{margin-bottom:.35rem}.muted{color:#94a3b8}
+.controls{display:flex;gap:.7rem;flex-wrap:wrap;margin:1.25rem 0}
+.controls a,.download{padding:.65rem 1rem;border-radius:8px;text-decoration:none;border:1px solid #475569;color:#cbd5e1;background:#1e293b}
+.controls a.active{background:#6366f1;color:#fff;border-color:#6366f1}
+.download{background:#22c55e;color:#052e16;border:0;font-weight:700}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin:1.25rem 0}
+.card,.panel{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:1.1rem}
+.card strong{display:block;font-size:1.45rem;margin-top:.35rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.chart{height:310px}.panel h2{font-size:1.05rem}
+table{width:100%;border-collapse:collapse}th,td{padding:.65rem;border-bottom:1px solid #334155;text-align:left}th{color:#94a3b8;font-size:.82rem}
+@media(max-width:800px){.cards,.grid{grid-template-columns:1fr 1fr}} @media(max-width:550px){.cards,.grid{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+{% block content %}
+<div class="analytics-page">
+<h1>📊 Shopping Analysis</h1>
+<p class="muted">Analyse purchases, stores, products, budget and shopping-list additions by month.</p>
+
+<div class="controls">
+    <span class="muted" style="padding:.65rem 0;">Period:</span>
+    <a class="{% if months == 1 %}active{% endif %}" href="?months=1">1 Month</a>
+    <a class="{% if months == 2 %}active{% endif %}" href="?months=2">2 Months</a>
+    <a class="{% if months == 3 %}active{% endif %}" href="?months=3">3 Months</a>
+    <a class="download" href="{% url 'shopping:analytics_pdf' %}?months={{ months }}">⬇ Download Statement</a>
+</div>
+
+<div class="cards">
+<div class="card">Total spent<strong>R{{ total_spent|floatformat:2 }}</strong></div>
+<div class="card">Items purchased<strong>{{ total_items }}</strong></div>
+<div class="card">Items added to list<strong>{{ total_added }}</strong></div>
+<div class="card">Monthly budget<strong>R{{ profile.available_amount|floatformat:2 }}</strong></div>
+</div>
+
+<div class="grid">
+<div class="panel"><h2>🥧 Most purchased products</h2><div class="chart"><canvas id="productsChart"></canvas></div></div>
+<div class="panel"><h2>🏪 Spending by store</h2><div class="chart"><canvas id="storesChart"></canvas></div></div>
+<div class="panel"><h2>💰 Budget analysis by month</h2><div class="chart"><canvas id="budgetChart"></canvas></div></div>
+<div class="panel"><h2>🛒 Items added to shopping list by month</h2><div class="chart"><canvas id="addedChart"></canvas></div></div>
+</div>
+
+<div class="panel" style="margin-top:1rem">
+<h2>Monthly statement</h2>
+<table><thead><tr><th>Month</th><th>Budget</th><th>Spent</th><th>Remaining</th><th>Added to list</th></tr></thead>
+<tbody>{% for row in monthly_rows %}<tr><td>{{ row.label }}</td><td>R{{ row.budget|floatformat:2 }}</td><td>R{{ row.spent|floatformat:2 }}</td><td>R{{ row.remaining|floatformat:2 }}</td><td>{{ row.added_items }}</td></tr>{% empty %}<tr><td colspan="5">No data for this period.</td></tr>{% endfor %}</tbody></table>
+</div>
+
+<div class="panel" style="margin-top:1rem">
+<h2>📅 When products were added</h2>
+<table><thead><tr><th>Product</th><th>Store</th><th>Quantity</th><th>Price</th><th>Month added</th></tr></thead>
+<tbody>{% for item in recent_additions %}<tr><td>{{ item.product_name }}</td><td>{{ item.store|default:"Retailer" }}</td><td>{{ item.quantity }}</td><td>R{{ item.unit_price|floatformat:2 }}</td><td>{{ item.added_at|date:"F Y" }}</td></tr>{% empty %}<tr><td colspan="5">No shopping-list additions in this period.</td></tr>{% endfor %}</tbody></table>
+</div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+{{ product_rows|json_script:"product-data" }}
+{{ store_rows|json_script:"store-data" }}
+{{ monthly_rows|json_script:"monthly-data" }}
+<script>
+const products=JSON.parse(document.getElementById("product-data").textContent);
+const stores=JSON.parse(document.getElementById("store-data").textContent);
+const months=JSON.parse(document.getElementById("monthly-data").textContent);
+const labels=months.map(x=>x.label);
+new Chart(document.getElementById("productsChart"),{type:"pie",data:{labels:products.map(x=>x.product_name),datasets:[{data:products.map(x=>x.items)}]},options:{responsive:true,maintainAspectRatio:false}});
+new Chart(document.getElementById("storesChart"),{type:"pie",data:{labels:stores.map(x=>x.store||"Unknown"),datasets:[{data:stores.map(x=>Number(x.total))}]},options:{responsive:true,maintainAspectRatio:false}});
+new Chart(document.getElementById("budgetChart"),{type:"bar",data:{labels:labels,datasets:[{label:"Budget",data:months.map(x=>Number(x.budget))},{label:"Spent",data:months.map(x=>Number(x.spent))},{label:"Remaining",data:months.map(x=>Number(x.remaining))}]},options:{responsive:true,maintainAspectRatio:false}});
+new Chart(document.getElementById("addedChart"),{type:"bar",data:{labels:labels,datasets:[{label:"Items added",data:months.map(x=>x.added_items)}]},options:{responsive:true,maintainAspectRatio:false}});
+</script>
+{% endblock %}
