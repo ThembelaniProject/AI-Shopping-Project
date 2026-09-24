@@ -1,0 +1,90 @@
+/* SmartSpend app-wide responsive foundation */
+:root { color-scheme: dark; }
+*, *::before, *::after { box-sizing: border-box; }
+html { width: 100%; min-width: 0; -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+body { width: 100%; min-width: 0; margin: 0; overflow-x: hidden; }
+.app-main { width: 100%; min-width: 0; }
+img, video, iframe, canvas, svg { max-width: 100%; }
+img, video { height: auto; }
+input, select, textarea, button { max-width: 100%; font: inherit; }
+input, select, textarea { min-width: 0; }
+button, a { touch-action: manipulation; }
+pre, code { overflow-wrap: anywhere; }
+pre { max-width: 100%; overflow-x: auto; }
+table { max-width: 100%; }
+
+/* Prevent fixed-width layouts from forcing horizontal scrolling. */
+.container, .container-fluid, .products-page, .dashboard-container,
+.analytics-container, .profile-container, .history-container,
+.shopping-list-container, .page-container, .content-container {
+    width: min(100% - 2rem, 1200px);
+    max-width: 1200px;
+    margin-inline: auto;
+}
+
+/* Common grids collapse naturally on narrow screens. */
+.products, .product-grid, .dashboard-grid, .stats-grid, .analytics-grid,
+.form-grid, .cards-grid, .summary-grid {
+    min-width: 0;
+}
+.product-card, .card, .stat-card, .profile-card, .search-card,
+.dashboard-card, .analytics-card { min-width: 0; overflow-wrap: anywhere; }
+
+/* Navigation wraps instead of overflowing on tablets and phones. */
+.navbar { width: 100%; max-width: 100%; }
+.navbar-container { width: min(100%, 1440px); min-width: 0; flex-wrap: wrap; }
+.navbar-links { min-width: 0; max-width: 100%; flex-wrap: wrap; }
+.navbar-links a, .navbar-links button { min-height: 40px; display: inline-flex; align-items: center; }
+
+@media (max-width: 992px) {
+    .container, .container-fluid, .products-page, .dashboard-container,
+    .analytics-container, .profile-container, .history-container,
+    .shopping-list-container, .page-container, .content-container {
+        width: min(100% - 1.5rem, 100%);
+    }
+    .navbar-container { justify-content: center; padding: .75rem; }
+    .navbar-brand { margin-inline: auto; }
+    .navbar-links { width: 100%; justify-content: center; gap: .5rem .8rem; }
+}
+
+@media (max-width: 768px) {
+    .products, .product-grid, .dashboard-grid, .stats-grid, .analytics-grid,
+    .cards-grid, .summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .navbar-links { gap: .35rem .65rem; }
+    .navbar-links a, .navbar-links button { font-size: .85rem; padding: .45rem .55rem; }
+    .navbar-logo { max-width: 135px; }
+    .table-responsive, .table-wrapper { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    h1 { font-size: clamp(1.55rem, 5vw, 2.25rem); }
+    h2 { font-size: clamp(1.2rem, 4vw, 1.7rem); }
+}
+
+@media (max-width: 540px) {
+    .container, .container-fluid, .products-page, .dashboard-container,
+    .analytics-container, .profile-container, .history-container,
+    .shopping-list-container, .page-container, .content-container {
+        width: calc(100% - 1rem);
+    }
+    .products, .product-grid, .dashboard-grid, .stats-grid, .analytics-grid,
+    .form-grid, .cards-grid, .summary-grid { grid-template-columns: minmax(0, 1fr) !important; }
+    .navbar-container { padding: .6rem .5rem; }
+    .navbar-links { justify-content: center; gap: .25rem .45rem; }
+    .navbar-links a, .navbar-links button { font-size: .8rem; padding: .4rem .45rem; }
+    .navbar-user { display: none !important; }
+    .navbar-logo { width: 112px; height: 38px; }
+    .product-card, .profile-card, .search-card, .dashboard-card { padding: 1rem !important; }
+    .form-actions { align-items: stretch; }
+    .form-actions > *, form button[type="submit"] { max-width: 100%; }
+    input, select, textarea { width: 100%; }
+    .modal-dialog { margin: .5rem; }
+}
+
+@media (max-width: 360px) {
+    .navbar-links a, .navbar-links button { font-size: .74rem; padding: .35rem; }
+    .navbar-logo { width: 96px; }
+    body { font-size: .92rem; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
