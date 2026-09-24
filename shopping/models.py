@@ -51,3 +51,20 @@ class ShoppingListItem(models.Model):
 
     def __str__(self):
         return f"{self.product_name} x {self.quantity}"
+
+
+class ShoppingListAddition(models.Model):
+    """Audit trail of every time a product is added to the shopping list."""
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="shopping_list_additions")
+    product_id = models.CharField(max_length=255, blank=True)
+    product_name = models.CharField(max_length=255)
+    store = models.CharField(max_length=100, blank=True)
+    unit_price = models.DecimalField(max_digits=12, decimal_places=2)
+    quantity = models.PositiveIntegerField(default=1)
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-added_at"]
+
+    def __str__(self):
+        return f"{self.product_name} x {self.quantity} - {self.added_at:%Y-%m}"
