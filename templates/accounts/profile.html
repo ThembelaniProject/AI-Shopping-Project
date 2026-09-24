@@ -31,16 +31,23 @@
     </section>
     <section class="profile-card">
       <h2>My Location</h2>
-      {% if user_latitude and user_longitude %}
+      {% if user_address %}
         <div id="location-status" class="location-status success">
-          <strong>📍 Your Recent Search Address</strong><br><br>
+          <strong>📍 Your Address</strong><br><br>
+          <span id="profile-address" class="address-text">{{ user_address }}</span>
+          {% if user_latitude and user_longitude %}<span class="location-coordinates">Coordinates: {{ user_latitude }}, {{ user_longitude }}</span>{% endif %}
+        </div>
+        <p style="color:#94a3b8;font-size:.82rem;line-height:1.5;margin-bottom:0">This is the address associated with your most recent location used by SmartSpend.</p>
+      {% elif user_latitude and user_longitude %}
+        <div id="location-status" class="location-status success">
+          <strong>📍 Your Address</strong><br><br>
           <span id="profile-address" class="address-text" data-lat="{{ user_latitude|escape }}" data-lon="{{ user_longitude|escape }}">Looking up your address…</span>
           <span class="location-coordinates">Coordinates: {{ user_latitude }}, {{ user_longitude }}</span>
         </div>
-        <p style="color:#94a3b8;font-size:.82rem;line-height:1.5;margin-bottom:0">Approximate address for the location used in your latest product search.</p>
+        <p style="color:#94a3b8;font-size:.82rem;line-height:1.5;margin-bottom:0">Your address is being determined from your saved location.</p>
       {% else %}
-        <div id="location-status" class="location-status"><strong>📍 No Search Location Yet</strong><br><br><span id="profile-address" class="address-text">Your address will appear here after you perform a product search with location enabled.</span></div>
-        <p style="color:#94a3b8;font-size:.82rem;line-height:1.5;margin-bottom:0">Product Search captures your browser location when you allow location access.</p>
+        <div id="location-status" class="location-status"><strong>📍 No Location Available</strong><br><br><span id="profile-address" class="address-text">Allow location access during product search to show your address here.</span></div>
+        <p style="color:#94a3b8;font-size:.82rem;line-height:1.5;margin-bottom:0">SmartSpend uses your browser location to determine the address for nearby-store searches.</p>
       {% endif %}
     </section>
     <section class="profile-card">
@@ -51,7 +58,7 @@
     </section>
   </div>
 </main>
-{% if user_latitude and user_longitude %}
+{% if user_latitude and user_longitude and not user_address %}
 <script>
 (function () {
   const addressElement = document.getElementById('profile-address');
