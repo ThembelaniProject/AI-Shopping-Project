@@ -181,6 +181,30 @@ LOGIN_REDIRECT_URL = "shopping:dashboard"
 LOGOUT_REDIRECT_URL = "accounts:login"
 
 
-PARSE_API_KEY = os.getenv("PARSE_API_KEY", "")
-LOYALTYHUB_API_KEY = os.getenv("LOYALTYHUB_API_KEY", "")
-RETAILER_API_PROVIDER = os.getenv("RETAILER_API_PROVIDER", "parse")
+def _env_value(*names, default=""):
+    """Read a deployment environment variable safely."""
+    for name in names:
+        value = os.getenv(name)
+        if value is not None and value.strip():
+            value = value.strip()
+            # Vercel/Docker users sometimes paste quoted secrets.
+            if len(value) >= 2 and value[0] == value[-1] and value[0] in {"\"", "'"}:
+                value = value[1:-1].strip()
+            return value
+    return default
+
+
+PARSE_API_KEY = _env_value(
+    "PARSE_API_KEY",
+    "PARSE_BOT_API_KEY",
+)
+LOYALTYHUB_API_KEY = _env_value(
+    "LOYALTYHUB_API_KEY",
+)
+AZLABS_API_KEY = _env_value(
+    "AZLABS_API_KEY",
+)
+RETAILER_API_PROVIDER = _env_value(
+    "RETAILER_API_PROVIDER",
+    default="azlabs",
+).lower()
