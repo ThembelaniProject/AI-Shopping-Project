@@ -174,7 +174,7 @@ STALE_CACHE_TIMEOUT = int(
     os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "172800")
 )  # 48 hours
 
-SEARCH_CACHE_VERSION = "v9"
+SEARCH_CACHE_VERSION = "v10"
 COOLDOWN_CACHE_TIMEOUT = int(
     os.getenv("RETAILER_COOLDOWN_CACHE_TIMEOUT", "300")
 )
@@ -2843,7 +2843,11 @@ def _provider_order() -> list[str]:
 
     if PARSE_API_KEY:
         available.append("pricecheck")
-        available.append("parse")
+        # Query Checkers and Pick n Pay as independent providers.
+        # The old aggregated "parse" provider could return successfully
+        # while a retailer-specific result was hidden by another source.
+        available.append("checkers")
+        available.append("pnp")
 
     if LOYALTYHUB_API_KEY:
         available.append("loyaltyhub")
@@ -2864,14 +2868,18 @@ def _provider_order() -> list[str]:
         "loyaltyhub",
     } else "azlabs"
 
-    if preferred == "checkers":
-        return (["parse"] if PARSE_API_KEY else []) + [
-            p for p in available if p not in {"parse"}
+    # "parse" remains accepted for backwards compatibility with .env,
+    # but its retailer search is now represented by the two explicit
+    # Checkers/PnP providers so each retailer can surface independently.
+    if preferred == "parse":
+        preferred_order = ["checkers", "pnp"]
+        return preferred_order + [
+            p for p in available if p not in preferred_order
         ]
 
-    if preferred == "pnp":
-        return (["parse"] if PARSE_API_KEY else []) + [
-            p for p in available if p not in {"parse"}
+    if preferred in {"checkers", "pnp"}:
+        return [preferred] + [
+            p for p in available if p != preferred
         ]
 
     return [preferred] + [p for p in available if p != preferred]
