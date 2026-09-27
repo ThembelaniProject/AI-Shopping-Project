@@ -46,6 +46,29 @@ def _safe_string(
 
 
 
+def _format_address(value: Any) -> str:
+    """Convert retailer address objects into a readable address."""
+    if isinstance(value, str):
+        return value.strip()
+
+    if not isinstance(value, dict):
+        return ""
+
+    parts = []
+    for key in (
+        "address", "streetAddress", "street", "houseNumber",
+        "housenumber", "suburb", "town", "city", "province",
+        "state", "postalCode", "postcode",
+    ):
+        item = value.get(key)
+        if item not in (None, ""):
+            item = _safe_string(item)
+            if item and item not in parts:
+                parts.append(item)
+
+    return ", ".join(parts)
+
+
 # ============================================================
 # CONFIGURATION
 # ============================================================
@@ -1074,8 +1097,25 @@ def normalize_product(
             "size",
             "pack_size",
             "packSize",
+            "weight",
+            "volume",
+            "netWeight",
+            "net_weight",
         )
     )
+
+    if size.lower() in {"0", "0.0", "0.00", "none", "null"}:
+        size = ""
+
+    if not size:
+        size_match = re.search(
+            r"(?<![A-Za-z0-9])([0-9]+(?:[.,][0-9]+)?\s*"
+            r"(?:kg|g|l|ml|cl|mg|pack|pk|ea))\b",
+            name,
+            flags=re.IGNORECASE,
+        )
+        if size_match:
+            size = re.sub(r"\s+", " ", size_match.group(1)).strip()
 
     updated_at = _safe_string(
         _first_value(
@@ -1104,6 +1144,14 @@ def normalize_product(
         "colour": colour,
         "size": size,
         "barcode": barcode,
+        "article_number": _safe_string(
+            raw.get("articleNumber")
+            or raw.get("article_number")
+        ),
+        "checkers_slug": _safe_string(
+            raw.get("checkers_slug")
+            or raw.get("slug")
+        ),
         "price": final_price,
         "regular_price": regular_price,
         "sale_price": (
@@ -1558,7 +1606,7 @@ def search_checkers_products(
     )
 
     cache_key = (
-        f"checkers:search:"
+        f"checkers:search:v3:"
         f"{keyword.lower()}:{limit}"
     )
 
@@ -1596,58 +1644,38 @@ def search_checkers_products(
     for row in rows[:limit]:
         row = dict(row)
 
-        # Checkers can return an image ID/reference rather than a browser URL.
-        # Resolve it through Parse's dedicated get_image_url endpoint.
-        # The Checkers search API documents a singular "image" reference,
-        # while richer responses may expose imageId/imageIds. Resolve every
-        # supported reference before normalize_product sees it.
-        # Checkers may return a direct image URL or an image ID.
-        # Parse returns Checkers image references (not necessarily browser URLs).
-        # Resolve every reference through get_image_url and keep all resolved
-        # URLs so the first broken CDN reference does not hide a valid image.
-        resolved_images = []
-        for image_reference in _extract_checkers_image_ids(row):
-            resolved = _resolve_checkers_image(image_reference)
-            if resolved and resolved not in resolved_images:
-                resolved_images.append(resolved)
+        # Do not resolve every Checkers image during search.
+        # Parse's free tier is rate-limited, so resolve the selected
+        # product image on the detail page instead.
+        article_number = _safe_string(
+            row.get("articleNumber")
+            or row.get("article_number")
+        )
+        row["articleNumber"] = article_number
 
-        if resolved_images:
-            row["images"] = resolved_images
-            row["image_url"] = resolved_images[0]
-            row["imageUrl"] = resolved_images[0]
-            row["image"] = resolved_images[0]
-        else:
-            # An unresolved Checkers imageId is NOT a browser URL. Remove it
-            # before normalization so Open Food Facts can supply a real image
-            # instead of the browser trying to load a Mongo/object ID.
-            for image_key in (
-                "image", "imageId", "image_id", "imageIds", "image_ids",
-                "images", "image_url", "imageUrl", "thumbnail", "thumbnailUrl",
-                "thumbnail_url", "productImage", "product_image",
-            ):
-                value = row.get(image_key)
-                if value is not None:
-                    refs = _extract_checkers_image_ids({image_key: value})
-                    if refs:
-                        row.pop(image_key, None)
+        details_slug = _safe_string(
+            row.get("slug")
+            or row.get("productSlug")
+            or row.get("product_slug")
+            or row.get("urlSlug")
+            or row.get("url_slug")
+        )
 
-            # Search responses can occasionally omit the image reference.
-            # The details endpoint exposes imageIds, so use it as a targeted
-            # fallback when the search row contains a product slug/id.
-            details_slug = _safe_string(
-                row.get("slug")
-                or row.get("productSlug")
-                or row.get("product_slug")
-                or row.get("urlSlug")
-                or row.get("url_slug")
+        if not details_slug and article_number:
+            row_name = _safe_string(
+                row.get("name")
+                or row.get("title")
             )
-            if details_slug:
-                details_images = _get_checkers_detail_images(details_slug)
-                if details_images:
-                    row["images"] = details_images
-                    row["image_url"] = details_images[0]
-                    row["imageUrl"] = details_images[0]
-                    row["image"] = details_images[0]
+            if row_name:
+                slug_name = re.sub(
+                    r"[^a-z0-9]+",
+                    "-",
+                    row_name.lower(),
+                ).strip("-")
+                details_slug = f"{slug_name}-{article_number}EA"
+
+        if details_slug:
+            row["checkers_slug"] = details_slug
 
         # Parse's Checkers API documents priceWithoutDecimal as ZAR
         # cents. It is the authoritative numeric retailer price when
@@ -1846,10 +1874,12 @@ def get_checkers_stores(
         if distance > radius_km:
             continue
 
-        address = _safe_string(
+        address = _format_address(
             raw.get("address")
             or raw.get("storeAddress")
+            or raw.get("streetAddress")
             or location.get("address")
+            or location.get("streetAddress")
         )
 
         store = {
