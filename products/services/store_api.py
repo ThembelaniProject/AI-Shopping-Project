@@ -590,15 +590,28 @@ def normalize_product(
 
     raw = raw if isinstance(raw, dict) else {}
 
+    # Retailer APIs can return branch metadata as a nested store object.
+    # Keep that metadata structured instead of rendering the raw dict.
+    raw_store = raw.get("store")
+    if not isinstance(raw_store, dict):
+        raw_store = raw.get("storeInfo") or raw.get("store_info") or {}
+    if not isinstance(raw_store, dict):
+        raw_store = {}
+
+    store_label = _first_value(
+        raw_store,
+        "name", "storeName", "store_name", "displayName", "brand", "retailer",
+    )
+
     source_retailer = _normalise_retailer(
         retailer
         or _first_value(
             raw,
             "retailer",
-            "store",
             "merchant",
             "storeName",
         )
+        or store_label
         or "Retailer"
     )
 
@@ -910,15 +923,19 @@ def normalize_product(
         or raw.get("lat")
         or raw_location.get("latitude")
         or raw_location.get("lat")
+        or raw_store.get("latitude")
+        or raw_store.get("lat")
     )
     raw_lon = (
         raw.get("longitude")
-        or raw.get("longitude")
-        or raw.get("lng")
         or raw.get("lon")
+        or raw.get("lng")
         or raw_location.get("longitude")
-        or raw_location.get("lng")
         or raw_location.get("lon")
+        or raw_location.get("lng")
+        or raw_store.get("longitude")
+        or raw_store.get("lon")
+        or raw_store.get("lng")
     )
 
     product_location = (
@@ -944,6 +961,9 @@ def normalize_product(
     raw_address = _safe_string(
         raw.get("address")
         or raw.get("storeAddress")
+        or raw_store.get("address")
+        or raw_store.get("storeAddress")
+        or raw_store.get("streetAddress")
         or product_location.get("address")
     )
     if raw_address and not product_location.get("address"):
@@ -952,7 +972,9 @@ def normalize_product(
     raw_store_name = _safe_string(
         raw.get("storeName")
         or raw.get("store_name")
+        or store_label
         or product_location.get("name")
+        or source_retailer
     )
     if raw_store_name and not product_location.get("name"):
         product_location["name"] = raw_store_name
@@ -969,7 +991,42 @@ def normalize_product(
         )
         or product_location.get("storeId")
         or product_location.get("id")
+        or raw_store.get("store_id")
+        or raw_store.get("storeId")
+        or raw_store.get("id")
     )
+
+    # Some live feeds already calculate customer distance.
+    distance_from_customer = _first_value(
+        raw,
+        "distanceFromCustomer", "distance_from_customer", "distance_km", "distance",
+    )
+    if distance_from_customer is None:
+        distance_from_customer = _first_value(
+            raw_store,
+            "distanceFromCustomer", "distance_from_customer", "distance_km", "distance",
+        )
+    try:
+        distance_from_customer = float(distance_from_customer) if distance_from_customer is not None else None
+    except (TypeError, ValueError):
+        distance_from_customer = None
+
+    service_option_ids = _first_value(raw, "serviceOptionIds", "service_option_ids")
+    if service_option_ids is None:
+        service_option_ids = _first_value(raw_store, "serviceOptionIds", "service_option_ids")
+    if not isinstance(service_option_ids, list):
+        service_option_ids = []
+
+    service_labels = {
+        "sixty-min-delivery": "60-minute delivery",
+        "one-day-delivery": "1-day delivery",
+        "one-day-collection": "1-day collection",
+    }
+    shipping_options = [
+        service_labels.get(_safe_string(option), _safe_string(option).replace("-", " ").title())
+        for option in service_option_ids
+        if _safe_string(option)
+    ]
 
     product_id = _stable_product_id(
         source_retailer,
@@ -1038,6 +1095,8 @@ def normalize_product(
             or raw.get("dealExpiry")
         ),
         "shipping_cost": Decimal("0"),
+        "shipping_options": shipping_options,
+        "shipping_available": bool(shipping_options),
         "total_cost": final_price,
         "stock": stock,
         "in_stock": in_stock,
@@ -1062,8 +1121,8 @@ def normalize_product(
         "price_freshness": "unknown",
         "recommendation_score": Decimal("0"),
         "matched_preferences": [],
-        "distance_km": None,
-        "distance": None,
+        "distance_km": distance_from_customer,
+        "distance": distance_from_customer,
     }
 
 
