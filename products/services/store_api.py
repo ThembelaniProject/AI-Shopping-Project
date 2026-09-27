@@ -2258,7 +2258,7 @@ def search_pricecheck_products(
         return []
 
     product_limit = min(max(1, int(limit)), PRICECHECK_MAX_PRODUCTS)
-    cache_key = f"pricecheck:search:v1:{keyword.lower()}:{product_limit}"
+    cache_key = f"pricecheck:search:v2:{keyword.lower()}:{product_limit}"
 
     cached = _cache_get(cache_key)
     if cached is not None:
@@ -2294,7 +2294,7 @@ def search_pricecheck_products(
         if not pc_id:
             continue
 
-        detail_key = f"pricecheck:offers:{pc_id}"
+        detail_key = f"pricecheck:offers:v2:{pc_id}"
         detail = _cache_get(detail_key)
 
         if detail is None:
