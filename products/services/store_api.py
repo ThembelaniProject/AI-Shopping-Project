@@ -3506,8 +3506,15 @@ def _attach_location(
     radius_km: float,
 ):
     """
-    One cached OSM query per retailer/area, not one request per product.
+    Attach branch/store location and distance to product offers.
+
+    Retailer-specific APIs are preferred for Checkers/PnP. PriceCheck can
+    return many other South African retailers with an address but no
+    coordinates, so those offers are matched against nearby OSM stores by
+    store name/address when possible.
     """
+    if latitude is None or longitude is None:
+        return products
 
     retailer_names = sorted(
         {
@@ -3526,15 +3533,6 @@ def _attach_location(
     stores_by_retailer = {}
 
     for retailer in retailer_names:
-        if (
-            latitude is None
-            or longitude is None
-        ):
-            continue
-
-        # Use retailer-specific branch data first. This gives the UI
-        # an actual branch address/coordinates instead of an arbitrary
-        # supermarket found by OpenStreetMap.
         if retailer == "Checkers":
             try:
                 stores_by_retailer[retailer] = get_checkers_stores(
@@ -3566,8 +3564,6 @@ def _attach_location(
                 retailer=retailer,
             )
 
-        # Retailer API branch lookup can fail or return no branch. Fall
-        # back to OSM rather than losing the product completely.
         if not stores_by_retailer[retailer]:
             stores_by_retailer[retailer] = find_nearby_stores(
                 latitude,
@@ -3576,6 +3572,36 @@ def _attach_location(
                 retailer=retailer,
             )
 
+    # PriceCheck offers often contain a registered/physical address but
+    # no coordinates. Search nearby OSM supermarkets once and match those
+    # offers by store name/address so distance can still be calculated.
+    address_products = [
+        product
+        for product in products
+        if isinstance(product.get("location"), dict)
+        and product.get("location", {}).get("address")
+        and not (
+            product.get("location", {}).get("latitude")
+            or product.get("location", {}).get("lat")
+        )
+    ]
+
+    all_nearby_stores = []
+    if address_products:
+        all_nearby_stores = find_nearby_stores(
+            latitude,
+            longitude,
+            radius_km,
+            retailer="",
+        )
+
+    def compact(value: Any) -> str:
+        return re.sub(
+            r"[^a-z0-9]+",
+            "",
+            _safe_string(value).lower(),
+        )
+
     for product in products:
         retailer = _normalise_retailer(
             product.get("retailer")
@@ -3583,30 +3609,97 @@ def _attach_location(
             or ""
         )
 
-        location = (
-            product.get("location")
-            or {}
-        )
+        location = product.get("location") or {}
+        if not isinstance(location, dict):
+            location = {}
 
-        if not location:
-            nearest = _nearest_store(
-                stores_by_retailer.get(
-                    retailer,
-                    [],
-                ),
+        # First try the address/name supplied by PriceCheck against nearby
+        # physical stores. This is deliberately a best-effort match; if no
+        # physical match exists, the product keeps its registered address
+        # and distance remains unavailable rather than being invented.
+        if (
+            location.get("address")
+            and not (
+                location.get("latitude")
+                or location.get("lat")
+            )
+            and all_nearby_stores
+        ):
+            product_name = compact(
+                location.get("name")
+                or product.get("store")
+                or product.get("retailer")
+            )
+            product_address = compact(
+                location.get("address")
+            )
+
+            matches = []
+            for store in all_nearby_stores:
+                store_name = compact(store.get("name"))
+                store_address = compact(store.get("address"))
+
+                name_match = bool(
+                    product_name
+                    and store_name
+                    and (
+                        product_name in store_name
+                        or store_name in product_name
+                    )
+                )
+
+                address_tokens = [
+                    token
+                    for token in re.findall(
+                        r"[a-z0-9]{4,}",
+                        product_address,
+                    )
+                ]
+                address_match = bool(
+                    address_tokens
+                    and store_address
+                    and sum(
+                        1
+                        for token in address_tokens
+                        if token in store_address
+                    ) >= min(2, len(address_tokens))
+                )
+
+                if name_match or address_match:
+                    matches.append(store)
+
+            nearest_match = _nearest_store(
+                matches,
                 latitude,
                 longitude,
             )
 
+            if nearest_match:
+                location = {
+                    **location,
+                    **nearest_match,
+                    "address": (
+                        location.get("address")
+                        or nearest_match.get("address")
+                    ),
+                }
+                product["location"] = location
+                product["store_id"] = (
+                    product.get("store_id")
+                    or nearest_match.get("store_id")
+                )
+
+        if not product.get("location"):
+            nearest = _nearest_store(
+                stores_by_retailer.get(retailer, []),
+                latitude,
+                longitude,
+            )
             if nearest:
                 product["location"] = nearest
                 product["store_id"] = (
-                    product.get(
-                        "store_id"
-                    )
-                    or nearest.get(
-                        "store_id"
-                    )
+                    product.get("store_id")
+                    or nearest.get("store_id")
                 )
 
         _add_distance(
