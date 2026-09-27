@@ -276,10 +276,25 @@ def _product_price(product):
 
 
 def _product_snapshot(product, fallback_id=""):
+    raw_store = product.get("store")
+    if isinstance(raw_store, dict):
+        store_name = (
+            raw_store.get("name")
+            or raw_store.get("storeName")
+            or raw_store.get("store_name")
+            or raw_store.get("displayName")
+            or raw_store.get("brand")
+            or ""
+        )
+    else:
+        store_name = raw_store or ""
+
+    store_name = str(store_name).strip()
+
     return {
         "product_id": str(product.get("id") or product.get("product_id") or fallback_id),
         "product_name": str(product.get("name") or "Product").strip(),
-        "store": str(product.get("store") or "").strip(),
+        "store": store_name[:255],
         "category": str(product.get("category") or "").strip(),
         "image_url": str(product.get("image") or "").strip() or None,
         "product_url": str(product.get("url") or "").strip() or None,
