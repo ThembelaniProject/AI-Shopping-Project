@@ -111,7 +111,7 @@ PNP_BRANCH_LOOKUP_ENABLED = (
 
 PNP_MAX_BRANCHES_TO_TRY = max(
     1,
-    int(os.getenv("PNP_MAX_BRANCHES_TO_TRY", "1")),
+    int(os.getenv("PNP_MAX_BRANCHES_TO_TRY", "5")),
 )
 
 LOYALTYHUB_BASE_URL = "https://loyaltyhub.co.za/api/v1"
@@ -2075,9 +2075,9 @@ def search_nearest_pnp_branch_products(
     Find the nearest online-shopping PnP branch and retrieve prices
     scoped to that branch.
 
-    Only the nearest branch is queried by default to control Parse
-    credits. Set PNP_MAX_BRANCHES_TO_TRY > 1 if comparison across
-    multiple nearby PnP branches is required.
+    The nearest 5 branches are queried by default so the search can show
+    multiple nearby Pick n Pay stores. Set PNP_MAX_BRANCHES_TO_TRY to a
+    different value when you want to control API usage.
     """
 
     if not PNP_BRANCH_LOOKUP_ENABLED:
