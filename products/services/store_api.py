@@ -157,18 +157,10 @@ LIVE_PRICE_MODE = (
     in {"1", "true", "yes", "on"}
 )
 
-CACHE_TIMEOUT = int(
-    os.getenv("PRODUCT_CACHE_TIMEOUT", "60")
-)  # Fresh Redis cache window for retailer search results
-
-STALE_CACHE_TIMEOUT = int(
-    os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "172800")
-)  # 48 hours
-
-SEARCH_CACHE_VERSION = "v10"
-COOLDOWN_CACHE_TIMEOUT = int(
-    os.getenv("RETAILER_COOLDOWN_CACHE_TIMEOUT", "300")
-)
+CACHE_TIMEOUT = int(os.getenv("PRODUCT_CACHE_TIMEOUT", "900"))
+STALE_CACHE_TIMEOUT = int(os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "604800"))
+SEARCH_CACHE_VERSION = "v11"
+COOLDOWN_CACHE_TIMEOUT = int(os.getenv("RETAILER_COOLDOWN_CACHE_TIMEOUT", "900"))
 
 STORE_CACHE_TIMEOUT = int(
     os.getenv("STORE_CACHE_TIMEOUT", "86400")
@@ -1262,7 +1254,7 @@ def _request_json(
         )
 
         raise StoreAPIError(
-            f"{provider} rate limit reached. "
+            f"{provider} is temporarily rate-limited. "
             f"Retry after {retry_after}."
         )
 
@@ -3007,6 +2999,18 @@ def search_products(
     products = _deduplicate_products(
         products
     )
+
+    # If every live provider is temporarily unavailable, the complete-search
+    # stale cache is the last-resort production fallback.
+    # It is intentionally checked before raising an outage error.
+    if not products:
+        stale_results = _cache_stale_get(final_cache_key)
+        if stale_results is not None:
+            return _mark_cached_products(
+                stale_results,
+                "stale",
+                False,
+            )
 
     # Do not let AZ Labs or PriceCheck consume the entire requested page.
     # The providers are aggregated, then deliberately interleaved so
