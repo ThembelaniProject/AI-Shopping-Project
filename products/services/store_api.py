@@ -2258,7 +2258,7 @@ def search_pricecheck_products(
         return []
 
     product_limit = min(max(1, int(limit)), PRICECHECK_MAX_PRODUCTS)
-    cache_key = f"pricecheck:search:v2:{keyword.lower()}:{product_limit}"
+    cache_key = f"pricecheck:search:v3:{keyword.lower()}:{product_limit}"
 
     cached = _cache_get(cache_key)
     if cached is not None:
@@ -2294,7 +2294,7 @@ def search_pricecheck_products(
         if not pc_id:
             continue
 
-        detail_key = f"pricecheck:offers:v2:{pc_id}"
+        detail_key = f"pricecheck:offers:v3:{pc_id}"
         detail = _cache_get(detail_key)
 
         if detail is None:
@@ -2322,17 +2322,32 @@ def search_pricecheck_products(
         if not isinstance(offers, list):
             offers = []
 
+        # PriceCheck returns images from get_product_offers, but the
+        # search summary can use a different field name. Keep every
+        # supported image field and let normalize_product() select the
+        # first browser-usable URL.
+        pricecheck_images = (
+            data.get("images")
+            or data.get("image_urls")
+            or data.get("imageUrls")
+            or data.get("image")
+            or summary.get("images")
+            or summary.get("image_urls")
+            or summary.get("imageUrls")
+            or summary.get("image")
+            or summary.get("image_url")
+            or summary.get("imageUrl")
+            or []
+        )
+
         common = {
             "name": data.get("name") or summary.get("name") or "Unnamed product",
             "description": data.get("description") or summary.get("description") or "",
-            "brand": data.get("brand") or "",
-            "category": data.get("category") or "",
-            "image": (
-                data.get("images")[0]
-                if isinstance(data.get("images"), list) and data.get("images")
-                else summary.get("image") or ""
-            ),
-            "url": summary.get("url") or "",
+            "brand": data.get("brand") or summary.get("brand") or "",
+            "category": data.get("category") or summary.get("category") or "",
+            "images": pricecheck_images,
+            "image": pricecheck_images,
+            "url": summary.get("url") or summary.get("product_url") or summary.get("productUrl") or "",
             "product_id": pc_id,
         }
 
@@ -2368,6 +2383,15 @@ def search_pricecheck_products(
 
             row = {
                 **common,
+                "barcode": (
+                    summary.get("barcode")
+                    or summary.get("ean")
+                    or summary.get("gtin")
+                    or data.get("barcode")
+                    or data.get("ean")
+                    or data.get("gtin")
+                    or ""
+                ),
                 "store": store_name,
                 "retailer": store_name,
                 "store_id": offer.get("store_id") or offer.get("storeId") or "",
