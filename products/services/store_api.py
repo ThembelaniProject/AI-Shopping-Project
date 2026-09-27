@@ -2,17 +2,16 @@
 Multi-provider South African retail integration for AI Shopping.
 
 Provider order:
-1. AZ Labs - live grocery search when configured.
-2. PriceCheck via Parse - broad South African product/retailer discovery.
+1. PriceCheck via Parse - broad South African product/retailer discovery.
+2. AZ Labs - live grocery search when configured.
 3. Parse retailer APIs - live Checkers + Pick n Pay catalogue data.
-4. LoyaltyHub - optional broader South African refreshed-price feed.
 
 All providers are normalized into one product shape so products/views.py
 does not need to know which API supplied the result.
 
 Important:
 - Never put API keys in this file.
-- Configure PARSE_API_KEY, AZLABS_API_KEY and LOYALTYHUB_API_KEY as environment variables.
+- Configure PARSE_API_KEY and AZLABS_API_KEY as environment variables.
 - PriceCheck uses the same PARSE_API_KEY; no separate PriceCheck key is required.
 - Product responses are cached to reduce API usage.
 - Store distance is calculated with OpenStreetMap/Overpass and cached.
@@ -87,11 +86,6 @@ PARSE_API_KEY = _clean_secret(
     or os.getenv("PARSE_BOT_API_KEY", "")
 )
 
-LOYALTYHUB_API_KEY = _clean_secret(
-    getattr(settings, "LOYALTYHUB_API_KEY", None)
-    or os.getenv("LOYALTYHUB_API_KEY", "")
-)
-
 AZLABS_API_KEY = _clean_secret(
     getattr(settings, "AZLABS_API_KEY", None)
     or os.getenv("AZLABS_API_KEY", "")
@@ -151,9 +145,6 @@ PNP_MAX_BRANCHES_TO_TRY = max(
     1,
     int(os.getenv("PNP_MAX_BRANCHES_TO_TRY", "5")),
 )
-
-LOYALTYHUB_BASE_URL = "https://loyaltyhub.co.za/api/v1"
-LOYALTYHUB_PRICES_URL = f"{LOYALTYHUB_BASE_URL}/prices"
 
 # Retailer search results must not be held for hours when the UI is
 # explicitly showing "live" prices. LIVE_PRICE_MODE bypasses the normal
@@ -2585,110 +2576,6 @@ def search_pricecheck_products(
 
 
 # ============================================================
-# LOYALTYHUB
-# ============================================================
-
-def search_loyaltyhub_products(
-    keyword: str,
-    limit: int = 20,
-    retailer: str = "",
-) -> list[dict]:
-    if not LOYALTYHUB_API_KEY:
-        raise StoreAPIError(
-            "LOYALTYHUB_API_KEY is not configured."
-        )
-
-    keyword = _safe_string(keyword)
-
-    if not keyword:
-        return []
-
-    limit = max(
-        1,
-        min(int(limit), 20),
-    )
-
-    cache_key = (
-        f"loyaltyhub:prices:"
-        f"{keyword.lower()}:"
-        f"{_retailer_key(retailer) if retailer else 'all'}:"
-        f"{limit}"
-    )
-
-    cached = _cache_get(cache_key)
-
-    if cached is not None and not LIVE_PRICE_MODE:
-        return cached
-
-    params = {
-        "search": keyword,
-        "limit": limit,
-        "offset": 0,
-    }
-
-    if retailer:
-        params["retailer"] = retailer
-
-    try:
-        payload = _request_json(
-            "GET",
-            LOYALTYHUB_PRICES_URL,
-            headers={
-                "Authorization": (
-                    f"Bearer {LOYALTYHUB_API_KEY}"
-                ),
-                "Accept": "application/json",
-            },
-            params=params,
-            provider="LoyaltyHub",
-        )
-    except StoreAPIError:
-        stale = _cache_stale_get(cache_key)
-        if stale is not None:
-            return stale
-        raise
-
-    rows = _extract_rows(payload)
-
-    freshness = ""
-    if isinstance(payload, dict):
-        meta = payload.get("meta") or {}
-        if isinstance(meta, dict):
-            freshness = _safe_string(
-                meta.get("updated_at")
-                or meta.get("updatedAt")
-            )
-
-    products = []
-
-    for row in rows[:limit]:
-        if freshness and not row.get("updated_at"):
-            row = dict(row)
-            row["updated_at"] = freshness
-
-        product = normalize_product(row)
-        product["price_source"] = "LoyaltyHub price feed"
-        product["price_is_live"] = False
-        product["price_freshness"] = "refreshed feed"
-        products.append(product)
-        _cache_product(product)
-
-    _cache_set(
-        cache_key,
-        products,
-        CACHE_TIMEOUT if products else 60,
-    )
-
-    if products:
-        _cache_stale_set(
-            cache_key,
-            products,
-        )
-
-    return products
-
-
-# ============================================================
 # PARSE RETAILER API - LIVE SHOP PRICES
 # ============================================================
 
@@ -2821,7 +2708,7 @@ def search_parse_retailer_products(
             + " | ".join(errors[:4])
         )
 
-    if not merged and not PARSE_API_KEY and not AZLABS_API_KEY and not LOYALTYHUB_API_KEY:
+    if not merged and not PARSE_API_KEY and not AZLABS_API_KEY:
         raise StoreAPIError(
             "No retailer API credentials are configured. "
             "Set AZLABS_API_KEY or PARSE_API_KEY in the deployment environment."
@@ -2849,24 +2736,15 @@ def _provider_order() -> list[str]:
         available.append("checkers")
         available.append("pnp")
 
-    if LOYALTYHUB_API_KEY:
-        available.append("loyaltyhub")
-
     # Preferred provider controls ordering only. Every configured provider
     # must still be queried so live search always aggregates all sources.
-    if API_PROVIDER == "loyaltyhub":
-        return (["loyaltyhub"] if LOYALTYHUB_API_KEY else []) + [
-            p for p in available if p != "loyaltyhub"
-        ]
-
     preferred = API_PROVIDER if API_PROVIDER in {
         "azlabs",
         "pricecheck",
         "parse",
         "checkers",
         "pnp",
-        "loyaltyhub",
-    } else "azlabs"
+    } else "pricecheck"
 
     # "parse" remains accepted for backwards compatibility with .env,
     # but its retailer search is now represented by the two explicit
@@ -2935,12 +2813,6 @@ def _search_provider(
                 if radius_km is not None
                 else OSM_RADIUS_KM
             ),
-        )
-
-    if provider == "loyaltyhub":
-        return search_loyaltyhub_products(
-            keyword,
-            limit=limit,
         )
 
     return []
@@ -3051,7 +2923,7 @@ def search_products(
 
     Provider flow:
         Aggregate every configured provider:
-            AZ Labs -> Parse.bot -> LoyaltyHub
+            PriceCheck -> AZ Labs -> Checkers -> Pick n Pay
         (providers without API keys are skipped)
 
     Cache flow:
@@ -3158,8 +3030,7 @@ def search_products(
 
         raise StoreAPIError(
             "No retailer API is configured. "
-            "Set PARSE_API_KEY, or "
-            "LOYALTYHUB_API_KEY."
+            "Set PARSE_API_KEY or AZLABS_API_KEY."
         )
 
     products = products[:requested_limit]
