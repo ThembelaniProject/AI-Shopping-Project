@@ -2,15 +2,18 @@
 Multi-provider South African retail integration for AI Shopping.
 
 Provider order:
-1. Parse retailer APIs - primary live retailer catalogue for Checkers + Pick n Pay.
-2. LoyaltyHub - optional broader South African refreshed-price fallback.
+1. AZ Labs - live grocery search when configured.
+2. PriceCheck via Parse - broad South African product/retailer discovery.
+3. Parse retailer APIs - live Checkers + Pick n Pay catalogue data.
+4. LoyaltyHub - optional broader South African refreshed-price feed.
 
 All providers are normalized into one product shape so products/views.py
 does not need to know which API supplied the result.
 
 Important:
 - Never put API keys in this file.
-- Configure PARSE_API_KEY and LOYALTYHUB_API_KEY as environment variables.
+- Configure PARSE_API_KEY, AZLABS_API_KEY and LOYALTYHUB_API_KEY as environment variables.
+- PriceCheck uses the same PARSE_API_KEY; no separate PriceCheck key is required.
 - Product responses are cached to reduce API usage.
 - Store distance is calculated with OpenStreetMap/Overpass and cached.
 """
@@ -79,7 +82,19 @@ API_PROVIDER = _clean_secret(
 AZLABS_BASE_URL = "https://azlabs.ai/api/v1"
 AZLABS_SEARCH_URL = f"{AZLABS_BASE_URL}/grocery/search"
 
-PARSE_BASE_URL = "https://api.parse.bot/scraper"
+PARSE_BASE_URL = _clean_secret(
+    getattr(settings, "PARSE_BASE_URL", None)
+    or os.getenv("PARSE_BASE_URL", "https://api.parse.bot/scraper")
+).rstrip("/")
+
+PRICECHECK_SCRAPER_ID = _clean_secret(
+    getattr(settings, "PRICECHECK_SCRAPER_ID", None)
+    or os.getenv("PRICECHECK_SCRAPER_ID", "6de3452a-00ab-44bc-b023-4f6c36b1e64e")
+)
+PRICECHECK_SEARCH_URL = f"{PARSE_BASE_URL}/{PRICECHECK_SCRAPER_ID}/search_products"
+PRICECHECK_OFFERS_URL = f"{PARSE_BASE_URL}/{PRICECHECK_SCRAPER_ID}/get_product_offers"
+PRICECHECK_MAX_PRODUCTS = max(1, min(int(os.getenv("PRICECHECK_MAX_PRODUCTS", "6")), 12))
+PRICECHECK_MAX_OFFERS = max(1, min(int(os.getenv("PRICECHECK_MAX_OFFERS", "100")), 100))
 
 CHECKERS_SCRAPER_ID = "a7a3a4ba-dfb7-4476-9712-8753b2fb3140"
 CHECKERS_SEARCH_URL = (
@@ -136,7 +151,7 @@ STALE_CACHE_TIMEOUT = int(
     os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "172800")
 )  # 48 hours
 
-SEARCH_CACHE_VERSION = "v4"
+SEARCH_CACHE_VERSION = "v5"
 COOLDOWN_CACHE_TIMEOUT = int(
     os.getenv("RETAILER_COOLDOWN_CACHE_TIMEOUT", "300")
 )
@@ -2225,6 +2240,190 @@ def search_pnp_products(
     return products
 
 
+
+# ============================================================
+# PRICECHECK SOUTH AFRICA - BROAD RETAIL DISCOVERY
+# ============================================================
+
+def search_pricecheck_products(
+    keyword: str,
+    limit: int = 20,
+) -> list[dict]:
+    """Search PriceCheck and expand matched products into store offers."""
+    if not PARSE_API_KEY:
+        raise StoreAPIError("PARSE_API_KEY is not configured.")
+
+    keyword = _safe_string(keyword)
+    if not keyword:
+        return []
+
+    product_limit = min(max(1, int(limit)), PRICECHECK_MAX_PRODUCTS)
+    cache_key = f"pricecheck:search:v1:{keyword.lower()}:{product_limit}"
+
+    cached = _cache_get(cache_key)
+    if cached is not None and not LIVE_PRICE_MODE:
+        return _mark_cached_products(cached, "live", True)
+
+    try:
+        search_payload = _request_json(
+            "GET",
+            PRICECHECK_SEARCH_URL,
+            headers={"X-API-Key": PARSE_API_KEY, "Accept": "application/json"},
+            params={"query": keyword, "page": 1},
+            provider="PriceCheck search",
+        )
+    except StoreAPIError:
+        stale = _cache_stale_get(cache_key)
+        if stale is not None:
+            return _mark_cached_products(stale, "stale", False)
+        raise
+
+    summaries = _extract_rows(search_payload)
+    products = []
+    errors = []
+
+    for summary in summaries[:product_limit]:
+        if not isinstance(summary, dict):
+            continue
+
+        pc_id = _safe_string(
+            summary.get("product_id")
+            or summary.get("productId")
+            or summary.get("id")
+        )
+        if not pc_id:
+            continue
+
+        detail_key = f"pricecheck:offers:{pc_id}"
+        detail = _cache_get(detail_key)
+
+        if detail is None or LIVE_PRICE_MODE:
+            try:
+                detail = _request_json(
+                    "GET",
+                    PRICECHECK_OFFERS_URL,
+                    headers={"X-API-Key": PARSE_API_KEY, "Accept": "application/json"},
+                    params={"product_id": pc_id},
+                    provider="PriceCheck offers",
+                )
+                _cache_set(detail_key, detail, CACHE_TIMEOUT)
+                _cache_stale_set(detail_key, detail)
+            except StoreAPIError as exc:
+                errors.append(str(exc))
+                detail = _cache_stale_get(detail_key)
+                if detail is None:
+                    continue
+
+        data = detail.get("data") if isinstance(detail, dict) else {}
+        if not isinstance(data, dict):
+            data = detail if isinstance(detail, dict) else {}
+
+        offers = data.get("offers") or []
+        if not isinstance(offers, list):
+            offers = []
+
+        common = {
+            "name": data.get("name") or summary.get("name") or "Unnamed product",
+            "description": data.get("description") or summary.get("description") or "",
+            "brand": data.get("brand") or "",
+            "category": data.get("category") or "",
+            "image": (
+                data.get("images")[0]
+                if isinstance(data.get("images"), list) and data.get("images")
+                else summary.get("image") or ""
+            ),
+            "url": summary.get("url") or "",
+            "product_id": pc_id,
+        }
+
+        for offer in offers[:PRICECHECK_MAX_OFFERS]:
+            if not isinstance(offer, dict):
+                continue
+
+            store_name = _safe_string(
+                offer.get("store")
+                or offer.get("store_name")
+                or offer.get("retailer")
+                or summary.get("store")
+                or "Retailer"
+            )
+
+            address = offer.get("address")
+            if isinstance(address, dict):
+                address = ", ".join(
+                    _safe_string(v)
+                    for v in (
+                        address.get("address"),
+                        address.get("streetAddress"),
+                        address.get("street"),
+                        address.get("suburb"),
+                        address.get("city"),
+                        address.get("province"),
+                        address.get("postalCode"),
+                    )
+                    if _safe_string(v)
+                )
+            else:
+                address = _safe_string(address)
+
+            row = {
+                **common,
+                "store": store_name,
+                "retailer": store_name,
+                "store_id": offer.get("store_id") or offer.get("storeId") or "",
+                "offer_id": offer.get("offer_id") or offer.get("offerId") or "",
+                "address": address,
+                "price": (
+                    offer.get("price")
+                    or offer.get("total_price")
+                    or offer.get("totalPrice")
+                    or summary.get("price")
+                    or 0
+                ),
+                "in_stock": offer.get("in_stock", summary.get("in_stock", False)),
+                "on_sale": _safe_bool(offer.get("on_special"), False),
+                "url": (
+                    offer.get("url")
+                    or offer.get("product_url")
+                    or offer.get("productUrl")
+                    or summary.get("url")
+                    or ""
+                ),
+            }
+
+            product = normalize_product(row, retailer=store_name)
+            offer_id = _safe_string(row.get("offer_id"))
+
+            if offer_id:
+                product["id"] = f"pricecheck_{pc_id}_{offer_id}"
+                product["product_id"] = product["id"]
+
+            product["price_source"] = "PriceCheck South Africa live offers"
+            product["price_is_live"] = True
+            product["price_freshness"] = "live"
+            product["pricecheck_product_id"] = pc_id
+            product["offer_id"] = offer_id
+            product["store_address"] = address
+            product["store"] = store_name
+
+            products.append(product)
+            _cache_product(product)
+
+    products = _deduplicate_products(products)
+    _cache_set(cache_key, products, CACHE_TIMEOUT if products else 60)
+
+    if products:
+        _cache_stale_set(cache_key, products)
+
+    if not products and errors:
+        raise StoreAPIError(
+            "PriceCheck returned no usable offers. "
+            + " | ".join(errors[:3])
+        )
+
+    return _mark_cached_products(products, "live", True)
+
+
 # ============================================================
 # LOYALTYHUB
 # ============================================================
@@ -2483,6 +2682,7 @@ def _provider_order() -> list[str]:
         available.append("azlabs")
 
     if PARSE_API_KEY:
+        available.append("pricecheck")
         available.append("parse")
 
     if LOYALTYHUB_API_KEY:
@@ -2497,6 +2697,7 @@ def _provider_order() -> list[str]:
 
     preferred = API_PROVIDER if API_PROVIDER in {
         "azlabs",
+        "pricecheck",
         "parse",
         "checkers",
         "pnp",
@@ -2526,6 +2727,12 @@ def _search_provider(
 ) -> list[dict]:
     if provider == "azlabs":
         return search_azlabs_products(
+            keyword,
+            limit=limit,
+        )
+
+    if provider == "pricecheck":
+        return search_pricecheck_products(
             keyword,
             limit=limit,
         )
