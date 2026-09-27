@@ -505,23 +505,66 @@ def search(request):
         if not isinstance(store_location_data, dict):
             store_location_data = {}
 
-        product_location = str(
+        # Detail pages may load the product from cache. Prefer the branch
+        # location cached during the original search, then the product's
+        # own location data.
+        branch_location = (
+            store_location
+            if isinstance(store_location, dict)
+            else {}
+        )
+
+        if branch_location:
+            store_location_data = {
+                **store_location_data,
+                **branch_location,
+            }
+
+        raw_address = (
             store_location_data.get("address")
-            or store_location_data.get("name")
-            or store_location_data.get("city")
-            or product.get("location", "")
-        ).strip()
+            or store_location_data.get("storeAddress")
+            or store_location_data.get("streetAddress")
+            or product.get("store_address")
+            or product.get("address")
+        )
+
+        if isinstance(raw_address, dict):
+            address_parts = [
+                raw_address.get("address"),
+                raw_address.get("streetAddress"),
+                raw_address.get("street"),
+                raw_address.get("suburb"),
+                raw_address.get("city"),
+                raw_address.get("province"),
+                raw_address.get("postalCode"),
+            ]
+            store_address = ", ".join(
+                str(part).strip()
+                for part in address_parts
+                if part and str(part).strip()
+            )
+        else:
+            store_address = str(raw_address or "").strip()
+
+        product_location = (
+            store_address
+            or str(
+                store_location_data.get("name")
+                or store_location_data.get("city")
+                or ""
+            ).strip()
+        )
 
         store_name = str(
             store_location_data.get("name")
+            or product.get("store_name")
             or product.get("store")
             or ""
         ).strip()
 
-        store_address = str(
-            store_location_data.get("address")
-            or ""
-        ).strip()
+        # Never expose an empty dictionary as an address.
+        if store_address == "{}":
+            store_address = ""
 
         description = str(
             product.get(
@@ -718,6 +761,12 @@ def search(request):
             "distance_km",
             product.get("distance")
         )
+
+        if raw_distance is None and isinstance(store_location_data, dict):
+            raw_distance = store_location_data.get(
+                "distance_km",
+                store_location_data.get("distance")
+            )
 
         distance = (
             to_decimal(raw_distance)
