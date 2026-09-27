@@ -1161,19 +1161,6 @@ def _extract_checkers_image_ids(raw: dict) -> list[str]:
     """
     Extract Checkers image IDs or direct image URLs from all common
     response shapes returned by Parse.
-
-    Checkers can return an image as:
-        "imageId": "abc123"
-        "imageIds": ["abc123"]
-        "image": {"imageId": "abc123"}
-        "image": {"id": "abc123"}
-        "image": {"url": "https://..."}
-        "images": [{"imageId": "abc123"}]
-        "media": [{"url": "https://..."}]
-
-    The returned values are intentionally generic: direct URLs are passed
-    through by _resolve_checkers_image(), while image IDs are resolved
-    through Parse's get_image_url endpoint.
     """
     if not isinstance(raw, dict):
         return []
@@ -1191,15 +1178,9 @@ def _extract_checkers_image_ids(raw: dict) -> list[str]:
             return
 
         if isinstance(value, dict):
-            # Direct browser/CDN URL forms.
             for key in (
-                "url",
-                "imageUrl",
-                "image_url",
-                "cdnUrl",
-                "cdn_url",
-                "src",
-                "href",
+                "url", "imageUrl", "image_url",
+                "cdnUrl", "cdn_url", "src", "href",
             ):
                 item = value.get(key)
                 if isinstance(item, str) and item.strip():
@@ -1208,12 +1189,7 @@ def _extract_checkers_image_ids(raw: dict) -> list[str]:
                         found.append(item)
                     return
 
-            # Checkers image reference forms.
-            for key in (
-                "imageId",
-                "image_id",
-                "id",
-            ):
+            for key in ("imageId", "image_id", "id"):
                 item = value.get(key)
                 if isinstance(item, str) and item.strip():
                     item = item.strip()
@@ -1221,15 +1197,10 @@ def _extract_checkers_image_ids(raw: dict) -> list[str]:
                         found.append(item)
                     return
 
-            # Some Parse responses nest the image object.
             for key in (
-                "image",
-                "images",
-                "media",
-                "productImage",
-                "product_image",
-                "data",
-                "result",
+                "image", "images", "media",
+                "productImage", "product_image",
+                "data", "result",
             ):
                 if key in value:
                     add(value.get(key))
@@ -1240,20 +1211,10 @@ def _extract_checkers_image_ids(raw: dict) -> list[str]:
                 add(item)
 
     for key in (
-        "imageId",
-        "image_id",
-        "imageIds",
-        "image_ids",
-        "image",
-        "images",
-        "productImage",
-        "product_image",
-        "productImageUrl",
-        "product_image_url",
-        "media",
-        "thumbnail",
-        "thumbnailUrl",
-        "thumbnail_url",
+        "imageId", "image_id", "imageIds", "image_ids",
+        "image", "images", "productImage", "product_image",
+        "productImageUrl", "product_image_url", "media",
+        "thumbnail", "thumbnailUrl", "thumbnail_url",
     ):
         if key in raw:
             add(raw.get(key))
@@ -1276,16 +1237,13 @@ def _image_to_https(value: str) -> str:
 def _resolve_checkers_image(image_id: str) -> str:
     """
     Resolve a Checkers image ID/reference to its real CDN URL.
-
-    Direct URLs are returned immediately. Checkers image IDs are resolved
-    through Parse's dedicated get_image_url endpoint.
+    Direct URLs are returned immediately.
     """
     image_id = _safe_string(image_id)
 
     if not image_id:
         return ""
 
-    # A response may already contain a usable CDN/browser URL.
     if image_id.startswith(("http://", "https://", "//")):
         return _image_to_https(image_id)
 
@@ -1294,9 +1252,7 @@ def _resolve_checkers_image(image_id: str) -> str:
 
     cache_key = (
         "checkers:image-url:"
-        + hashlib.sha256(
-            image_id.encode("utf-8")
-        ).hexdigest()
+        + hashlib.sha256(image_id.encode("utf-8")).hexdigest()
     )
 
     cached = _cache_get(cache_key)
@@ -1311,9 +1267,7 @@ def _resolve_checkers_image(image_id: str) -> str:
                 "X-API-Key": PARSE_API_KEY,
                 "Accept": "application/json",
             },
-            params={
-                "imageId": image_id,
-            },
+            params={"imageId": image_id},
             provider="Checkers image",
         )
     except StoreAPIError:
@@ -1330,18 +1284,12 @@ def _resolve_checkers_image(image_id: str) -> str:
 
         if isinstance(value, dict):
             for key in (
-                "url",
-                "imageUrl",
-                "image_url",
-                "cdnUrl",
-                "cdn_url",
-                "href",
-                "src",
+                "url", "imageUrl", "image_url",
+                "cdnUrl", "cdn_url", "href", "src",
             ):
                 item = value.get(key)
                 if item is not None:
                     collect(item)
-
             collect(value.get("data"))
             collect(value.get("result"))
             return
@@ -1356,13 +1304,7 @@ def _resolve_checkers_image(image_id: str) -> str:
         return ""
 
     url = _image_to_https(candidates[0])
-
-    _cache_set(
-        cache_key,
-        url,
-        86400,
-    )
-
+    _cache_set(cache_key, url, 86400)
     return url
 
 
@@ -1508,10 +1450,12 @@ def search_checkers_products(
     for row in rows[:limit]:
         row = dict(row)
 
-        # Checkers may return either a real image URL or an image ID.
-        # Resolve the first usable image reference before normalization.
-        # This is deliberately done before normalize_product() so the
-        # normalized product always exposes a browser-loadable image URL.
+        # Checkers can return an image ID/reference rather than a browser URL.
+        # Resolve it through Parse's dedicated get_image_url endpoint.
+        # The Checkers search API documents a singular "image" reference,
+        # while richer responses may expose imageId/imageIds. Resolve every
+        # supported reference before normalize_product sees it.
+        # Checkers may return a direct image URL or an image ID.
         for image_reference in _extract_checkers_image_ids(row):
             resolved = _resolve_checkers_image(image_reference)
             if resolved:
@@ -3085,3 +3029,501 @@ def find_nearby_stores(
             "distance_km": round(
                 distance,
                 2,
+            ),
+            "distance": round(
+                distance,
+                2,
+            ),
+            "source": "OpenStreetMap",
+        }
+
+        stores.append(store)
+
+        _cache_set(
+            f"store:location:{store['store_id']}",
+            store,
+            STORE_CACHE_TIMEOUT,
+        )
+
+    stores.sort(
+        key=lambda item: item[
+            "distance_km"
+        ]
+    )
+
+    _cache_set(
+        cache_key,
+        stores,
+        STORE_CACHE_TIMEOUT
+        if stores
+        else 60,
+    )
+
+    return stores
+
+
+def _nearest_store(
+    stores: list[dict],
+    latitude: float | None,
+    longitude: float | None,
+):
+    if (
+        latitude is None
+        or longitude is None
+        or not stores
+    ):
+        return None
+
+    valid = []
+
+    for store in stores:
+        try:
+            distance = _haversine_km(
+                latitude,
+                longitude,
+                float(
+                    store["latitude"]
+                ),
+                float(
+                    store["longitude"]
+                ),
+            )
+
+            item = dict(store)
+
+            item["distance_km"] = round(
+                distance,
+                2,
+            )
+            item["distance"] = round(
+                distance,
+                2,
+            )
+
+            valid.append(item)
+
+        except Exception:
+            continue
+
+    if not valid:
+        return None
+
+    return min(
+        valid,
+        key=lambda item: item[
+            "distance_km"
+        ],
+    )
+
+
+def _add_distance(
+    product: dict,
+    latitude: float | None,
+    longitude: float | None,
+):
+    location = (
+        product.get("location")
+        or {}
+    )
+
+    if not isinstance(
+        location,
+        dict,
+    ):
+        location = {}
+
+    store_lat = (
+        location.get("latitude")
+        or location.get("lat")
+    )
+    store_lon = (
+        location.get("longitude")
+        or location.get("lon")
+        or location.get("lng")
+    )
+
+    if (
+        latitude is None
+        or longitude is None
+        or store_lat is None
+        or store_lon is None
+    ):
+        product["distance_km"] = None
+        product["distance"] = None
+        return
+
+    try:
+        distance = round(
+            _haversine_km(
+                float(latitude),
+                float(longitude),
+                float(store_lat),
+                float(store_lon),
+            ),
+            2,
+        )
+
+        product["distance_km"] = distance
+        product["distance"] = distance
+
+    except Exception:
+        product["distance_km"] = None
+        product["distance"] = None
+
+
+def _attach_location(
+    products: list[dict],
+    latitude: float | None,
+    longitude: float | None,
+    radius_km: float,
+):
+    """
+    One cached OSM query per retailer/area, not one request per product.
+    """
+
+    retailer_names = sorted(
+        {
+            _safe_string(
+                product.get("retailer")
+                or product.get("store")
+            )
+            for product in products
+            if (
+                product.get("retailer")
+                or product.get("store")
+            )
+        }
+    )
+
+    stores_by_retailer = {}
+
+    for retailer in retailer_names:
+        if (
+            latitude is None
+            or longitude is None
+        ):
+            continue
+
+        # Use retailer-specific branch data first. This gives the UI
+        # an actual branch address/coordinates instead of an arbitrary
+        # supermarket found by OpenStreetMap.
+        if retailer == "Checkers":
+            try:
+                stores_by_retailer[retailer] = get_checkers_stores(
+                    latitude,
+                    longitude,
+                    radius_km,
+                )
+            except StoreAPIError:
+                stores_by_retailer[retailer] = []
+        elif retailer == "Pick n Pay":
+            try:
+                stores_by_retailer[retailer] = get_pnp_stores(
+                    latitude,
+                    longitude,
+                )
+                stores_by_retailer[retailer] = [
+                    store
+                    for store in stores_by_retailer[retailer]
+                    if store.get("distance_km") is not None
+                    and store.get("distance_km") <= radius_km
+                ]
+            except StoreAPIError:
+                stores_by_retailer[retailer] = []
+        else:
+            stores_by_retailer[retailer] = find_nearby_stores(
+                latitude,
+                longitude,
+                radius_km,
+                retailer=retailer,
+            )
+
+        # Retailer API branch lookup can fail or return no branch. Fall
+        # back to OSM rather than losing the product completely.
+        if not stores_by_retailer[retailer]:
+            stores_by_retailer[retailer] = find_nearby_stores(
+                latitude,
+                longitude,
+                radius_km,
+                retailer=retailer,
+            )
+
+    for product in products:
+        retailer = _normalise_retailer(
+            product.get("retailer")
+            or product.get("store")
+            or ""
+        )
+
+        location = (
+            product.get("location")
+            or {}
+        )
+
+        if not location:
+            nearest = _nearest_store(
+                stores_by_retailer.get(
+                    retailer,
+                    [],
+                ),
+                latitude,
+                longitude,
+            )
+
+            if nearest:
+                product["location"] = nearest
+                product["store_id"] = (
+                    product.get(
+                        "store_id"
+                    )
+                    or nearest.get(
+                        "store_id"
+                    )
+                )
+
+        _add_distance(
+            product,
+            latitude,
+            longitude,
+        )
+
+    return products
+
+
+# ============================================================
+# PRICE COMPARISON
+# ============================================================
+
+def _normalized_match_key(
+    product: dict,
+) -> str:
+    name = _safe_string(
+        product.get("name")
+        or product.get("title")
+    ).lower()
+
+    name = re.sub(
+        r"\b\d+(?:[.,]\d+)?\s*"
+        r"(kg|g|l|ml|pack|pk)\b",
+        "",
+        name,
+    )
+
+    name = re.sub(
+        r"[^a-z0-9]+",
+        " ",
+        name,
+    ).strip()
+
+    brand = _safe_string(
+        product.get("brand")
+    ).lower()
+
+    size = _safe_string(
+        product.get("size")
+    ).lower()
+
+    return (
+        f"{brand}|{name}|{size}"
+    )
+
+
+def compare_products(
+    products: list[dict],
+):
+    if not products:
+        return {
+            "products": [],
+            "cheapest": None,
+            "most_expensive": None,
+            "saving": Decimal("0"),
+        }
+
+    ordered = sorted(
+        products,
+        key=lambda item: _to_decimal(
+            item.get("price"),
+            "999999999.99",
+        ),
+    )
+
+    cheapest = ordered[0]
+    expensive = ordered[-1]
+
+    return {
+        "products": ordered,
+        "cheapest": cheapest,
+        "most_expensive": expensive,
+        "saving": (
+            _to_decimal(
+                expensive.get("price")
+            )
+            - _to_decimal(
+                cheapest.get("price")
+            )
+        ),
+    }
+
+
+def compare_equivalent_products(
+    products: list[dict],
+):
+    groups = {}
+
+    for product in products or []:
+        key = _normalized_match_key(
+            product
+        )
+        groups.setdefault(
+            key,
+            [],
+        ).append(product)
+
+    output = []
+
+    for key, group in groups.items():
+        if len(group) < 2:
+            continue
+
+        comparison = compare_products(
+            group
+        )
+        comparison["match_key"] = key
+        output.append(comparison)
+
+    return output
+
+
+def get_cheapest_product(
+    products,
+):
+    if not products:
+        return None
+
+    return min(
+        products,
+        key=lambda item: _to_decimal(
+            item.get("price"),
+            "999999999.99",
+        ),
+    )
+
+
+def get_most_expensive_product(
+    products,
+):
+    if not products:
+        return None
+
+    return max(
+        products,
+        key=lambda item: _to_decimal(
+            item.get("price")
+        ),
+    )
+
+
+# ============================================================
+# COMPATIBILITY HELPERS
+# ============================================================
+
+def extract_store_locations(
+    payload,
+):
+    if not isinstance(
+        payload,
+        dict,
+    ):
+        return []
+
+    data = (
+        payload.get("data")
+        or payload.get("stores")
+        or payload.get("results")
+        or []
+    )
+
+    if not isinstance(
+        data,
+        list,
+    ):
+        return []
+
+    return [
+        item
+        for item in data
+        if isinstance(
+            item,
+            dict,
+        )
+    ]
+
+
+def extract_pnp_products(
+    payload,
+):
+    rows = _extract_rows(
+        payload
+    )
+
+    return [
+        normalize_product(
+            item,
+            retailer="Pick n Pay",
+        )
+        for item in rows
+    ]
+
+
+def extract_price_comparisons(
+    payload,
+):
+    if isinstance(
+        payload,
+        dict,
+    ):
+        data = payload.get(
+            "data",
+            payload,
+        )
+
+        if isinstance(
+            data,
+            dict,
+        ):
+            return (
+                data.get("offers")
+                or data.get(
+                    "comparison"
+                )
+                or data.get(
+                    "matches"
+                )
+                or []
+            )
+
+        if isinstance(
+            data,
+            list,
+        ):
+            return data
+
+    if isinstance(
+        payload,
+        list,
+    ):
+        return payload
+
+    return []
+
+
+def get_store_locations_near_user(
+    latitude: float,
+    longitude: float,
+    radius_km: float = OSM_RADIUS_KM,
+):
+    return find_nearby_stores(
+        latitude,
+        longitude,
+        radius_km,
+    )
