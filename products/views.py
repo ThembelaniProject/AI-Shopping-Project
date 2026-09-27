@@ -508,11 +508,10 @@ def search(request):
         # Detail pages may load the product from cache. Prefer the branch
         # location cached during the original search, then the product's
         # own location data.
-        branch_location = (
-            store_location
-            if isinstance(store_location, dict)
-            else {}
-        )
+        branch_location = product.get("store_location") or {}
+
+        if not isinstance(branch_location, dict):
+            branch_location = {}
 
         if branch_location:
             store_location_data = {
