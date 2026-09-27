@@ -2606,13 +2606,15 @@ def search_products(
     Main function used by products/views.py.
 
     Provider flow:
-        Parse retailer APIs (Checkers + Pick n Pay)
-            -> optional LoyaltyHub refreshed-price fallback
+        Aggregate every configured provider:
+            AZ Labs -> Parse.bot -> LoyaltyHub
+        (providers without API keys are skipped)
 
     Cache flow:
-        fresh Redis cache -> return the same live result without another API call
-        cache miss -> query the retailer API
-        provider failure/rate limit -> use stale Redis data when available
+        fresh Redis cache -> return the same aggregated live result
+        cache miss -> query every configured provider
+        individual provider failure/rate limit -> continue with other providers
+        complete outage -> use stale Redis data when available
         successful result -> store both fresh and 48-hour stale copies
         final search response -> cached with location data included
 
@@ -2633,9 +2635,12 @@ def search_products(
     except (TypeError, ValueError):
         requested_limit = 20
 
+    # Query every configured provider with the full requested page size.
+    # The previous 20-item cap meant an aggregator search could silently
+    # miss products from later providers.
     provider_limit = min(
         requested_limit,
-        20,
+        100,
     )
 
     # One short-lived Redis entry covers the complete search, including
@@ -2672,11 +2677,11 @@ def search_products(
             )
 
             if results:
+                # Aggregator mode: keep searching the remaining providers
+                # instead of stopping at the first successful API.
+                # _deduplicate_products() removes overlapping retailer
+                # records after all configured sources have responded.
                 products.extend(results)
-
-                # Stop after the first successful provider tier. The
-                # primary Parse tier already queries both live retailers.
-                break
 
         except StoreAPIError as exc:
             errors.append(
