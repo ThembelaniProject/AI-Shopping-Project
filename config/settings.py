@@ -198,13 +198,10 @@ PARSE_API_KEY = _env_value(
     "PARSE_API_KEY",
     "PARSE_BOT_API_KEY",
 )
-LOYALTYHUB_API_KEY = _env_value(
-    "LOYALTYHUB_API_KEY",
-)
 AZLABS_API_KEY = _env_value(
     "AZLABS_API_KEY",
 )
 RETAILER_API_PROVIDER = _env_value(
     "RETAILER_API_PROVIDER",
-    default="azlabs",
+    default="pricecheck",
 ).lower()
