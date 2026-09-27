@@ -1766,7 +1766,7 @@ def get_checkers_stores(
 
         if store["store_id"]:
             _cache_set(
-                f"store:location:{store['store_id']}",
+                f"store:location:v2:{store['store_id']}",
                 store,
                 STORE_CACHE_TIMEOUT,
             )
@@ -1826,7 +1826,7 @@ def get_pnp_stores(
             "PARSE_API_KEY is not configured."
         )
 
-    cache_key = "pnp:stores:all"
+    cache_key = "pnp:stores:all:v2"
 
     stores = _cache_get(cache_key)
 
@@ -2889,7 +2889,7 @@ def get_store_location(
         return None
 
     return _cache_get(
-        f"store:location:{store_id}"
+        f"store:location:v2:{store_id}"
     )
 
 
