@@ -98,6 +98,7 @@ API_PROVIDER = _clean_secret(
 
 AZLABS_BASE_URL = "https://azlabs.ai/api/v1"
 AZLABS_SEARCH_URL = f"{AZLABS_BASE_URL}/grocery/search"
+AZLABS_COMPARE_URL = f"{AZLABS_BASE_URL}/grocery/compare"
 
 PARSE_BASE_URL = _clean_secret(
     getattr(settings, "PARSE_BASE_URL", None)
@@ -159,7 +160,7 @@ LIVE_PRICE_MODE = (
 
 CACHE_TIMEOUT = int(os.getenv("PRODUCT_CACHE_TIMEOUT", "900"))
 STALE_CACHE_TIMEOUT = int(os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "604800"))
-SEARCH_CACHE_VERSION = "v10"
+SEARCH_CACHE_VERSION = "v11"
 COOLDOWN_CACHE_TIMEOUT = int(os.getenv("RETAILER_COOLDOWN_CACHE_TIMEOUT", "900"))
 
 STORE_CACHE_TIMEOUT = int(
@@ -1517,7 +1518,14 @@ def search_azlabs_products(
     keyword: str,
     limit: int = 20,
 ) -> list[dict]:
-    """Search AZ Labs live Pick n Pay + Checkers grocery data."""
+    """
+    Search AZ Labs' live grocery comparison endpoint.
+
+    /grocery/compare returns size-normalized matches containing offers
+    from Pick n Pay and Checkers. Each offer is exposed as an individual
+    product so the existing SmartSpend result cards can show the exact
+    retailer price and stock state.
+    """
     if not AZLABS_API_KEY:
         raise StoreAPIError(
             "AZLABS_API_KEY is not configured."
@@ -1528,66 +1536,150 @@ def search_azlabs_products(
         return []
 
     limit = max(1, min(int(limit), 20))
-    cache_key = f"azlabs:search:{keyword.lower()}:{limit}"
+    cache_key = f"azlabs:compare:{keyword.lower()}:{limit}"
 
     cached = _cache_get(cache_key)
     if cached is not None:
-        return _mark_cached_products(cached, "cached", False)
+        return _mark_cached_products(
+            cached,
+            "cached",
+            False,
+        )
 
     try:
         payload = _request_json(
             "GET",
-            AZLABS_SEARCH_URL,
+            AZLABS_COMPARE_URL,
             headers={
                 "Authorization": f"Bearer {AZLABS_API_KEY}",
                 "Accept": "application/json",
             },
             params={
                 "q": keyword,
-                "store": "all",
+                "limit": limit,
             },
             provider="AZ Labs",
         )
     except StoreAPIError:
         stale = _cache_stale_get(cache_key)
         if stale is not None:
-            return _mark_cached_products(stale, "stale", False)
+            return _mark_cached_products(
+                stale,
+                "stale",
+                False,
+            )
         raise
 
-    rows = _extract_rows(payload)
+    matches = payload.get("matches", []) if isinstance(payload, dict) else []
+    if not isinstance(matches, list):
+        matches = []
+
     products = []
 
-    for row in rows[:limit]:
-        if not isinstance(row, dict):
+    for match in matches[:limit]:
+        if not isinstance(match, dict):
             continue
 
-        retailer = _normalise_retailer(
-            row.get("retailer")
-            or row.get("store")
-            or row.get("merchant")
-            or "Retailer"
+        match_name = _safe_string(
+            match.get("name")
+            or match.get("title")
+            or keyword
+        )
+        match_size = _safe_string(
+            match.get("size")
+        )
+        match_saving = _to_decimal(
+            match.get("saving"),
+            "0",
         )
 
-        product = normalize_product(
-            row,
-            retailer=retailer,
-        )
-        product["price_source"] = "AZ Labs live grocery API"
-        product["price_is_live"] = True
-        product["price_freshness"] = "live"
-        products.append(product)
-        _cache_product(product)
+        offers = match.get("offers", [])
+        if not isinstance(offers, list):
+            offers = []
+
+        for offer in offers:
+            if not isinstance(offer, dict):
+                continue
+
+            store = _safe_string(
+                offer.get("store")
+                or offer.get("retailer")
+                or offer.get("merchant")
+            )
+            offer_name = _safe_string(
+                offer.get("name")
+                or match_name
+            )
+
+            if not store or not offer_name:
+                continue
+
+            price = _to_decimal(
+                offer.get("price"),
+                "0",
+            )
+            if price <= 0:
+                continue
+
+            retailer = _normalise_retailer(store)
+
+            raw_offer = dict(offer)
+            raw_offer["name"] = offer_name
+            raw_offer["price"] = price
+            raw_offer["size"] = (
+                _safe_string(offer.get("size"))
+                or match_size
+            )
+            raw_offer["retailer"] = retailer
+            raw_offer["store"] = store
+            raw_offer["inStock"] = offer.get(
+                "inStock",
+                offer.get("in_stock"),
+            )
+
+            product = normalize_product(
+                raw_offer,
+                retailer=retailer,
+            )
+
+            # AZ Labs returns live comparison data. Do not convert the
+            # match-level saving into a product discount: it is the
+            # difference between retailer offers, not necessarily a sale.
+            product["price_source"] = (
+                "AZ Labs live grocery comparison API"
+            )
+            product["price_is_live"] = True
+            product["price_freshness"] = "live"
+            product["stock_available"] = _safe_bool(
+                raw_offer.get("inStock"),
+                False,
+            )
+            product["azlabs_match_name"] = match_name
+            product["azlabs_match_size"] = match_size
+            product["azlabs_cheapest_stores"] = (
+                match.get("cheapestStores")
+                if isinstance(match.get("cheapestStores"), list)
+                else []
+            )
+            product["azlabs_comparison_saving"] = (
+                match_saving
+            )
+
+            products.append(product)
 
     _cache_set(
         cache_key,
         products,
         CACHE_TIMEOUT if products else 60,
     )
+
     if products:
-        _cache_stale_set(cache_key, products)
+        _cache_stale_set(
+            cache_key,
+            products,
+        )
 
     return products
-
 
 # ============================================================
 # CHECKERS THROUGH PARSE
