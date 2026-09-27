@@ -174,7 +174,7 @@ STALE_CACHE_TIMEOUT = int(
     os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "172800")
 )  # 48 hours
 
-SEARCH_CACHE_VERSION = "v8"
+SEARCH_CACHE_VERSION = "v9"
 COOLDOWN_CACHE_TIMEOUT = int(
     os.getenv("RETAILER_COOLDOWN_CACHE_TIMEOUT", "300")
 )
@@ -2962,6 +2962,71 @@ def _deduplicate_products(
     return output
 
 
+def _interleave_retailer_products(
+    products: list[dict],
+) -> list[dict]:
+    """
+    Keep the aggregated search balanced across live retailers.
+
+    Previously the providers were all queried, but the first provider
+    could fill the requested page before Checkers/PnP rows reached the UI.
+    This made Checkers appear to be unavailable even when its API returned
+    valid products. Interleave the live retailer groups so configured
+    sources remain visible on the same search page.
+    """
+    groups: dict[str, list[dict]] = {}
+    order: list[str] = []
+
+    for product in products:
+        retailer = _normalise_retailer(
+            product.get("retailer")
+            or product.get("store")
+            or "Retailer"
+        )
+
+        if retailer not in groups:
+            groups[retailer] = []
+            order.append(retailer)
+
+        groups[retailer].append(product)
+
+    if len(order) <= 1:
+        return products
+
+    # Prefer the two retailer APIs that provide direct live catalogue data,
+    # then continue with every other configured provider.
+    preferred = [
+        retailer
+        for retailer in ("Checkers", "Pick n Pay")
+        if retailer in groups
+    ]
+    remaining = [
+        retailer
+        for retailer in order
+        if retailer not in preferred
+    ]
+    ordered_groups = preferred + remaining
+
+    output: list[dict] = []
+    index = 0
+
+    while True:
+        added = False
+
+        for retailer in ordered_groups:
+            rows = groups[retailer]
+            if index < len(rows):
+                output.append(rows[index])
+                added = True
+
+        if not added:
+            break
+
+        index += 1
+
+    return output
+
+
 # ============================================================
 # PUBLIC SEARCH
 # ============================================================
@@ -3062,6 +3127,11 @@ def search_products(
     products = _deduplicate_products(
         products
     )
+
+    # Do not let AZ Labs or PriceCheck consume the entire requested page.
+    # The providers are aggregated, then deliberately interleaved so
+    # Checkers/PnP live catalogue results are visible when they are available.
+    products = _interleave_retailer_products(products)
 
     if not products:
         stale_results = _cache_stale_get(final_cache_key)
