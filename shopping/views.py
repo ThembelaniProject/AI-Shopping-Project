@@ -1,5 +1,6 @@
 from decimal import Decimal, InvalidOperation
 from datetime import timedelta
+import ast
 
 from django.conf import settings
 from django.contrib import messages
@@ -275,21 +276,49 @@ def _product_price(product):
         return Decimal("0.00")
 
 
-def _product_snapshot(product, fallback_id=""):
-    raw_store = product.get("store")
-    if isinstance(raw_store, dict):
-        store_name = (
-            raw_store.get("name")
-            or raw_store.get("storeName")
-            or raw_store.get("store_name")
-            or raw_store.get("displayName")
-            or raw_store.get("brand")
-            or ""
-        )
-    else:
-        store_name = raw_store or ""
+def _clean_store_name(store_value, retailer=""):
+    """Return a human-readable retailer/store name, never raw store metadata."""
+    if isinstance(store_value, dict):
+        return str(
+            store_value.get("name")
+            or store_value.get("storeName")
+            or store_value.get("store_name")
+            or store_value.get("displayName")
+            or store_value.get("brand")
+            or retailer
+            or "Store"
+        ).strip()
 
-    store_name = str(store_name).strip()
+    if isinstance(store_value, str):
+        value = store_value.strip()
+        if value.startswith("{") and value.endswith("}"):
+            try:
+                parsed = ast.literal_eval(value)
+            except (ValueError, SyntaxError):
+                parsed = None
+            if isinstance(parsed, dict):
+                return str(
+                    parsed.get("name")
+                    or parsed.get("storeName")
+                    or parsed.get("store_name")
+                    or parsed.get("displayName")
+                    or parsed.get("brand")
+                    or retailer
+                    or "Store"
+                ).strip()
+        return value
+
+    return str(retailer or "Store").strip()
+
+
+def _product_snapshot(product, fallback_id=""):
+    retailer = (
+        product.get("retailer")
+        or product.get("brand")
+        or product.get("merchant")
+        or ""
+    )
+    store_name = _clean_store_name(product.get("store"), retailer)
 
     return {
         "product_id": str(product.get("id") or product.get("product_id") or fallback_id),
@@ -343,7 +372,15 @@ def shopping_list(request):
     profile = _get_user_profile(request)
     if not profile.terms_accepted:
         return redirect("accounts:accept_terms")
-    items = ShoppingListItem.objects.filter(user=request.user)
+    items = list(ShoppingListItem.objects.filter(user=request.user))
+
+    # Clean legacy rows that stored the complete retailer/store metadata dict.
+    for item in items:
+        cleaned_store = _clean_store_name(item.store)
+        if cleaned_store != item.store:
+            item.store = cleaned_store[:255]
+            item.save(update_fields=["store"])
+
     estimated_total = sum((item.estimated_total for item in items), Decimal("0.00"))
     remaining_after_list = profile.available_amount - _current_month_spending(request.user) - estimated_total
     return render(request, "shopping/shopping_list.html", {
