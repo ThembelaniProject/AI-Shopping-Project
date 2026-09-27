@@ -110,8 +110,8 @@ PRICECHECK_SCRAPER_ID = _clean_secret(
 )
 PRICECHECK_SEARCH_URL = f"{PARSE_BASE_URL}/{PRICECHECK_SCRAPER_ID}/search_products"
 PRICECHECK_OFFERS_URL = f"{PARSE_BASE_URL}/{PRICECHECK_SCRAPER_ID}/get_product_offers"
-PRICECHECK_MAX_PRODUCTS = max(1, min(int(os.getenv("PRICECHECK_MAX_PRODUCTS", "4")), 4))
-PRICECHECK_MAX_OFFERS = max(1, min(int(os.getenv("PRICECHECK_MAX_OFFERS", "100")), 100))
+PRICECHECK_MAX_PRODUCTS = max(1, min(int(os.getenv("PRICECHECK_MAX_PRODUCTS", "2")), 2))
+PRICECHECK_MAX_OFFERS = max(1, min(int(os.getenv("PRICECHECK_MAX_OFFERS", "50")), 50))
 
 CHECKERS_SCRAPER_ID = "a7a3a4ba-dfb7-4476-9712-8753b2fb3140"
 CHECKERS_SEARCH_URL = (
@@ -1195,12 +1195,31 @@ def _request_json(
     json: dict | None = None,
     provider: str,
 ) -> Any:
-    cooldown_key = f"retailer:cooldown:{_retailer_key(provider)}"
-    if _cache_get(cooldown_key):
-        raise StoreAPIError(
-            f"{provider} is temporarily rate-limited. "
-            "Using cached data when available."
-        )
+    provider_key = _retailer_key(provider)
+    parse_backed = provider_key in {
+        "pricecheck_search",
+        "checkers",
+        "pick_n_pay",
+        "pick_n_pay_stores",
+        "pnp",
+    }
+
+    # PriceCheck, Checkers and Pick n Pay all consume the same Parse.bot
+    # API key/quota. A 429 from one must therefore pause the whole Parse
+    # provider family instead of making three more requests that will also
+    # return 429.
+    cooldown_keys = (
+        ["retailer:cooldown:parse"]
+        if parse_backed
+        else [f"retailer:cooldown:{provider_key}"]
+    )
+
+    for cooldown_key in cooldown_keys:
+        if _cache_get(cooldown_key):
+            raise StoreAPIError(
+                f"{provider} is temporarily rate-limited. "
+                "Using cached data when available."
+            )
 
     try:
         response = SESSION.request(
@@ -1247,8 +1266,13 @@ def _request_json(
         except (TypeError, ValueError):
             cooldown = COOLDOWN_CACHE_TIMEOUT
 
+        cooldown_key = (
+            "retailer:cooldown:parse"
+            if parse_backed
+            else f"retailer:cooldown:{provider_key}"
+        )
         _cache_set(
-            f"retailer:cooldown:{_retailer_key(provider)}",
+            cooldown_key,
             True,
             cooldown,
         )
