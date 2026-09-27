@@ -1387,6 +1387,63 @@ def _resolve_checkers_image(image_id: str) -> str:
     return url
 
 
+def _get_checkers_detail_images(slug: str) -> list[str]:
+    """Fetch and resolve Checkers imageIds from get_product_details."""
+    slug = _safe_string(slug)
+    if not slug or not PARSE_API_KEY:
+        return []
+
+    cache_key = (
+        "checkers:detail-images:"
+        + hashlib.sha256(slug.encode("utf-8")).hexdigest()
+    )
+    cached = _cache_get(cache_key)
+    if cached:
+        return list(cached)
+
+    try:
+        payload = _request_json(
+            "GET",
+            f"{PARSE_BASE_URL}/{CHECKERS_SCRAPER_ID}/get_product_details",
+            headers={
+                "X-API-Key": PARSE_API_KEY,
+                "Accept": "application/json",
+            },
+            params={"slug": slug},
+            provider="Checkers details",
+        )
+    except StoreAPIError:
+        return []
+
+    raw_images = []
+    if isinstance(payload, dict):
+        raw_images.extend([
+            payload.get("imageIds"),
+            payload.get("image_ids"),
+            payload.get("images"),
+            payload.get("imageId"),
+            payload.get("image_id"),
+            payload.get("image"),
+            (payload.get("data") or {}).get("imageIds")
+            if isinstance(payload.get("data"), dict) else None,
+            (payload.get("data") or {}).get("imageIds")
+            if isinstance(payload.get("data"), dict) else None,
+        ])
+
+    resolved = []
+    for reference in raw_images:
+        for image_reference in _extract_checkers_image_ids(
+            {"images": reference}
+        ):
+            url = _resolve_checkers_image(image_reference)
+            if url and url not in resolved:
+                resolved.append(url)
+
+    if resolved:
+        _cache_set(cache_key, resolved, 86400)
+    return resolved
+
+
 # ============================================================
 # AZ LABS LIVE GROCERY API
 # ============================================================
@@ -1535,13 +1592,39 @@ def search_checkers_products(
         # while richer responses may expose imageId/imageIds. Resolve every
         # supported reference before normalize_product sees it.
         # Checkers may return a direct image URL or an image ID.
+        # Parse returns Checkers image references (not necessarily browser URLs).
+        # Resolve every reference through get_image_url and keep all resolved
+        # URLs so the first broken CDN reference does not hide a valid image.
+        resolved_images = []
         for image_reference in _extract_checkers_image_ids(row):
             resolved = _resolve_checkers_image(image_reference)
-            if resolved:
-                row["image_url"] = resolved
-                row["imageUrl"] = resolved
-                row["image"] = resolved
-                break
+            if resolved and resolved not in resolved_images:
+                resolved_images.append(resolved)
+
+        if resolved_images:
+            row["images"] = resolved_images
+            row["imageIds"] = _extract_checkers_image_ids(row)
+            row["image_url"] = resolved_images[0]
+            row["imageUrl"] = resolved_images[0]
+            row["image"] = resolved_images[0]
+        else:
+            # Search responses can occasionally omit the image reference.
+            # The details endpoint exposes imageIds, so use it as a targeted
+            # fallback when the search row contains a product slug/id.
+            details_slug = _safe_string(
+                row.get("slug")
+                or row.get("productSlug")
+                or row.get("product_slug")
+                or row.get("urlSlug")
+                or row.get("url_slug")
+            )
+            if details_slug:
+                details_images = _get_checkers_detail_images(details_slug)
+                if details_images:
+                    row["images"] = details_images
+                    row["image_url"] = details_images[0]
+                    row["imageUrl"] = details_images[0]
+                    row["image"] = details_images[0]
 
         # Parse's Checkers API documents priceWithoutDecimal as ZAR
         # cents. It is the authoritative numeric retailer price when
