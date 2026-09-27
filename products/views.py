@@ -13,6 +13,7 @@ from .services.store_api import (
     StoreAPIError,
     _extract_store_id,
     _cache_product,
+    _get_checkers_detail_images,
 )
 
 
@@ -1236,6 +1237,50 @@ def detail(request, product_id):
         product_image = get_product_image(
             product
         )
+
+        # Resolve Checkers images only for the product detail page.
+        # Search results no longer spend Parse requests resolving every image.
+        retailer_name = str(
+            product.get("retailer")
+            or product.get("source")
+            or ""
+        ).strip().lower()
+
+        if not product_image and "checkers" in retailer_name:
+            checkers_slug = str(
+                product.get("checkers_slug")
+                or product.get("slug")
+                or ""
+            ).strip()
+
+            if not checkers_slug:
+                article_number = str(
+                    product.get("article_number")
+                    or product.get("articleNumber")
+                    or ""
+                ).strip()
+
+                if article_number and product_name:
+                    slug_name = re.sub(
+                        r"[^a-z0-9]+",
+                        "-",
+                        product_name.lower(),
+                    ).strip("-")
+                    checkers_slug = f"{slug_name}-{article_number}EA"
+
+            if checkers_slug:
+                try:
+                    detail_images = _get_checkers_detail_images(
+                        checkers_slug
+                    )
+                except Exception:
+                    detail_images = []
+
+                if detail_images:
+                    product["images"] = detail_images
+                    product_image = detail_images[0]
+
+        product["image"] = product_image
 
         # ==================================================
         # PRICE
