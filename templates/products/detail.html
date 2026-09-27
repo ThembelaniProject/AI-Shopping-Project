@@ -320,8 +320,26 @@
 
                     <p>
                         <strong>Shipping:</strong>
-                        R{{ product.shipping_cost|floatformat:2 }}
+                        {% if product.shipping_options %}
+                            {{ product.shipping_options|join:", " }}
+                        {% elif product.shipping_cost %}
+                            R{{ product.shipping_cost|floatformat:2 }}
+                        {% else %}
+                            Delivery options unavailable
+                        {% endif %}
                     </p>
+
+                    {% if product.store_address %}
+                        <p>
+                            <strong>Address:</strong>
+                            {{ product.store_address }}
+                        </p>
+                    {% elif product.location.address %}
+                        <p>
+                            <strong>Address:</strong>
+                            {{ product.location.address }}
+                        </p>
+                    {% endif %}
 
                     {% if product.rating %}
                         <p>
