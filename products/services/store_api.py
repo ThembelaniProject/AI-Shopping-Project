@@ -1532,7 +1532,7 @@ def search_azlabs_products(
 
     cached = _cache_get(cache_key)
     if cached is not None:
-        return _mark_cached_products(cached, "live", True)
+        return _mark_cached_products(cached, "cached", False)
 
     try:
         payload = _request_json(
@@ -3003,8 +3003,8 @@ def search_products(
     if cached_results is not None:
         return _mark_cached_products(
             cached_results,
-            "live",
-            True,
+            "cached",
+            False,
         )
 
     errors = []
