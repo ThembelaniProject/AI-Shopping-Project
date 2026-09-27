@@ -276,6 +276,16 @@ def _product_price(product):
         return Decimal("0.00")
 
 
+def _retailer_from_product_id(product_id=""):
+    """Infer the retailer from normalized provider-prefixed product IDs."""
+    value = str(product_id or "").strip().lower()
+    if value.startswith("checkers_") or value.startswith("checkers-"):
+        return "Checkers"
+    if value.startswith("pnp_") or value.startswith("pnp-") or value.startswith("picknpay_"):
+        return "Pick n Pay"
+    return ""
+
+
 def _clean_store_name(store_value, retailer=""):
     """Return a human-readable retailer/store name, never raw store metadata."""
     if isinstance(store_value, dict):
@@ -312,16 +322,18 @@ def _clean_store_name(store_value, retailer=""):
 
 
 def _product_snapshot(product, fallback_id=""):
+    product_id = str(product.get("id") or product.get("product_id") or fallback_id)
     retailer = (
         product.get("retailer")
         or product.get("brand")
         or product.get("merchant")
+        or _retailer_from_product_id(product_id)
         or ""
     )
     store_name = _clean_store_name(product.get("store"), retailer)
 
     return {
-        "product_id": str(product.get("id") or product.get("product_id") or fallback_id),
+        "product_id": product_id,
         "product_name": str(product.get("name") or "Product").strip(),
         "store": store_name[:255],
         "category": str(product.get("category") or "").strip(),
@@ -376,7 +388,11 @@ def shopping_list(request):
 
     # Clean legacy rows that stored the complete retailer/store metadata dict.
     for item in items:
-        cleaned_store = _clean_store_name(item.store)
+        retailer = _retailer_from_product_id(item.product_id)
+        cleaned_store = _clean_store_name(item.store, retailer)
+        # Never allow raw API metadata dictionaries to reach the template.
+        if isinstance(item.store, str) and item.store.lstrip().startswith("{"):
+            cleaned_store = retailer or cleaned_store
         cleaned_store = cleaned_store[:255]
         item.store_display = cleaned_store
         if cleaned_store != item.store:
