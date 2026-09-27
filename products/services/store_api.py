@@ -2488,8 +2488,12 @@ def _provider_order() -> list[str]:
     if LOYALTYHUB_API_KEY:
         available.append("loyaltyhub")
 
+    # Preferred provider controls ordering only. Every configured provider
+    # must still be queried so live search always aggregates all sources.
     if API_PROVIDER == "loyaltyhub":
-        return ["loyaltyhub"] if LOYALTYHUB_API_KEY else available
+        return (["loyaltyhub"] if LOYALTYHUB_API_KEY else []) + [
+            p for p in available if p != "loyaltyhub"
+        ]
 
     preferred = API_PROVIDER if API_PROVIDER in {
         "azlabs",
