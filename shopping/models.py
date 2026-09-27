@@ -13,7 +13,7 @@ class PurchaseHistory(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="purchase_history")
     product_id = models.CharField(max_length=255, blank=True)
     product_name = models.CharField(max_length=255)
-    store = models.CharField(max_length=100, blank=True)
+    store = models.CharField(max_length=255, blank=True)
     category = models.CharField(max_length=150, blank=True)
     image_url = models.URLField(blank=True, null=True)
     product_url = models.URLField(blank=True, null=True)
