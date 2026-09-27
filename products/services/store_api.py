@@ -159,7 +159,7 @@ LIVE_PRICE_MODE = (
 
 CACHE_TIMEOUT = int(os.getenv("PRODUCT_CACHE_TIMEOUT", "900"))
 STALE_CACHE_TIMEOUT = int(os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "604800"))
-SEARCH_CACHE_VERSION = "v11"
+SEARCH_CACHE_VERSION = "v10"
 COOLDOWN_CACHE_TIMEOUT = int(os.getenv("RETAILER_COOLDOWN_CACHE_TIMEOUT", "900"))
 
 STORE_CACHE_TIMEOUT = int(
@@ -1965,15 +1965,24 @@ def get_pnp_stores(
     stores = _cache_get(cache_key)
 
     if stores is None:
-        payload = _request_json(
-            "GET",
-            PNP_STORES_URL,
-            headers={
-                "X-API-Key": PARSE_API_KEY,
-                "Accept": "application/json",
-            },
-            provider="Pick n Pay stores",
-        )
+        try:
+            payload = _request_json(
+                "GET",
+                PNP_STORES_URL,
+                headers={
+                    "X-API-Key": PARSE_API_KEY,
+                    "Accept": "application/json",
+                },
+                provider="Pick n Pay stores",
+            )
+        except StoreAPIError:
+            # Branch coordinates change infrequently. Reuse the last
+            # successful branch catalogue during a Parse rate limit/outage.
+            stale_stores = _cache_stale_get(cache_key)
+            if stale_stores is not None:
+                stores = stale_stores
+            else:
+                raise
 
         if isinstance(payload, dict):
             stores = payload.get("stores") or payload.get("data") or []
@@ -1992,6 +2001,10 @@ def get_pnp_stores(
             cache_key,
             stores,
             STORE_CACHE_TIMEOUT,
+        )
+        _cache_stale_set(
+            cache_key,
+            stores,
         )
 
     if latitude is None or longitude is None:
