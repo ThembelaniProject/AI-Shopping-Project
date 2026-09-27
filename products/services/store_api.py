@@ -2261,7 +2261,7 @@ def search_pricecheck_products(
     cache_key = f"pricecheck:search:v1:{keyword.lower()}:{product_limit}"
 
     cached = _cache_get(cache_key)
-    if cached is not None and not LIVE_PRICE_MODE:
+    if cached is not None:
         return _mark_cached_products(cached, "live", True)
 
     try:
@@ -2297,7 +2297,7 @@ def search_pricecheck_products(
         detail_key = f"pricecheck:offers:{pc_id}"
         detail = _cache_get(detail_key)
 
-        if detail is None or LIVE_PRICE_MODE:
+        if detail is None:
             try:
                 detail = _request_json(
                     "GET",
