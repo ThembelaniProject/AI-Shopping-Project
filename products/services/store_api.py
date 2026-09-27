@@ -30,6 +30,20 @@ from django.core.cache import cache
 
 
 # ============================================================
+# BASIC VALUE HELPERS
+# ============================================================
+
+def _safe_string(
+    value: Any,
+    default: str = "",
+) -> str:
+    if value is None:
+        return default
+    return str(value).strip()
+
+
+
+# ============================================================
 # CONFIGURATION
 # ============================================================
 
@@ -242,15 +256,6 @@ def _cache_stale_set(key: str, value: Any):
 # ============================================================
 # BASIC HELPERS
 # ============================================================
-
-def _safe_string(
-    value: Any,
-    default: str = "",
-) -> str:
-    if value is None:
-        return default
-    return str(value).strip()
-
 
 def _to_decimal(
     value: Any,
