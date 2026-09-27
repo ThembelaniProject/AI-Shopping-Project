@@ -377,6 +377,16 @@ def _retailer_key(value: str) -> str:
 
 
 def _normalise_retailer(value: str) -> str:
+    # Retailer fields can be nested store objects in live Checkers/PnP feeds.
+    if isinstance(value, dict):
+        value = (
+            value.get("name")
+            or value.get("storeName")
+            or value.get("store_name")
+            or value.get("brand")
+            or value.get("retailer")
+            or ""
+        )
     text = _safe_string(value).lower()
 
     if "pick n pay" in text or "picknpay" in text or text == "pnp":
@@ -1603,11 +1613,24 @@ def search_checkers_products(
 
         if resolved_images:
             row["images"] = resolved_images
-            row["imageIds"] = _extract_checkers_image_ids(row)
             row["image_url"] = resolved_images[0]
             row["imageUrl"] = resolved_images[0]
             row["image"] = resolved_images[0]
         else:
+            # An unresolved Checkers imageId is NOT a browser URL. Remove it
+            # before normalization so Open Food Facts can supply a real image
+            # instead of the browser trying to load a Mongo/object ID.
+            for image_key in (
+                "image", "imageId", "image_id", "imageIds", "image_ids",
+                "images", "image_url", "imageUrl", "thumbnail", "thumbnailUrl",
+                "thumbnail_url", "productImage", "product_image",
+            ):
+                value = row.get(image_key)
+                if value is not None:
+                    refs = _extract_checkers_image_ids({image_key: value})
+                    if refs:
+                        row.pop(image_key, None)
+
             # Search responses can occasionally omit the image reference.
             # The details endpoint exposes imageIds, so use it as a targeted
             # fallback when the search row contains a product slug/id.
@@ -3796,18 +3819,46 @@ def _attach_location(
                     or nearest_match.get("store_id")
                 )
 
-        if not product.get("location"):
+        # A product may already contain a small Checkers store object
+        # (storeId/serviceOptionIds/distanceFromCustomer) without address or
+        # coordinates. Replace/merge it with the real branch returned by
+        # find_stores so the UI gets a proper name, address and distance.
+        retailer_stores = stores_by_retailer.get(retailer, [])
+        current_store_id = _safe_string(
+            product.get("store_id")
+            or location.get("store_id")
+            or location.get("storeId")
+            or location.get("id")
+        )
+        nearest = None
+        if current_store_id and retailer_stores:
+            nearest = next(
+                (
+                    store for store in retailer_stores
+                    if _safe_string(store.get("store_id")) == current_store_id
+                ),
+                None,
+            )
+        if nearest is None:
             nearest = _nearest_store(
-                stores_by_retailer.get(retailer, []),
+                retailer_stores,
                 latitude,
                 longitude,
             )
-            if nearest:
-                product["location"] = nearest
-                product["store_id"] = (
-                    product.get("store_id")
-                    or nearest.get("store_id")
-                )
+
+        if nearest:
+            existing_location = product.get("location") or {}
+            if not isinstance(existing_location, dict):
+                existing_location = {}
+            product["location"] = {
+                **existing_location,
+                **nearest,
+            }
+            product["store_id"] = (
+                product.get("store_id")
+                or nearest.get("store_id")
+            )
+            product["store"] = nearest.get("name") or product.get("store")
 
         _add_distance(
             product,
