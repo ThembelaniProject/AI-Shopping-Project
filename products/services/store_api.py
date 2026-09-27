@@ -33,20 +33,37 @@ from django.core.cache import cache
 # CONFIGURATION
 # ============================================================
 
-PARSE_API_KEY = (
+def _clean_secret(value: Any) -> str:
+    """Normalize secrets copied into .env/Vercel without exposing them."""
+    value = _safe_string(value)
+    if len(value) >= 2 and value[0] == value[-1] and value[0] in {"\"", "'"}:
+        value = value[1:-1].strip()
+    return value
+
+
+PARSE_API_KEY = _clean_secret(
     getattr(settings, "PARSE_API_KEY", None)
     or os.getenv("PARSE_API_KEY", "")
-).strip()
+    or os.getenv("PARSE_BOT_API_KEY", "")
+)
 
-LOYALTYHUB_API_KEY = (
+LOYALTYHUB_API_KEY = _clean_secret(
     getattr(settings, "LOYALTYHUB_API_KEY", None)
     or os.getenv("LOYALTYHUB_API_KEY", "")
-).strip()
+)
 
-API_PROVIDER = os.getenv(
-    "RETAILER_API_PROVIDER",
-    "parse",
-).strip().lower()
+AZLABS_API_KEY = _clean_secret(
+    getattr(settings, "AZLABS_API_KEY", None)
+    or os.getenv("AZLABS_API_KEY", "")
+)
+
+API_PROVIDER = _clean_secret(
+    getattr(settings, "RETAILER_API_PROVIDER", None)
+    or os.getenv("RETAILER_API_PROVIDER", "azlabs")
+).lower()
+
+AZLABS_BASE_URL = "https://azlabs.ai/api/v1"
+AZLABS_SEARCH_URL = f"{AZLABS_BASE_URL}/grocery/search"
 
 PARSE_BASE_URL = "https://api.parse.bot/scraper"
 
@@ -524,6 +541,7 @@ def _extract_rows(payload: Any) -> list[dict]:
         payload.get("results"),
         payload.get("items"),
         payload.get("offers"),
+        payload.get("matches"),
         payload.get("data"),
     ]
 
@@ -1083,8 +1101,12 @@ def _request_json(
         ) from exc
 
     if response.status_code == 401:
+        # Keep the provider name in the error, but do not imply the
+        # retailer itself is unavailable. A 401 is an integration-key
+        # problem and the caller can safely try the next provider.
         raise StoreAPIError(
-            f"{provider} API key is invalid."
+            f"{provider} authentication failed (HTTP 401). "
+            "Check the API key configured in the deployment environment."
         )
 
     if response.status_code == 403:
@@ -1254,6 +1276,86 @@ def _resolve_checkers_image(image_id: str) -> str:
     url = _image_to_https(candidates[0])
     _cache_set(cache_key, url, 86400)
     return url
+
+
+# ============================================================
+# AZ LABS LIVE GROCERY API
+# ============================================================
+
+def search_azlabs_products(
+    keyword: str,
+    limit: int = 20,
+) -> list[dict]:
+    """Search AZ Labs live Pick n Pay + Checkers grocery data."""
+    if not AZLABS_API_KEY:
+        raise StoreAPIError(
+            "AZLABS_API_KEY is not configured."
+        )
+
+    keyword = _safe_string(keyword)
+    if not keyword:
+        return []
+
+    limit = max(1, min(int(limit), 20))
+    cache_key = f"azlabs:search:{keyword.lower()}:{limit}"
+
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return _mark_cached_products(cached, "live", True)
+
+    try:
+        payload = _request_json(
+            "GET",
+            AZLABS_SEARCH_URL,
+            headers={
+                "Authorization": f"Bearer {AZLABS_API_KEY}",
+                "Accept": "application/json",
+            },
+            params={
+                "q": keyword,
+                "store": "all",
+            },
+            provider="AZ Labs",
+        )
+    except StoreAPIError:
+        stale = _cache_stale_get(cache_key)
+        if stale is not None:
+            return _mark_cached_products(stale, "stale", False)
+        raise
+
+    rows = _extract_rows(payload)
+    products = []
+
+    for row in rows[:limit]:
+        if not isinstance(row, dict):
+            continue
+
+        retailer = _normalise_retailer(
+            row.get("retailer")
+            or row.get("store")
+            or row.get("merchant")
+            or "Retailer"
+        )
+
+        product = normalize_product(
+            row,
+            retailer=retailer,
+        )
+        product["price_source"] = "AZ Labs live grocery API"
+        product["price_is_live"] = True
+        product["price_freshness"] = "live"
+        products.append(product)
+        _cache_product(product)
+
+    _cache_set(
+        cache_key,
+        products,
+        CACHE_TIMEOUT if products else 60,
+    )
+    if products:
+        _cache_stale_set(cache_key, products)
+
+    return products
 
 
 # ============================================================
@@ -2136,7 +2238,12 @@ def search_parse_retailer_products(
             try:
                 rows = search_fn(query)
             except StoreAPIError as exc:
-                errors.append(f"{retailer_name}: {exc}")
+                message = str(exc)
+                errors.append(f"{retailer_name}: {message}")
+                # A 401 will fail every spelling variant; stop retrying
+                # the same provider and let the outer provider fallback run.
+                if "authentication failed (HTTP 401)" in message:
+                    break
                 continue
 
             for product in rows:
@@ -2212,6 +2319,12 @@ def search_parse_retailer_products(
             + " | ".join(errors[:4])
         )
 
+    if not merged and not PARSE_API_KEY and not AZLABS_API_KEY and not LOYALTYHUB_API_KEY:
+        raise StoreAPIError(
+            "No retailer API credentials are configured. "
+            "Set AZLABS_API_KEY or PARSE_API_KEY in the deployment environment."
+        )
+
     return _deduplicate_products(merged)[:limit]
 
 
@@ -2220,37 +2333,40 @@ def search_parse_retailer_products(
 # ============================================================
 
 def _provider_order() -> list[str]:
-    if API_PROVIDER in {
+    """Return configured live providers, skipping providers without keys."""
+    available = []
+
+    if AZLABS_API_KEY:
+        available.append("azlabs")
+
+    if PARSE_API_KEY:
+        available.append("parse")
+
+    if LOYALTYHUB_API_KEY:
+        available.append("loyaltyhub")
+
+    if API_PROVIDER == "loyaltyhub":
+        return ["loyaltyhub"] if LOYALTYHUB_API_KEY else available
+
+    preferred = API_PROVIDER if API_PROVIDER in {
+        "azlabs",
         "parse",
         "checkers",
         "pnp",
         "loyaltyhub",
-    }:
-        preferred = API_PROVIDER
-    else:
-        preferred = "parse"
+    } else "azlabs"
 
-    # LoyaltyHub is intentionally NOT part of the automatic fallback chain.
-    # Its public developer documentation says its prices are refreshed twice
-    # a week and may lag actual shelf prices. That is not acceptable when
-    # this application is in live-price mode.
-    default_order = [
-        "parse",
-        "checkers",
-        "pnp",
-    ]
+    if preferred == "checkers":
+        return (["parse"] if PARSE_API_KEY else []) + [
+            p for p in available if p not in {"parse"}
+        ]
 
-    if preferred == "loyaltyhub":
-        return ["loyaltyhub"]
+    if preferred == "pnp":
+        return (["parse"] if PARSE_API_KEY else []) + [
+            p for p in available if p not in {"parse"}
+        ]
 
-    return [
-        preferred,
-        *[
-            provider
-            for provider in default_order
-            if provider != preferred
-        ],
-    ]
+    return [preferred] + [p for p in available if p != preferred]
 
 
 def _search_provider(
@@ -2261,6 +2377,12 @@ def _search_provider(
     longitude: float | None = None,
     radius_km: float | None = None,
 ) -> list[dict]:
+    if provider == "azlabs":
+        return search_azlabs_products(
+            keyword,
+            limit=limit,
+        )
+
     if provider == "parse":
         return search_parse_retailer_products(
             keyword,
