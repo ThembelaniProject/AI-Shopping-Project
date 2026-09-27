@@ -377,8 +377,10 @@ def shopping_list(request):
     # Clean legacy rows that stored the complete retailer/store metadata dict.
     for item in items:
         cleaned_store = _clean_store_name(item.store)
+        cleaned_store = cleaned_store[:255]
+        item.store_display = cleaned_store
         if cleaned_store != item.store:
-            item.store = cleaned_store[:255]
+            item.store = cleaned_store
             item.save(update_fields=["store"])
 
     estimated_total = sum((item.estimated_total for item in items), Decimal("0.00"))
