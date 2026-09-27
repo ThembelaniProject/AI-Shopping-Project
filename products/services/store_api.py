@@ -1890,10 +1890,58 @@ def get_pnp_stores(
         )
         item["retailer"] = "Pick n Pay"
 
-        address = _safe_string(
+        raw_address = (
             store.get("storeAddress")
+            or store.get("store_address")
             or store.get("address")
+            or store.get("location")
         )
+
+        if isinstance(raw_address, dict):
+            address_parts = [
+                raw_address.get("address"),
+                raw_address.get("streetAddress"),
+                raw_address.get("street"),
+                raw_address.get("suburb"),
+                raw_address.get("city"),
+                raw_address.get("province"),
+                raw_address.get("postalCode"),
+            ]
+            address = ", ".join(
+                _safe_string(part)
+                for part in address_parts
+                if _safe_string(part)
+            )
+        else:
+            address = _safe_string(raw_address)
+
+        location_data = store.get("location")
+        if isinstance(location_data, dict):
+            store_lat = (
+                store.get("latitude")
+                or store.get("lat")
+                or location_data.get("latitude")
+                or location_data.get("lat")
+            )
+            store_lon = (
+                store.get("longitude")
+                or store.get("lon")
+                or store.get("lng")
+                or location_data.get("longitude")
+                or location_data.get("lon")
+                or location_data.get("lng")
+            )
+        else:
+            store_lat = store.get("latitude") or store.get("lat")
+            store_lon = (
+                store.get("longitude")
+                or store.get("lon")
+                or store.get("lng")
+            )
+
+        if store_lat is not None and store_lon is not None:
+            item["latitude"] = store_lat
+            item["longitude"] = store_lon
 
         item["address"] = address
         nearby.append(item)
