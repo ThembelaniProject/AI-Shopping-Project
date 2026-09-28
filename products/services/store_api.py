@@ -2078,12 +2078,22 @@ def _pnp_store_distance(
 def get_pnp_stores(
     latitude: float | None = None,
     longitude: float | None = None,
+    query: str | None = None,
 ) -> list[dict]:
     """
     Get Pick n Pay branches from Parse.
 
-    The result is cached for 24 hours because branch addresses and
-    coordinates change much less frequently than prices.
+    When PNP_STORE_QUERY is configured (or query is supplied), use the
+    Parse get_stores endpoint with its location query. This is useful for
+    reducing the branch catalogue returned by Parse (for example:
+    query="sandton").
+
+    If no query is supplied, the endpoint is called without a location
+    filter so the existing coordinate-based distance calculation can find
+    the nearest branch.
+
+    Distances are always calculated locally from the user's latitude and
+    longitude using the branch coordinates returned by Parse.
     """
 
     if not PARSE_API_KEY:
@@ -2091,19 +2101,48 @@ def get_pnp_stores(
             "PARSE_API_KEY is not configured."
         )
 
-    cache_key = "pnp:stores:all:v2"
+    try:
+        user_latitude = (
+            float(latitude) if latitude is not None else None
+        )
+        user_longitude = (
+            float(longitude) if longitude is not None else None
+        )
+    except (TypeError, ValueError):
+        return []
+
+    query = _safe_string(
+        query
+        or os.getenv("PNP_STORE_QUERY", "")
+    )
+
+    # Include the query in the cache key because "sandton" and "durban",
+    # for example, must not share the same store catalogue.
+    query_key = re.sub(
+        r"[^a-z0-9]+",
+        "-",
+        query.lower(),
+    ).strip("-") or "all"
+
+    cache_key = f"pnp:stores:query:{query_key}:v3"
 
     stores = _cache_get(cache_key)
 
     if stores is None:
         try:
+            params = {}
+            if query:
+                params["query"] = query
+
             payload = _request_json(
                 "GET",
                 PNP_STORES_URL,
                 headers={
                     "X-API-Key": PARSE_API_KEY,
+                    "API-Snapshot-Version": "9",
                     "Accept": "application/json",
                 },
+                params=params,
                 provider="Pick n Pay stores",
             )
         except StoreAPIError:
@@ -2116,11 +2155,25 @@ def get_pnp_stores(
                 raise
 
         if isinstance(payload, dict):
-            stores = payload.get("stores") or payload.get("data") or []
+            stores = (
+                payload.get("stores")
+                or payload.get("data")
+                or payload.get("results")
+                or payload.get("items")
+                or []
+            )
         elif isinstance(payload, list):
             stores = payload
         else:
             stores = []
+
+        if isinstance(stores, dict):
+            stores = (
+                stores.get("stores")
+                or stores.get("results")
+                or stores.get("items")
+                or []
+            )
 
         stores = [
             item
@@ -2138,7 +2191,9 @@ def get_pnp_stores(
             stores,
         )
 
-    if latitude is None or longitude is None:
+    # Without a user position there is nothing to calculate, but callers
+    # can still use this function to retrieve the PnP branch catalogue.
+    if user_latitude is None or user_longitude is None:
         return stores
 
     nearby = []
@@ -2146,8 +2201,8 @@ def get_pnp_stores(
     for store in stores:
         distance = _pnp_store_distance(
             store,
-            float(latitude),
-            float(longitude),
+            user_latitude,
+            user_longitude,
         )
 
         if distance is None:
@@ -2160,11 +2215,16 @@ def get_pnp_stores(
             store.get("storeId")
             or store.get("store_id")
             or store.get("id")
+            or store.get("branchId")
+            or store.get("branch_id")
         )
         item["name"] = _safe_string(
             store.get("storeName")
             or store.get("name")
             or store.get("store_name")
+            or store.get("displayName")
+            or store.get("brand")
+            or "Pick n Pay"
         )
         item["retailer"] = "Pick n Pay"
 
@@ -2176,20 +2236,7 @@ def get_pnp_stores(
         )
 
         if isinstance(raw_address, dict):
-            address_parts = [
-                raw_address.get("address"),
-                raw_address.get("streetAddress"),
-                raw_address.get("street"),
-                raw_address.get("suburb"),
-                raw_address.get("city"),
-                raw_address.get("province"),
-                raw_address.get("postalCode"),
-            ]
-            address = ", ".join(
-                _safe_string(part)
-                for part in address_parts
-                if _safe_string(part)
-            )
+            address = _format_address(raw_address)
         else:
             address = _safe_string(raw_address)
 
@@ -2210,7 +2257,10 @@ def get_pnp_stores(
                 or location_data.get("lng")
             )
         else:
-            store_lat = store.get("latitude") or store.get("lat")
+            store_lat = (
+                store.get("latitude")
+                or store.get("lat")
+            )
             store_lon = (
                 store.get("longitude")
                 or store.get("lon")
@@ -2218,10 +2268,14 @@ def get_pnp_stores(
             )
 
         if store_lat is not None and store_lon is not None:
-            item["latitude"] = store_lat
-            item["longitude"] = store_lon
+            try:
+                item["latitude"] = float(store_lat)
+                item["longitude"] = float(store_lon)
+            except (TypeError, ValueError):
+                pass
 
         item["address"] = address
+        item["source"] = "Parse Pick n Pay get_stores"
         nearby.append(item)
 
     nearby.sort(
@@ -2229,7 +2283,6 @@ def get_pnp_stores(
     )
 
     return nearby
-
 
 def search_pnp_store_products(
     keyword: str,
