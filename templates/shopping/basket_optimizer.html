@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Smart Basket Lab - SmartSpend{% endblock %}
+{% block extra_css %}
+<style>
+.lab{max-width:1200px;margin:0 auto;padding:2rem 1rem 4rem;color:#f1f5f9}
+.hero{background:linear-gradient(135deg,rgba(99,102,241,.22),rgba(168,85,247,.10));border:1px solid #475569;border-radius:18px;padding:2rem;margin-bottom:1.25rem}
+.hero h1{margin:0 0 .5rem;font-size:2rem}.muted{color:#94a3b8;line-height:1.55}
+.cards{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;margin:1.25rem 0}
+.card,.panel{background:#1e293b;border:1px solid #334155;border-radius:14px;padding:1.1rem}
+.card span{display:block;color:#94a3b8;font-size:.82rem}.card strong{display:block;font-size:1.35rem;margin-top:.35rem}
+.good{color:#22c55e}.warn{color:#f59e0b}.bad{color:#ef4444}
+.panel{margin-top:1rem}.panel h2{font-size:1.1rem;margin-top:0}
+table{width:100%;border-collapse:collapse}th,td{padding:.75rem;border-bottom:1px solid #334155;text-align:left;vertical-align:top}th{color:#94a3b8;font-size:.8rem}
+.badge{display:inline-block;padding:.25rem .55rem;border-radius:999px;background:#312e81;color:#c7d2fe;font-size:.75rem;font-weight:700}
+.actions{display:flex;gap:.7rem;flex-wrap:wrap;margin-top:1rem}
+.btn{display:inline-flex;padding:.7rem 1rem;border-radius:9px;text-decoration:none;border:1px solid #475569;background:#0f172a;color:#e2e8f0;font-weight:700}
+.btn.primary{background:#6366f1;border-color:#6366f1;color:#fff}
+.empty{text-align:center;padding:2.5rem;color:#94a3b8}
+.reason{margin:.25rem 0 0;color:#94a3b8;font-size:.82rem}
+@media(max-width:850px){.cards{grid-template-columns:repeat(2,1fr)}table{font-size:.86rem}}
+@media(max-width:560px){.cards{grid-template-columns:1fr}.hero{padding:1.3rem}table{display:block;overflow-x:auto;white-space:nowrap}}
+</style>
+{% endblock %}
+{% block content %}
+<main class="lab">
+<section class="hero">
+    <span class="badge">🧠 DECISION INTELLIGENCE</span>
+    <h1>Smart Basket Lab</h1>
+    <p class="muted">
+        Instead of asking “What is the cheapest product?”, SmartSpend asks:
+        <strong>“What is the smartest basket I can build with my constraints?”</strong>
+        The system compares your saved basket against current retailer results,
+        checks your remaining budget and explains the trade-offs.
+    </p>
+    <div class="actions">
+        <a class="btn primary" href="{% url 'shopping:basket_optimizer' %}">🔄 Recalculate Basket</a>
+        <a class="btn" href="{% url 'shopping:shopping_list' %}">🛒 Edit Shopping List</a>
+    </div>
+</section>
+
+{% if error %}
+<div class="panel"><strong class="warn">⚠️ {{ error }}</strong><p class="muted">The analysis can still use products already available in your shopping list.</p></div>
+{% endif %}
+
+<div class="cards">
+    <div class="card"><span>Current basket</span><strong>R{{ current_total|floatformat:2 }}</strong></div>
+    <div class="card"><span>Optimised basket</span><strong>R{{ optimised_total|floatformat:2 }}</strong></div>
+    <div class="card"><span>Potential saving</span><strong class="{% if savings > 0 %}good{% endif %}">R{{ savings|floatformat:2 }}</strong></div>
+    <div class="card"><span>Budget after basket</span><strong class="{% if budget_after >= 0 %}good{% else %}bad{% endif %}">R{{ budget_after|floatformat:2 }}</strong></div>
+</div>
+
+<section class="panel">
+<h2>🔬 How the decision was made</h2>
+<p class="muted">
+    Each candidate is evaluated using price, product-name similarity, retailer availability,
+    sale status and your saved preferences. A cheaper result is not automatically accepted
+    if it is clearly a poor match. The final basket is constrained by your available budget.
+</p>
+</section>
+
+{% if rows %}
+<section class="panel">
+<h2>🧺 Basket comparison</h2>
+<table>
+<thead><tr><th>Requested item</th><th>Your basket</th><th>Optimised choice</th><th>Decision</th><th>Reasoning</th></tr></thead>
+<tbody>
+{% for row in rows %}
+<tr>
+<td><strong>{{ row.requested }}</strong><div class="reason">Qty: {{ row.quantity }}</div></td>
+<td>R{{ row.current_total|floatformat:2 }}<div class="reason">{{ row.current_store|default:"Saved item" }}</div></td>
+<td>R{{ row.optimised_total|floatformat:2 }}<div class="reason">{{ row.optimised_store|default:"No cheaper match" }}</div></td>
+<td>
+{% if row.status == "save" %}<span class="badge good">SAVE R{{ row.saving|floatformat:2 }}</span>
+{% elif row.status == "keep" %}<span class="badge">KEEP</span>
+{% else %}<span class="badge warn">REVIEW</span>{% endif %}
+</td>
+<td>{{ row.reason }}</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+</section>
+{% else %}
+<section class="panel empty">
+    <h2>Your basket is empty</h2>
+    <p>Add products to your Shopping List first, then return here to run the decision analysis.</p>
+    <a class="btn primary" href="{% url 'products:search' %}">Find Products</a>
+</section>
+{% endif %}
+
+<section class="panel">
+<h2>💡 Critical-thinking insight</h2>
+<p class="muted">{{ insight }}</p>
+{% if savings > 0 %}
+<p class="good"><strong>Opportunity cost:</strong> keeping the original basket would use R{{ savings|floatformat:2 }} more of your available money. That amount could remain available for another priority.</p>
+{% endif %}
+</section>
+</main>
+{% endblock %}
