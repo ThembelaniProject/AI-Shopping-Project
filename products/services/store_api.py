@@ -1060,6 +1060,82 @@ def normalize_product(
         if _safe_string(option)
     ]
 
+    # Delivery/shipping cost. Prefer a fee explicitly returned by the
+    # retailer API. If the live catalogue does not expose checkout fees,
+    # use configurable Sixty60/asap! delivery estimates instead of R0.00.
+    explicit_shipping = _first_value(
+        raw,
+        "shipping_cost", "shippingCost",
+        "delivery_fee", "deliveryFee",
+        "delivery_cost", "deliveryCost",
+        "shipping_fee", "shippingFee",
+        "delivery_charge", "deliveryCharge",
+    )
+    if explicit_shipping is None:
+        explicit_shipping = _first_value(
+            raw_store,
+            "shipping_cost", "shippingCost",
+            "delivery_fee", "deliveryFee",
+            "delivery_cost", "deliveryCost",
+            "shipping_fee", "shippingFee",
+            "delivery_charge", "deliveryCharge",
+        )
+
+    retailer_key = _normalise_retailer(source_retailer).lower()
+    checkers_360_fee = _to_decimal(
+        os.getenv("CHECKERS_SIXTY60_DELIVERY_FEE", "36"),
+        "36",
+    )
+    pnp_asap_fee = _to_decimal(
+        os.getenv("PNP_ASAP_DELIVERY_FEE", "35"),
+        "35",
+    )
+
+    is_checkers_360 = (
+        "checkers" in retailer_key
+        and (
+            not shipping_options
+            or any(
+                "60" in _safe_string(option).lower()
+                or "sixty" in _safe_string(option).lower()
+                for option in service_option_ids
+            )
+        )
+    )
+    is_pnp_asap = (
+        "pick n pay" in retailer_key
+        or "pick_n_pay" in retailer_key
+        or retailer_key == "pnp"
+    )
+
+    if explicit_shipping is not None:
+        shipping_cost = max(Decimal("0"), _to_decimal(explicit_shipping, "0"))
+        shipping_source = "retailer API"
+        shipping_is_estimate = False
+    elif is_checkers_360:
+        shipping_cost = max(Decimal("0"), checkers_360_fee)
+        shipping_source = "Checkers Sixty60 delivery estimate"
+        shipping_is_estimate = True
+    elif is_pnp_asap:
+        shipping_cost = max(Decimal("0"), pnp_asap_fee)
+        shipping_source = "Pick n Pay asap! delivery estimate"
+        shipping_is_estimate = True
+    else:
+        shipping_cost = Decimal("0")
+        shipping_source = "not available"
+        shipping_is_estimate = False
+
+    if is_checkers_360 and not shipping_options:
+        shipping_options = ["60-minute delivery"]
+    if is_pnp_asap and not shipping_options:
+        shipping_options = ["Pick n Pay asap! delivery"]
+
+    shipping_available = (
+        is_checkers_360
+        or is_pnp_asap
+        or bool(shipping_options)
+    )
+
     product_id = _stable_product_id(
         source_retailer,
         raw,
@@ -1151,10 +1227,19 @@ def normalize_product(
             raw.get("deal_expiry")
             or raw.get("dealExpiry")
         ),
-        "shipping_cost": Decimal("0"),
+        "shipping_cost": shipping_cost,
         "shipping_options": shipping_options,
-        "shipping_available": bool(shipping_options),
-        "total_cost": final_price,
+        "shipping_available": shipping_available,
+        "shipping_source": shipping_source,
+        "shipping_is_estimate": shipping_is_estimate,
+        "delivery_service": (
+            "Checkers Sixty60"
+            if is_checkers_360
+            else "Pick n Pay asap!"
+            if is_pnp_asap
+            else ""
+        ),
+        "total_cost": final_price + shipping_cost,
         "stock": stock,
         "in_stock": in_stock,
         "rating": _to_decimal(
