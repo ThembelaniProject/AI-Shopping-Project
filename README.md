@@ -145,6 +145,70 @@ The current architecture supports integrations/fallbacks for:
 
 The application normalises product information into a common format so that products from different sources can be compared.
 
+
+## 🧠 Smart Basket Lab — Decision Intelligence
+
+SmartSpend includes an explainable **Smart Basket Lab** that moves beyond ordinary product recommendations.
+
+Instead of asking only:
+
+> “Which product is cheapest?”
+
+the system asks:
+
+> **“What is the most sensible basket I can build while respecting my remaining budget?”**
+
+### How it works
+
+1. Reads the student's current Shopping List.
+2. Retrieves fresh candidates through the configured retailer-provider architecture.
+3. Measures product-name/category similarity so a cheap but unrelated item is not treated as a valid substitute.
+4. Considers price, sale status, preferred stores and preferred colours.
+5. Calculates the cost of each basket line and the potential saving.
+6. Applies a budget constraint using the student's remaining monthly allowance.
+7. Refuses to claim a saving when there is not enough evidence of a suitable replacement.
+8. Explains the decision and the **opportunity cost** of keeping the original basket.
+
+### Example
+
+If a student has:
+
+```text
+Remaining budget: R1,200
+Shopping list: R980
+```
+
+and Smart Basket Lab identifies suitable live alternatives that reduce the basket to:
+
+```text
+Optimised basket: R860
+Potential saving: R120
+Budget after basket: R340
+```
+
+the system explains that the R120 is not simply a “discount”; it is money that remains available for another student need.
+
+### Why this demonstrates critical thinking
+
+The feature demonstrates **constraint-based reasoning, evidence-based recommendation, trade-off analysis and explainable AI** rather than simply sorting products by price.
+
+It also follows an important design principle:
+
+**Do not recommend a cheaper product if the evidence suggests it is not a sufficiently relevant replacement.**
+
+This makes the AI decision process easier to explain, test and evaluate academically.
+
+### Demo
+
+Open:
+
+```text
+/shopping/basket-lab/
+```
+
+The feature is available from the main navigation as **🧠 Basket Lab** and from the dashboard as **Smart Basket Lab**.
+
+
 ---
 
 ## 🤖 AI Recommendation System
