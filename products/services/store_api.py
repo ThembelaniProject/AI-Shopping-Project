@@ -2054,11 +2054,23 @@ def _pnp_store_distance(
     latitude: float,
     longitude: float,
 ) -> float | None:
-    lat = store.get("latitude") or store.get("lat")
+    geolocation = store.get("geolocation")
+    if not isinstance(geolocation, dict):
+        geolocation = {}
+
+    lat = (
+        store.get("latitude")
+        or store.get("lat")
+        or geolocation.get("latitude")
+        or geolocation.get("lat")
+    )
     lon = (
         store.get("longitude")
         or store.get("lon")
         or store.get("lng")
+        or geolocation.get("longitude")
+        or geolocation.get("lon")
+        or geolocation.get("lng")
     )
 
     if lat is None or lon is None:
@@ -2113,7 +2125,7 @@ def get_pnp_stores(
 
     query = _safe_string(
         query
-        or os.getenv("PNP_STORE_QUERY", "")
+        or os.getenv("PNP_STORE_QUERY", "durban")
     )
 
     # Include the query in the cache key because "sandton" and "durban",
@@ -2236,36 +2248,53 @@ def get_pnp_stores(
         )
 
         if isinstance(raw_address, dict):
-            address = _format_address(raw_address)
+            province = raw_address.get("province")
+            if isinstance(province, dict):
+                province = province.get("name")
+            address_parts = [
+                raw_address.get("street"),
+                raw_address.get("address"),
+                raw_address.get("streetAddress"),
+                raw_address.get("suburb"),
+                raw_address.get("city"),
+                province,
+                raw_address.get("postalCode"),
+            ]
+            address = ", ".join(
+                _safe_string(part)
+                for part in address_parts
+                if _safe_string(part)
+            )
         else:
             address = _safe_string(raw_address)
 
         location_data = store.get("location")
-        if isinstance(location_data, dict):
-            store_lat = (
-                store.get("latitude")
-                or store.get("lat")
-                or location_data.get("latitude")
-                or location_data.get("lat")
-            )
-            store_lon = (
-                store.get("longitude")
-                or store.get("lon")
-                or store.get("lng")
-                or location_data.get("longitude")
-                or location_data.get("lon")
-                or location_data.get("lng")
-            )
-        else:
-            store_lat = (
-                store.get("latitude")
-                or store.get("lat")
-            )
-            store_lon = (
-                store.get("longitude")
-                or store.get("lon")
-                or store.get("lng")
-            )
+        if not isinstance(location_data, dict):
+            location_data = {}
+
+        geolocation = store.get("geolocation")
+        if not isinstance(geolocation, dict):
+            geolocation = {}
+
+        store_lat = (
+            store.get("latitude")
+            or store.get("lat")
+            or geolocation.get("latitude")
+            or geolocation.get("lat")
+            or location_data.get("latitude")
+            or location_data.get("lat")
+        )
+        store_lon = (
+            store.get("longitude")
+            or store.get("lon")
+            or store.get("lng")
+            or geolocation.get("longitude")
+            or geolocation.get("lon")
+            or geolocation.get("lng")
+            or location_data.get("longitude")
+            or location_data.get("lon")
+            or location_data.get("lng")
+        )
 
         if store_lat is not None and store_lon is not None:
             try:
