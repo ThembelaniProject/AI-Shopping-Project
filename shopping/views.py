@@ -415,6 +415,180 @@ def remove_from_shopping_list(request, item_id):
     return redirect("shopping:shopping_list")
 
 
+@login_required
+def basket_optimizer(request):
+    """Explainable basket optimisation using live retailer candidates."""
+    profile = _get_user_profile(request)
+    if not profile.terms_accepted:
+        return redirect("accounts:accept_terms")
+
+    items = list(ShoppingListItem.objects.filter(user=request.user).order_by("-added_at")[:8])
+    available_budget = profile.available_amount - _current_month_spending(request.user)
+    current_total = sum((item.estimated_total for item in items), Decimal("0.00"))
+    rows = []
+    optimised_total = Decimal("0.00")
+    errors = []
+
+    from difflib import SequenceMatcher
+    from products.services.store_api import StoreAPIError, search_products
+
+    preference = Preference.objects.filter(user=request.user).first()
+    preferred_stores = preference_values_for_optimizer(preference.stores) if preference else []
+    preferred_colours = preference_values_for_optimizer(preference.colours) if preference else []
+
+    for item in items:
+        current_unit = item.unit_price or Decimal("0.00")
+        current_line = current_unit * item.quantity
+        best = None
+
+        try:
+            candidates = search_products(keyword=item.product_name, limit=20)
+            wanted = f"{item.product_name} {item.category}".strip().lower()
+
+            for candidate in candidates[:20]:
+                if not isinstance(candidate, dict):
+                    continue
+                name = str(candidate.get("name") or "").strip()
+                if not name:
+                    continue
+                price = _product_price(candidate)
+                if price <= 0:
+                    continue
+
+                text = " ".join(
+                    str(candidate.get(k) or "")
+                    for k in ("name", "brand", "category", "description", "colour", "color")
+                ).lower()
+                similarity = SequenceMatcher(None, wanted, text).ratio()
+                if similarity < 0.28:
+                    continue
+
+                store = str(
+                    candidate.get("store")
+                    or candidate.get("retailer")
+                    or candidate.get("merchant")
+                    or ""
+                ).strip()
+
+                score = similarity * 55.0
+                if current_unit > 0:
+                    ratio = min(float(price / current_unit), 2.0)
+                    score += max(0.0, 25.0 - ratio * 12.5)
+                if candidate.get("on_sale"):
+                    score += 5.0
+                if any(x.lower() in store.lower() for x in preferred_stores if x):
+                    score += 7.0
+                if any(x.lower() in text for x in preferred_colours if x):
+                    score += 5.0
+                if current_unit > 0 and price > current_unit:
+                    score -= 18.0
+
+                key = (score, -float(price))
+                if best is None or key > best["_key"]:
+                    best = {
+                        "_key": key,
+                        "name": name,
+                        "price": price,
+                        "store": store,
+                        "on_sale": bool(candidate.get("on_sale")),
+                    }
+
+        except StoreAPIError as exc:
+            errors.append(str(exc))
+        except Exception as exc:
+            errors.append(str(exc))
+
+        if best and best["price"] < current_unit:
+            saving = (current_unit - best["price"]) * item.quantity
+            line_total = best["price"] * item.quantity
+            status = "save"
+            store = best["store"]
+            reason = (
+                "Lower live price with a sufficiently similar product match"
+                + (" and a sale signal." if best["on_sale"] else ".")
+            )
+        elif best:
+            saving = Decimal("0.00")
+            line_total = current_line
+            status = "keep"
+            store = item.store
+            reason = "A live candidate exists, but switching would not reduce the basket cost."
+        else:
+            saving = Decimal("0.00")
+            line_total = current_line
+            status = "review"
+            store = item.store
+            reason = "No sufficiently similar live alternative was found; no false saving was claimed."
+
+        optimised_total += line_total
+        rows.append({
+            "requested": item.product_name,
+            "quantity": item.quantity,
+            "current_total": current_line,
+            "current_store": item.store,
+            "optimised_total": line_total,
+            "optimised_store": store,
+            "saving": saving,
+            "status": status,
+            "reason": reason,
+        })
+
+    if current_total <= available_budget and optimised_total > available_budget:
+        optimised_total = current_total
+        for row in rows:
+            row["optimised_total"] = row["current_total"]
+            row["saving"] = Decimal("0.00")
+            row["status"] = "review"
+            row["reason"] = "The alternatives could not form a valid budget-constrained basket, so the original basket was retained."
+
+    savings = max(Decimal("0.00"), current_total - optimised_total)
+    budget_after = available_budget - optimised_total
+
+    if not items:
+        insight = "Add products to your Shopping List. Smart Basket Lab will then test the basket against current retailer data."
+    elif current_total > available_budget:
+        insight = (
+            f"Your planned basket is R{current_total - available_budget:,.2f} above the remaining monthly budget. "
+            f"The analysis found R{savings:,.2f} in potential savings; review lower-priority items if a shortfall remains."
+        )
+    elif savings > 0:
+        insight = (
+            f"The basket can potentially release R{savings:,.2f}. This is opportunity-cost reasoning: "
+            "money not spent on the current basket remains available for another need."
+        )
+    else:
+        insight = "No sufficiently strong cheaper substitutions were found, so the system avoids claiming savings from poor matches."
+
+    return render(request, "shopping/basket_optimizer.html", {
+        "profile": profile,
+        "available_budget": available_budget,
+        "current_total": current_total,
+        "optimised_total": optimised_total,
+        "savings": savings,
+        "budget_after": budget_after,
+        "rows": rows,
+        "insight": insight,
+        "error": "; ".join(dict.fromkeys(errors[:3])) if errors else "",
+    })
+
+
+def preference_values_for_optimizer(value):
+    """Normalize list/tuple/string preference fields for the optimiser."""
+    if not value:
+        return []
+    if isinstance(value, (list, tuple)):
+        return [str(x).strip() for x in value if str(x).strip()]
+    try:
+        parsed = ast.literal_eval(str(value))
+        if isinstance(parsed, (list, tuple)):
+            return [str(x).strip() for x in parsed if str(x).strip()]
+    except (ValueError, SyntaxError):
+        pass
+    return [x.strip() for x in str(value).split(",") if x.strip()]
+
+
+
+
 
 @login_required
 def analytics(request):
