@@ -1627,7 +1627,7 @@ def search_azlabs_products(
         return []
 
     limit = max(1, min(int(limit), 20))
-    cache_key = f"azlabs:compare:{keyword.lower()}:{limit}"
+    cache_key = f"azlabs:compare:v2:{keyword.lower()}:{limit}"
 
     cached = _cache_get(cache_key)
     if cached is not None:
@@ -1796,7 +1796,7 @@ def search_checkers_products(
     )
 
     cache_key = (
-        f"checkers:search:v3:"
+        f"checkers:search:v4:"
         f"{keyword.lower()}:{limit}"
     )
 
@@ -2431,7 +2431,7 @@ def search_pnp_store_products(
     limit = max(1, min(int(limit), 20))
 
     cache_key = (
-        f"pnp:branch-search:"
+        f"pnp:branch-search:v2:"
         f"{store_id}:"
         f"{keyword.lower()}:"
         f"{limit}"
@@ -2615,7 +2615,7 @@ def search_pnp_products(
             return branch_products
 
     cache_key = (
-        f"pnp:search:"
+        f"pnp:search:v2:"
         f"{keyword.lower()}:{limit}"
     )
 
@@ -2694,7 +2694,7 @@ def search_pricecheck_products(
         return []
 
     product_limit = min(max(1, int(limit)), PRICECHECK_MAX_PRODUCTS)
-    cache_key = f"pricecheck:search:v3:{keyword.lower()}:{product_limit}"
+    cache_key = f"pricecheck:search:v2:v3:{keyword.lower()}:{product_limit}"
 
     cached = _cache_get(cache_key)
     if cached is not None:
