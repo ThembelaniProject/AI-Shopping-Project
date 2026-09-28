@@ -1412,7 +1412,7 @@ def _resolve_checkers_image(image_id: str) -> str:
                 "X-API-Key": PARSE_API_KEY,
                 "Accept": "application/json",
             },
-            params={"imageId": image_id},
+            params={"image_id": image_id},
             provider="Checkers image",
         )
     except StoreAPIError:
@@ -1844,6 +1844,21 @@ def search_checkers_products(
             row,
             retailer="Checkers",
         )
+
+        # Checkers search responses can contain an image_id rather than a
+        # browser-ready URL. Resolve it once and cache the CDN URL so the
+        # template never receives the raw Parse image ID.
+        checkers_image = _safe_string(product.get("image"))
+        if not checkers_image.startswith(("http://", "https://", "//")):
+            image_references = _extract_checkers_image_ids(row)
+            for image_reference in image_references:
+                resolved_image = _resolve_checkers_image(image_reference)
+                if resolved_image:
+                    product["image"] = resolved_image
+                    product["thumbnail"] = resolved_image
+                    product["images"] = [resolved_image]
+                    break
+
         product["price_source"] = "Checkers live catalogue"
         product["price_is_live"] = True
         product["price_freshness"] = "live"
