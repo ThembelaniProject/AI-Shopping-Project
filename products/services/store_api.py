@@ -160,6 +160,9 @@ LIVE_PRICE_MODE = (
 
 CACHE_TIMEOUT = int(os.getenv("PRODUCT_CACHE_TIMEOUT", "900"))
 STALE_CACHE_TIMEOUT = int(os.getenv("PRODUCT_STALE_CACHE_TIMEOUT", "604800"))
+# Keep the last successful search available even when the current search
+# has a different location/limit and every live provider is rate-limited.
+LAST_SEARCH_CACHE_TIMEOUT = int(os.getenv("PRODUCT_LAST_SEARCH_CACHE_TIMEOUT", "604800"))
 SEARCH_CACHE_VERSION = "v11"
 COOLDOWN_CACHE_TIMEOUT = int(os.getenv("RETAILER_COOLDOWN_CACHE_TIMEOUT", "900"))
 
@@ -222,6 +225,14 @@ def _cache_set(
 
 def _stale_key(key: str) -> str:
     return f"{key}:stale"
+
+
+def _last_search_cache_key(keyword: str) -> str:
+    """Key for the latest successful result for a keyword, independent of location."""
+    digest = hashlib.sha256(
+        _safe_string(keyword).lower().encode("utf-8")
+    ).hexdigest()[:32]
+    return f"retailer:search:last:{digest}"
 
 
 def _search_cache_key(
@@ -3336,6 +3347,12 @@ def search_products(
 
     if not products:
         stale_results = _cache_stale_get(final_cache_key)
+        if stale_results is None:
+            # Location-aware stale cache may not exist when the user changes
+            # location. Fall back to the latest successful result for the
+            # same keyword instead of failing the whole search.
+            stale_results = _cache_get(_last_search_cache_key(keyword))
+
         if stale_results is not None:
             return _mark_cached_products(
                 stale_results,
@@ -3422,6 +3439,13 @@ def search_products(
     _cache_stale_set(
         final_cache_key,
         products,
+    )
+    # Keep a keyword-level copy so cached products remain available when
+    # retailer APIs are rate-limited and the user's location/limit changes.
+    _cache_set(
+        _last_search_cache_key(keyword),
+        products,
+        LAST_SEARCH_CACHE_TIMEOUT,
     )
 
     return _mark_cached_products(
