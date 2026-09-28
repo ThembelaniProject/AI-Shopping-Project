@@ -1083,12 +1083,12 @@ def normalize_product(
 
     retailer_key = _normalise_retailer(source_retailer).lower()
     checkers_360_fee = _to_decimal(
-        os.getenv("CHECKERS_SIXTY60_DELIVERY_FEE", "36"),
-        "36",
+        os.getenv("CHECKERS_SIXTY60_DELIVERY_FEE", "37"),
+        "37",
     )
     pnp_asap_fee = _to_decimal(
-        os.getenv("PNP_ASAP_DELIVERY_FEE", "35"),
-        "35",
+        os.getenv("PNP_ASAP_DELIVERY_FEE", "37"),
+        "37",
     )
 
     is_checkers_360 = (
