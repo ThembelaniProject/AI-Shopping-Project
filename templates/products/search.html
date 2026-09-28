@@ -1867,6 +1867,15 @@
                             </strong>
 
                             R{{ product.shipping_cost|floatformat:2 }}
+                            {% if product.shipping_is_estimate %}
+                                <span class="text-muted">
+                                    (estimated {{ product.delivery_service }})
+                                </span>
+                            {% elif product.shipping_source %}
+                                <span class="text-muted">
+                                    ({{ product.shipping_source }})
+                                </span>
+                            {% endif %}
 
                         </p>
 
