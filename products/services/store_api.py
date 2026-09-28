@@ -1108,8 +1108,14 @@ def normalize_product(
         or retailer_key == "pnp"
     )
 
-    if explicit_shipping is not None:
-        shipping_cost = max(Decimal("0"), _to_decimal(explicit_shipping, "0"))
+    explicit_shipping_value = (
+        _to_decimal(explicit_shipping, "0")
+        if explicit_shipping is not None
+        else Decimal("0")
+    )
+
+    if explicit_shipping is not None and explicit_shipping_value > 0:
+        shipping_cost = explicit_shipping_value
         shipping_source = "retailer API"
         shipping_is_estimate = False
     elif is_checkers_360:
