@@ -8,6 +8,7 @@
             <a href="{% url 'shopping:dashboard' %}">Dashboard</a>
             <a href="{% url 'products:search' %}">Products</a>
             <a href="{% url 'shopping:analytics' %}">📊 Analysis</a>
+            <a href="{% url 'shopping:basket_optimizer' %}">🧠 Basket Lab</a>
             <a href="{% url 'shopping:shopping_list' %}" class="shopping-list-link">
                 <span>🛒 Shopping List</span>
                 {% if shopping_list_count > 0 %}<span class="shopping-list-badge" aria-label="{{ shopping_list_count }} items in shopping list">{{ shopping_list_count }}</span>{% endif %}
